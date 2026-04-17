@@ -1,0 +1,22 @@
+# Environments
+.env
+.env.local
+.env.*.local
+
+# Dependency directories
+node_modules/
+backend/venv/
+backend/uploads/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.webm
+
+# Frontend builds
+dist/
+build/
+.DS_Store
