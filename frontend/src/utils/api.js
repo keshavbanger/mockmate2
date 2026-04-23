@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -29,6 +29,9 @@ export const startInterview = (sessionId) =>
 
 export const saveTurn = (sessionId, turnData) =>
   api.post('/save-turn', { session_id: sessionId, turn_data: turnData });
+
+export const sendMockChat = (sessionId, userText) =>
+  api.post('/mock-chat', { session_id: sessionId, user_text: userText });
 
 export const endInterview = (sessionId, conversationId) =>
   api.post('/end-interview', { session_id: sessionId, conversation_id: conversationId });

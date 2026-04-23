@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from dependencies import get_gemini_model
-from report_generator import generate_report
+from report_generator_enhanced import generate_enhanced_report
 from session_store import get_session, update_session
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ async def generate_report_endpoint(
 
     # Generate
     try:
-        report = await generate_report(
+        report = await generate_enhanced_report(
             session_id=body.session_id,
             session_data=session,
             gemini_model=gemini_model,

@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Light Theme Variables (Bizvance inspired) */
+  --bg-primary: #fafafa; /* Off-white */
+  --bg-secondary: #f8f9fa;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --brand-primary: #6B46C1; /* Deep purple */
+  --brand-secondary: #9F7AEA; /* Lighter purple */
+  --brand-light: #F3E8FF; /* Very light purple background */
+  --card-shadow: 0 20px 40px -10px rgba(107, 70, 193, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -12,123 +26,199 @@
   }
 
   body {
-    background-color: #0f0f1a;
-    color: #f1f5f9;
-    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Outfit', 'Inter', sans-serif;
     min-height: 100vh;
+    margin: 0;
   }
 
+  /* Custom Scrollbar for Light Theme */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
   }
-
   ::-webkit-scrollbar-track {
-    background: #1a1a2e;
+    background: transparent;
   }
-
   ::-webkit-scrollbar-thumb {
-    background: #4f46e5;
-    border-radius: 3px;
+    background: #e2e8f0;
+    border-radius: 10px;
   }
-
   ::-webkit-scrollbar-thumb:hover {
-    background: #6366f1;
+    background: #cbd5e1;
   }
 }
 
 @layer components {
+  .floating-nav {
+    @apply bg-white/90 backdrop-blur-md 
+           rounded-full px-6 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.05)]
+           flex items-center gap-8 transition-all duration-300;
+  }
+
+  .hero-title {
+    @apply text-5xl md:text-6xl font-extrabold tracking-tight text-[#111] leading-[1.2];
+  }
+
+  .text-brand {
+    @apply text-[var(--brand-primary)];
+  }
+
+  .pill-highlight {
+    @apply bg-[var(--brand-light)] text-[var(--brand-primary)] px-4 py-1 rounded-full inline-block;
+  }
+
+  .premium-card {
+    @apply bg-white border border-black/[0.03] rounded-[24px] p-8 
+           shadow-sm hover:shadow-[0_20px_50px_rgba(107,70,193,0.08)] 
+           transition-all duration-500;
+  }
+
+  .btn-primary-solid {
+    @apply bg-[var(--brand-primary)] text-white px-8 py-3 rounded-full font-semibold
+           hover:opacity-90 transition-all active:scale-[0.98] shadow-lg shadow-purple-900/20;
+  }
+
+  .btn-outline {
+    @apply bg-white text-[#111] border border-black/10 px-8 py-3 rounded-full 
+           font-semibold hover:bg-zinc-50 transition-all active:scale-[0.98] shadow-sm;
+  }
+
+  .step-label {
+    @apply text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2 block;
+  }
+
+  /* Keep existing dark theme components for interview room */
+  .dark-theme-only {
+    --bg-surface: #0f0f1a;
+  }
+  
   .card {
     @apply bg-surface-700 border border-white/5 rounded-2xl;
   }
 
-  .card-glow {
-    @apply card shadow-lg shadow-brand-600/10;
-  }
-
   .btn-primary {
     @apply bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl px-6 py-3
-           transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed
-           focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 focus:ring-offset-surface-900
-           active:scale-[0.98];
-  }
-
-  .btn-danger {
-    @apply bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl px-6 py-3
-           transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-400
-           focus:ring-offset-2 focus:ring-offset-surface-900 active:scale-[0.98];
-  }
-
-  .btn-ghost {
-    @apply border border-white/10 hover:bg-white/5 text-slate-300 hover:text-white
-           font-medium rounded-xl px-5 py-2.5 transition-all duration-200;
-  }
-
-  .input-select {
-    @apply w-full bg-surface-600 border border-white/10 rounded-xl px-4 py-3 text-white
-           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
-           transition-all duration-200 appearance-none cursor-pointer;
+           transition-all duration-200;
   }
 
   .badge {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold;
   }
-
-  .badge-green {
-    @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/20;
-  }
-
-  .badge-amber {
-    @apply badge bg-amber-500/15 text-amber-400 border border-amber-500/20;
-  }
-
-  .badge-blue {
-    @apply badge bg-blue-500/15 text-blue-400 border border-blue-500/20;
-  }
-
-  .badge-purple {
-    @apply badge bg-brand-500/15 text-brand-400 border border-brand-500/20;
-  }
-
-  .badge-red {
-    @apply badge bg-red-500/15 text-red-400 border border-red-500/20;
-  }
-
-  .section-title {
-    @apply text-lg font-semibold text-white mb-4;
-  }
-
-  .metric-label {
-    @apply text-xs font-medium text-slate-500 uppercase tracking-wider;
-  }
-
-  .score-text-green { @apply text-emerald-400; }
-  .score-text-amber { @apply text-amber-400; }
-  .score-text-red   { @apply text-red-400; }
 }
 
-/* Live pulsing dot */
-@keyframes livePulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
-}
-.live-dot {
-  animation: livePulse 1.5s ease-in-out infinite;
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Transcript highlight for filler words */
-.filler-highlight {
-  background: rgba(251, 191, 36, 0.2);
-  color: #fbbf24;
-  border-radius: 3px;
-  padding: 0 2px;
-  font-weight: 600;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-/* Print styles for report download */
-@media print {
-  .no-print { display: none !important; }
-  body { background: #fff !important; color: #111 !important; }
-  .card, .card-glow { background: #f8f9fa !important; border: 1px solid #dee2e6 !important; }
-  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+
+/* Base utility classes */
+.animate-fade-up {
+  opacity: 0;
+  animation: fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-fade-in {
+  opacity: 0;
+  animation: fadeIn 0.6s ease forwards;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Stagger delays */
+.animate-delay-1  { animation-delay: 0.1s; }
+.animate-delay-2  { animation-delay: 0.2s; }
+.animate-delay-3  { animation-delay: 0.3s; }
+.animate-delay-4  { animation-delay: 0.4s; }
+.animate-delay-5  { animation-delay: 0.5s; }
+.animate-delay-6  { animation-delay: 0.6s; }
+
+/* Scroll-reveal: elements start hidden, .is-visible triggers animation */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.scroll-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Marquee logo ticker */
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 25s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Gradient animated text (e.g. hero keyword) */
+.gradient-text {
+  background: linear-gradient(135deg, #6B46C1 0%, #9F7AEA 40%, #6B46C1 80%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 4s ease infinite;
+}
+
+/* Nav link hover underline */
+.nav-link {
+  position: relative;
+  transition: color 0.2s ease;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0%;
+  height: 2px;
+  background: var(--brand-primary);
+  border-radius: 2px;
+  transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nav-link:hover::after { width: 100%; }
+
+/* Button: lift on hover */
+.btn-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.btn-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(107, 70, 193, 0.28);
+}
+.btn-lift:active { transform: scale(0.97); }
+
+/* Card tilt + shadow depth (applied via JS, kept GPU-friendly) */
+.card-tilt {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  will-change: transform;
 }

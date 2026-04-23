@@ -133,78 +133,78 @@ export default function SetupPage() {
   const rd = ctx.resumeData;
 
   return (
-    <div className="min-h-screen bg-surface-900 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-[#fafafa] flex flex-col items-center justify-center p-6">
       <ToastContainer />
-      {/* Background glow */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[400px]
-                        bg-brand-600/20 rounded-full blur-[120px]" />
-      </div>
-
-      <div className="relative w-full max-w-2xl animate-fade-in">
+      
+      <div className="relative w-full max-w-2xl animate-fade-up">
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20
-                          rounded-full px-4 py-1.5 mb-5">
-            <span className="text-brand-400 text-sm font-semibold">🎙️ AI Mock Interview</span>
+          {/* MockMate logo */}
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <div className="h-8 w-8 rounded-full bg-[#6B46C1] flex items-center justify-center text-white">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+              </svg>
+            </div>
+            <span className="text-black font-bold text-xl tracking-tight">MockMate</span>
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-white mb-3">
+          <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20
+                          rounded-full px-4 py-1.5 mb-5">
+            <span className="text-purple-600 text-[10px] font-bold uppercase tracking-widest">🎙️ AI Mock Interview</span>
+          </div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-black mb-3">
             Ace Your Next Interview
           </h1>
-          <p className="text-slate-400 text-lg">
+          <p className="text-slate-500 text-lg">
             Upload your resume and let our AI interviewer help you prepare.
           </p>
         </div>
 
-        <div className="card-glow p-8 space-y-8">
+        <div className="premium-card p-8 space-y-8">
 
           {/* ── Step 1: Upload ── */}
           <div>
-            <p className="metric-label mb-3 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center h-5 w-5 rounded-full
-                               bg-brand-500/20 text-brand-400 text-[10px] font-bold">1</span>
-              Upload Your Resume
-            </p>
+            <span className="step-label mb-3">Step 1: Upload Your Resume</span>
             <div
               {...getRootProps()}
-              className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
-                          transition-all duration-200
+              className={`relative border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer
+                          transition-all duration-300
                           ${isDragActive
-                            ? 'border-brand-400 bg-brand-500/10'
+                            ? 'border-purple-400 bg-purple-500/5'
                             : uploadDone
-                              ? 'border-emerald-500/50 bg-emerald-500/5'
-                              : 'border-white/10 bg-surface-600/30 hover:border-brand-500/50 hover:bg-brand-500/5'
+                              ? 'border-purple-500/30 bg-purple-500/[0.02]'
+                              : 'border-slate-200 bg-slate-50/50 hover:border-purple-500/50 hover:bg-purple-500/[0.02]'
                           }`}
             >
               <input {...getInputProps()} />
               {uploading ? (
                 <div className="flex flex-col items-center gap-3">
                   <Spinner />
-                  <p className="text-slate-400 text-sm">Parsing resume…</p>
+                  <p className="text-slate-500 text-sm font-medium">Parsing resume…</p>
                 </div>
               ) : uploadDone ? (
                 <div className="flex flex-col items-center gap-2">
-                  <div className="h-12 w-12 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                    <svg className="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center">
+                    <svg className="h-6 w-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <p className="text-emerald-400 font-semibold text-sm">{fileName}</p>
-                  <p className="text-slate-500 text-xs">Click to replace</p>
+                  <p className="text-purple-600 font-bold text-sm">{fileName}</p>
+                  <p className="text-slate-400 text-xs">Click to replace file</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-brand-500/10 flex items-center justify-center">
-                    <svg className="h-6 w-6 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="h-14 w-14 rounded-2xl bg-white shadow-sm border border-black/5 flex items-center justify-center">
+                    <svg className="h-7 w-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
                   <div>
-                    <p className="text-white font-medium">
+                    <p className="text-black font-bold">
                       {isDragActive ? 'Drop your PDF here' : 'Drag & drop your resume'}
                     </p>
-                    <p className="text-slate-500 text-sm mt-1">or click to browse · PDF only · max 5 MB</p>
+                    <p className="text-slate-400 text-sm mt-1 font-medium">or click to browse · PDF only · max 5 MB</p>
                   </div>
                 </div>
               )}
@@ -212,27 +212,24 @@ export default function SetupPage() {
 
             {/* Parsed preview */}
             {rd && (
-              <div className="mt-4 p-4 bg-surface-600/40 rounded-xl border border-white/5 animate-slide-up">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="h-9 w-9 rounded-full bg-brand-500/20 flex items-center justify-center
-                                  text-brand-400 font-bold text-sm flex-shrink-0">
+              <div className="mt-6 p-5 bg-slate-50 rounded-2xl border border-black/[0.03] animate-fade-up">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="h-10 w-10 rounded-full bg-black flex items-center justify-center
+                                  text-white font-bold text-xs flex-shrink-0 shadow-sm">
                     {rd.name?.[0]?.toUpperCase() ?? '?'}
                   </div>
                   <div>
-                    <p className="text-white font-semibold text-sm">{rd.name}</p>
-                    <p className="text-slate-500 text-xs">{rd.email} · {rd.total_experience_years}y exp</p>
+                    <p className="text-black font-bold text-sm">{rd.name}</p>
+                    <p className="text-slate-500 text-xs font-medium">{rd.email} · {rd.total_experience_years}y experience</p>
                   </div>
                 </div>
                 {rd.skills?.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {rd.skills.slice(0, 10).map(s => (
-                      <span key={s} className="badge-purple text-[10px] px-2 py-0.5">{s}</span>
-                    ))}
-                    {rd.skills.length > 10 && (
-                      <span className="badge bg-white/5 text-slate-500 text-[10px] px-2 py-0.5">
-                        +{rd.skills.length - 10} more
+                  <div className="flex flex-wrap gap-2">
+                    {rd.skills.slice(0, 8).map(s => (
+                      <span key={s} className="bg-white border border-black/[0.05] text-slate-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                        {s}
                       </span>
-                    )}
+                    ))}
                   </div>
                 )}
               </div>
@@ -240,16 +237,39 @@ export default function SetupPage() {
           </div>
 
           {/* ── Step 2: Configure ── */}
-          <div>
-            <p className="metric-label mb-3 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center h-5 w-5 rounded-full
-                               bg-brand-500/20 text-brand-400 text-[10px] font-bold">2</span>
-              Configure Interview
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <SelectField label="Interview Type" value={type}       onChange={setType}       options={INTERVIEW_TYPES} icon="🎯" />
-              <SelectField label="Difficulty"     value={difficulty} onChange={setDifficulty} options={DIFFICULTIES}    icon="📊" />
-              <SelectField label="Language"       value={language}   onChange={setLanguage}   options={LANGUAGES}       icon="🌐" />
+          <div className="pt-4 border-t border-black/[0.05]">
+            <span className="step-label mb-4">Step 2: Configure Interview</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Type</label>
+                <select 
+                  value={type} 
+                  onChange={e => setType(e.target.value)}
+                  className="w-full bg-slate-50 border border-black/[0.05] rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 transition-all outline-none"
+                >
+                  {INTERVIEW_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Difficulty</label>
+                <select 
+                  value={difficulty} 
+                  onChange={e => setDifficulty(e.target.value)}
+                  className="w-full bg-slate-50 border border-black/[0.05] rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 transition-all outline-none"
+                >
+                  {DIFFICULTIES.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Language</label>
+                <select 
+                  value={language} 
+                  onChange={e => setLanguage(e.target.value)}
+                  className="w-full bg-slate-50 border border-black/[0.05] rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 transition-all outline-none"
+                >
+                  {LANGUAGES.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -257,7 +277,7 @@ export default function SetupPage() {
           <button
             onClick={handleStart}
             disabled={!uploadDone || starting}
-            className="btn-primary w-full flex items-center justify-center gap-3 text-base py-4"
+            className="btn-primary-solid w-full flex items-center justify-center gap-3 text-sm py-4"
           >
             {starting ? (
               <>
@@ -266,20 +286,17 @@ export default function SetupPage() {
               </>
             ) : (
               <>
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                 </svg>
-                Start Interview
+                <span>Start Your Interview</span>
               </>
             )}
           </button>
         </div>
 
-        <p className="text-center text-slate-600 text-xs mt-6">
-          Your resume is processed securely and never stored permanently.
+        <p className="text-center text-slate-400 text-[10px] font-medium uppercase tracking-[0.2em] mt-8">
+          Secure · Encrypted · AI-Powered
         </p>
       </div>
     </div>

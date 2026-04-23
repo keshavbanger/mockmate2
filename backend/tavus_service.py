@@ -47,8 +47,9 @@ Behavior Rules:
 # ---------------------------------------------------------------------------
 
 def _is_test_mode() -> bool:
-    """Return True when running with test credentials (no real API calls made)."""
-    return os.getenv("TAVUS_API_KEY", "").strip().lower() == "test"
+    """Return True when running with test credentials or forced test mode."""
+    val = os.getenv("TAVUS_API_KEY", "").strip().lower()
+    return val == "test" or val == ""
 
 
 def _get_headers() -> dict:

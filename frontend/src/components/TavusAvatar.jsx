@@ -1,24 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInterview } from '../context/InterviewContext.jsx';
-import { saveTurn } from '../utils/api.js';
+import { saveTurn, sendMockChat } from '../utils/api.js';
 
 // ─── Loading Overlay ──────────────────────────────────────────────────────────
 function ConnectingOverlay({ visible }) {
   if (!visible) return null;
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center
-                    bg-surface-800/95 backdrop-blur-sm rounded-xl z-10 gap-4">
+                    bg-white/95 backdrop-blur-sm rounded-[32px] z-10 gap-6">
       <div className="relative">
-        <div className="h-14 w-14 rounded-full border-2 border-brand-500/30 flex items-center justify-center">
-          <svg className="h-7 w-7 text-brand-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-          </svg>
+        <div className="h-16 w-16 rounded-full border-2 border-purple-500/10 flex items-center justify-center">
+          <div className="h-2 w-2 rounded-full bg-purple-500 animate-ping" />
         </div>
-        <div className="absolute inset-0 rounded-full border-t-2 border-brand-400 animate-spin" />
+        <div className="absolute inset-0 rounded-full border-t-2 border-purple-500 animate-spin" />
       </div>
       <div className="text-center">
-        <p className="text-white font-semibold">Connecting to InterviewBot…</p>
-        <p className="text-slate-500 text-sm mt-1">Setting up your session</p>
+        <p className="text-black font-bold tracking-tight">Connecting to Stitch AI</p>
+        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mt-2">Initializing Persona</p>
       </div>
     </div>
   );
@@ -30,7 +28,16 @@ export default function TavusAvatar({ conversationUrl }) {
   const [loaded, setLoaded] = useState(false);
   const [isMock, setIsMock] = useState(false);
   const [mockIndex, setMockIndex] = useState(0);
+  const [currentAnswer, setCurrentAnswer] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [turnId, setTurnId] = useState(0); // Forces STT restart per question
+  
   const iframeRef = useRef(null);
+  const currentAnswerRef = useRef('');
+  const silenceTimerRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const lastProcessedIndexRef = useRef(-1);
 
   // 1. Detect if we are in mock mode
   useEffect(() => {
@@ -53,6 +60,8 @@ export default function TavusAvatar({ conversationUrl }) {
 
         if (text) {
           ctx.updateTranscript(text);
+          if (isMock) return; // mock mode handles its own saving to prevent duplicates
+          
           const mappedRole = role === 'assistant' ? 'interviewer' : 'candidate';
           saveTurn(ctx.sessionId, {
             role: mappedRole,
@@ -75,40 +84,73 @@ export default function TavusAvatar({ conversationUrl }) {
     if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true; // Instant feedback
     recognition.lang = 'en-US';
 
+    lastProcessedIndexRef.current = -1;
+
     recognition.onresult = (event) => {
-      const last = event.results.length - 1;
-      const text = event.results[last][0].transcript;
+      if (isMuted) return;
+
+      let fullTranscript = '';
+      for (let i = 0; i < event.results.length; ++i) {
+        fullTranscript += event.results[i][0].transcript;
+        
+        // Dispatch only new final results to context transcript
+        if (event.results[i].isFinal && i > lastProcessedIndexRef.current) {
+          window.postMessage({
+            type: 'transcript',
+            data: { text: event.results[i][0].transcript, role: 'user' }
+          }, '*');
+          lastProcessedIndexRef.current = i;
+        }
+      }
       
-      // Dispatch as a fake Tavus message so it goes through our standard pipeline
-      window.postMessage({
-        type: 'transcript',
-        data: { text: text, role: 'user' }
-      }, '*');
+      setCurrentAnswer(fullTranscript);
+      currentAnswerRef.current = fullTranscript;
+
+      // Auto-submit after 4 seconds of silence
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        if (currentAnswerRef.current.trim().length > 0) {
+          autoSubmitAnswer(currentAnswerRef.current);
+        }
+      }, 4000);
     };
 
     recognition.onerror = (event) => {
       console.warn('SpeechRecognition error:', event.error);
     };
 
+    recognition.onend = () => {
+      // Auto restart if it died unexpectedly and we aren't muted
+      if (!isMuted && isMock) {
+        try { recognition.start(); } catch (e) {}
+      }
+    };
+
     try {
-      recognition.start();
+      if (!isMuted) {
+        recognition.start();
+      }
     } catch (e) {
       console.warn("Speech recognition failed to start:", e);
     }
 
-    return () => recognition.stop();
-  }, [isMock]);
+    return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      recognition.onend = null; // Prevent restart loop on unmount
+      try { recognition.stop(); } catch (e) {}
+    };
+  }, [isMock, isMuted, turnId]);
 
-  // 3. Mock Interview Logic: First question automatically, others via button
+  // 3. Structured Interview Logic: Speak question when index changes
   const speakQuestion = (text) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      // Optional: try to grab an English voice
       const voices = window.speechSynthesis.getVoices();
       const englishVoice = voices.find(v => v.lang.startsWith('en-') && v.name.toLowerCase().includes('google')) 
                         || voices.find(v => v.lang.startsWith('en-'));
@@ -117,78 +159,82 @@ export default function TavusAvatar({ conversationUrl }) {
     }
   };
 
+  const { currentQuestionIndex } = ctx.sessionMetrics;
+  const { questions } = ctx;
+
   useEffect(() => {
-    if (!isMock || !ctx.questions.length || mockIndex !== 0) return;
-
-    // Simulate the first question after 3 seconds
-    const timer = setTimeout(() => {
-      const questionText = ctx.questions[0];
-      window.postMessage({
-        type: 'transcript',
-        data: { text: questionText, role: 'assistant' }
-      }, '*');
-      speakQuestion(questionText);
+    if (!isMock || !questions.length) return;
+    
+    // If we just started, give a greeting + first question
+    if (currentQuestionIndex === 0 && mockIndex === 0) {
+      const candidateName = ctx.resumeData?.name || "there";
+      const text = `Hello ${candidateName}, welcome to the interview! I'll ask you ${questions.length} questions. Let's start with the first one. ${questions[0]}`;
+      
+      speakQuestion(text);
+      saveTurn(ctx.sessionId, { role: 'interviewer', text: text, timestamp_ms: Date.now() });
       setMockIndex(1);
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [isMock, mockIndex, ctx.questions]);
-
-  const handleNextMockQuestion = () => {
-    if (mockIndex < ctx.questions.length) {
-      const questionText = ctx.questions[mockIndex];
-      window.postMessage({
-        type: 'transcript',
-        data: { text: questionText, role: 'assistant' }
-      }, '*');
-      speakQuestion(questionText);
-      setMockIndex(prev => prev + 1);
+    } 
+    // If question index changed, speak the next question
+    else if (currentQuestionIndex < questions.length && currentQuestionIndex + 1 > mockIndex) {
+      const text = questions[currentQuestionIndex];
+      speakQuestion(text);
+      saveTurn(ctx.sessionId, { role: 'interviewer', text: text, timestamp_ms: Date.now() });
+      setMockIndex(currentQuestionIndex + 1);
     }
-  };
+    // If all done
+    else if (currentQuestionIndex >= questions.length && mockIndex === questions.length) {
+      const text = "That concludes our interview. Thank you! Please click End Interview to see your report.";
+      speakQuestion(text);
+      saveTurn(ctx.sessionId, { role: 'interviewer', text: text, timestamp_ms: Date.now() });
+      setMockIndex(mockIndex + 1);
+    }
+  }, [isMock, currentQuestionIndex, questions, ctx.sessionId, ctx.resumeData?.name, mockIndex]);
 
   // Safety: if no URL provided, show placeholder
   if (!conversationUrl) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-surface-700 rounded-xl">
-        <p className="text-slate-500 text-sm">No conversation URL provided</p>
-      </div>
+    <div className="w-full h-full flex items-center justify-center bg-slate-50 rounded-[32px] border border-black/[0.03]">
+      <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Waiting for Session...</p>
+    </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="flex flex-col h-full gap-4">
       {/* iframe wrapper */}
-      <div className="relative flex-1 bg-surface-800 rounded-xl overflow-hidden border border-white/5">
+      <div className="relative flex-1 bg-white rounded-[32px] overflow-hidden border border-black/[0.03] shadow-lg">
         <ConnectingOverlay visible={!loaded} />
         
         {isMock ? (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-surface-900 p-8 text-center">
-            <div className="w-32 h-32 rounded-full bg-brand-500/10 flex items-center justify-center mb-6 border-2 border-brand-500/20 animate-pulse">
-              <span className="text-5xl">🤖</span>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-[#f8f9fa] p-10 text-center">
+            <div className="relative mb-10">
+              <div className="w-32 h-32 rounded-full bg-white flex items-center justify-center border border-black/[0.03] shadow-2xl">
+                <span className="text-6xl">🤖</span>
+              </div>
+              {/* Outer pulse */}
+              <div className="absolute -inset-4 rounded-full border border-purple-500/10 animate-ping opacity-40" />
             </div>
-            <h3 className="text-white text-xl font-bold mb-2">Mock Interview Mode</h3>
-            <p className="text-slate-400 text-sm max-w-sm mb-6">
-              You are using test API keys. The first question was sent automatically.
-            </p>
+
+            <h3 className="text-black text-2xl font-black mb-2 tracking-tighter">stitch <span className="text-purple-500">interviewer</span></h3>
             
-            {mockIndex > 0 && mockIndex < ctx.questions.length ? (
-               <button 
-                 onClick={handleNextMockQuestion}
-                 className="btn-primary py-2 px-6 shadow-brand/20 shadow-lg hover:shadow-brand/40 transition-all font-semibold"
-               >
-                 Ask Next Question ({mockIndex}/{ctx.questions.length})
-               </button>
-            ) : mockIndex >= ctx.questions.length ? (
-               <div className="text-brand-400 text-sm font-semibold max-w-sm">
-                 All questions asked. You can end the interview when you finish answering!
-               </div>
-            ) : (
-                <div className="flex items-center gap-2 text-brand-400 text-xs font-mono bg-brand-500/5 px-4 py-2 rounded-full border border-brand-500/10">
-                  <span className="h-2 w-2 rounded-full bg-brand-400 animate-ping" />
-                  SYSTEM: PREPARING FIRST QUESTION...
-                </div>
-            )}
-            
+            <div className="bg-white border border-black/[0.03] rounded-3xl p-8 max-w-sm w-full shadow-sm">
+              <p className="text-slate-600 text-sm font-medium leading-relaxed italic">
+                "{currentQuestionIndex < questions.length ? questions[currentQuestionIndex] : "Session concluded."}"
+              </p>
+            </div>
+
+            <div className="mt-12 flex flex-col items-center gap-3">
+              <div className="flex gap-1.5">
+                {questions.map((_, i) => (
+                  <div key={i} className="h-1.5 w-6 rounded-full bg-slate-200 overflow-hidden">
+                    <div 
+                      className={`h-full bg-black transition-all duration-700 ${i <= currentQuestionIndex ? 'w-full' : 'w-0'}`}
+                    />
+                  </div>
+                ))}
+              </div>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Progress</span>
+            </div>
           </div>
         ) : (
           <iframe
@@ -205,28 +251,28 @@ export default function TavusAvatar({ conversationUrl }) {
       </div>
 
       {/* Interviewer label bar */}
-      <div className="flex items-center justify-between px-4 py-2.5
-                      bg-surface-700 rounded-xl border border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-brand-500/20 flex items-center justify-center
-                          text-brand-400 font-bold text-sm">
-            IB
+      <div className="flex items-center justify-between px-6 py-4
+                      bg-white rounded-[24px] border border-black/[0.03] shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center border border-black/[0.03]
+                          text-black font-black text-xs shadow-sm">
+            ST
           </div>
           <div>
-            <p className="text-white text-sm font-semibold">InterviewBot</p>
-            <p className="text-slate-500 text-xs">{isMock ? 'AI Simulator (Mock)' : 'AI Interview Coach'}</p>
+            <p className="text-black text-sm font-bold tracking-tight">stitch ai</p>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">{isMock ? 'Mock Persona' : 'Live Persona'}</p>
           </div>
         </div>
 
         {loaded ? (
-          <div className="flex items-center gap-1.5 badge-green">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 live-dot" />
-            Live
+          <div className="flex items-center gap-2 bg-purple-50 px-4 py-1.5 rounded-full border border-purple-500/10">
+            <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse" />
+            <span className="text-purple-600 text-[10px] font-black uppercase tracking-widest">Connected</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 badge bg-slate-500/15 text-slate-400
-                          border border-slate-500/20 text-xs">
-            Connecting…
+          <div className="flex items-center gap-2 bg-slate-50 px-4 py-1.5 rounded-full border border-black/[0.03]">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+            <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Idle</span>
           </div>
         )}
       </div>

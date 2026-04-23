@@ -267,23 +267,68 @@ export default function CandidatePanel({ audioStream }) {
     ctx.updateWPM(wpm);
   }, [ctx.sessionMetrics.transcript]); // eslint-disable-line
 
-  // ── 6. Render ──────────────────────────────────────────────────────────────
-  const { currentEmotion, totalFillers, wpm, transcript } = ctx.sessionMetrics;
+  // ── 6. Manual Submission Logic ─────────────────────────────────────────────
+  const [submitting, setSubmitting] = useState(false);
+  const [lastTranscriptLen, setLastTranscriptLen] = useState(0);
+
+  const handleSubmitAnswer = async () => {
+    const { sessionId, questions, sessionMetrics, setCurrentQuestion, pushTurn } = ctx;
+    const { currentQuestionIndex, transcript } = sessionMetrics;
+
+    if (currentQuestionIndex >= questions.length) return;
+
+    setSubmitting(true);
+    try {
+      // Extract the text spoken for THIS question
+      const currentAnswer = transcript.slice(lastTranscriptLen).trim();
+      
+      const turnData = {
+        role: 'candidate',
+        text: currentAnswer || '(No speech detected)',
+        question_index: currentQuestionIndex,
+        timestamp_ms: Date.now(),
+      };
+
+      // 1. Save to backend
+      const { saveTurn } = await import('../utils/api.js');
+      await saveTurn(sessionId, turnData);
+
+      // 2. Update local context
+      pushTurn(turnData);
+      setLastTranscriptLen(transcript.length);
+      
+      // 3. Move to next
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestion(currentQuestionIndex + 1);
+      } else {
+        // Last question finished
+        setCurrentQuestion(questions.length); // Mark as all done
+      }
+    } catch (err) {
+      console.error('Failed to submit answer:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── 7. Render ──────────────────────────────────────────────────────────────
+  const { currentEmotion, totalFillers, wpm, transcript, currentQuestionIndex } = ctx.sessionMetrics;
+  const { questions } = ctx;
 
   const highlightedParts = transcript
     ? highlightFillers(transcript.slice(-600))  // last 600 chars
     : [];
 
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-6 h-full">
 
       {/* ── Webcam feed ─────────────────────────────────────────────────── */}
-      <div className="relative rounded-xl overflow-hidden border border-white/5 bg-surface-800
+      <div className="relative rounded-3xl overflow-hidden border border-black/[0.03] bg-white shadow-lg
                       aspect-video w-full flex-shrink-0">
         {camError ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
             <span className="text-3xl">📷</span>
-            <p className="text-amber-400 text-sm font-medium">{camError}</p>
+            <p className="text-amber-600 text-xs font-bold">{camError}</p>
           </div>
         ) : (
           <video
@@ -296,85 +341,92 @@ export default function CandidatePanel({ audioStream }) {
           />
         )}
 
-        {/* MP status overlay */}
-        {!mpReady && !camError && (
-          <div className="absolute top-3 right-3">
-            <span className="badge bg-surface-800/90 text-slate-400 border border-white/10 text-[10px] gap-1">
-              <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10"
-                  stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Loading AI
+        {/* Live metrics overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t
+                        from-black/50 to-transparent flex items-end justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border border-white/20 text-white ${
+              currentEmotion === 'Confident' ? 'bg-purple-500/80' : 
+              currentEmotion === 'Nervous' ? 'bg-amber-500/80' : 'bg-slate-500/80'
+            }`}>
+              {currentEmotion === 'Confident' ? '😊' : currentEmotion === 'Nervous' ? '😟' : '😐'}
+              {' '}{currentEmotion}
             </span>
           </div>
-        )}
-
-        {/* Live metrics overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t
-                        from-black/70 to-transparent flex items-end justify-between">
-          <span className={`badge text-[11px] ${EMOTION_STYLE[currentEmotion] || 'badge-blue'}`}>
-            {currentEmotion === 'Confident' ? '😊' : currentEmotion === 'Nervous' ? '😟' : '😐'}
-            {' '}{currentEmotion}
-          </span>
           <div className="flex items-center gap-2">
-            <span className="badge bg-black/50 text-slate-300 border border-white/10 text-[10px]">
-              Fillers: {totalFillers}
-            </span>
-            <span className="badge bg-black/50 text-slate-300 border border-white/10 text-[10px]">
+            <span className="bg-black/40 backdrop-blur-md text-white border border-white/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
               ~{wpm} WPM
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── Confidence bar ───────────────────────────────────────────────── */}
-      <div className="px-1">
-        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-          <span>Confidence</span>
-          <span>{Math.round(currentData.confidence * 100)}%</span>
+      {/* ── Structured Interview Questions ────────────────────────────────── */}
+      <div className="flex-shrink-0 premium-card p-6">
+        <div className="flex items-center justify-between mb-6">
+          <span className="step-label">Interview Questions</span>
+          <span className="text-[10px] text-purple-500 font-bold uppercase tracking-[0.2em]">
+            {currentQuestionIndex < questions.length 
+              ? `${currentQuestionIndex + 1} / ${questions.length}`
+              : 'DONE'}
+          </span>
         </div>
-        <div className="h-1.5 bg-surface-500 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${currentData.confidence * 100}%`,
-              background: currentData.confidence > 0.6
-                ? '#10b981'
-                : currentData.confidence > 0.35
-                  ? '#f59e0b'
-                  : '#6366f1',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* ── Audio Input Visualizer ───────────────────────────────────────── */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <p className="metric-label text-sm">🎤 Listening</p>
-          <span className="text-[10px] text-slate-500">Real-time audio input</span>
-        </div>
-        <div className="h-16 overflow-hidden rounded-lg border border-white/5">
-          {audioStream ? (
-            <AudioVisualizer audioStream={audioStream} isActive={true} />
-          ) : (
-            <div className="w-full h-full bg-surface-700 rounded-lg flex items-center justify-center">
-              <span className="text-slate-500 text-sm">🎤 Requesting microphone access...</span>
+        
+        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+          {questions.map((q, idx) => (
+            <div 
+              key={idx}
+              className={`p-4 rounded-2xl border transition-all duration-500 text-sm font-medium ${
+                idx === currentQuestionIndex
+                  ? 'bg-slate-50 border-black/10 text-black shadow-sm'
+                  : idx < currentQuestionIndex
+                    ? 'bg-purple-50/50 border-purple-500/10 text-slate-400 opacity-60'
+                    : 'bg-transparent border-transparent text-slate-300'
+              }`}
+            >
+              <div className="flex gap-4">
+                <span className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
+                  idx === currentQuestionIndex ? 'bg-black text-white' : 
+                  idx < currentQuestionIndex ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-400'
+                }`}>
+                  {idx < currentQuestionIndex ? '✓' : idx + 1}
+                </span>
+                <p className="leading-relaxed">{q}</p>
+              </div>
             </div>
-          )}
+          ))}
         </div>
+
+        {currentQuestionIndex < questions.length && (
+          <button
+            onClick={handleSubmitAnswer}
+            disabled={submitting}
+            className="w-full mt-6 btn-black flex items-center justify-center gap-2 group text-xs py-3"
+          >
+            {submitting ? (
+              <>
+                <Spinner />
+                <span>Submitting...</span>
+              </>
+            ) : (
+              <>
+                <span>Submit Answer & Next</span>
+                <svg className="h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── Live transcript ──────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <p className="metric-label mb-2">Live Transcript</p>
-        <div className="flex-1 bg-surface-800/60 rounded-xl border border-white/5 p-4
-                        overflow-y-auto text-sm text-slate-400 leading-relaxed max-h-48">
+      <div className="flex-1 flex flex-col min-h-0 premium-card p-6">
+        <span className="step-label mb-4">Live Transcript</span>
+        <div className="flex-1 overflow-y-auto text-sm font-medium text-slate-500 leading-relaxed custom-scrollbar">
           {highlightedParts.length === 0 ? (
-            <span className="text-slate-600 italic">
-              Your speech will appear here once the interview starts…
+            <span className="text-slate-300 italic font-normal">
+              Waiting for speech input...
             </span>
           ) : (
             <>
@@ -382,32 +434,22 @@ export default function CandidatePanel({ audioStream }) {
                 typeof part === 'string' ? (
                   <span key={i}>{part}</span>
                 ) : (
-                  <mark key={part.key} className="filler-highlight">{part.filler}</mark>
+                  <mark key={part.key} className="bg-amber-100 text-amber-700 rounded px-1 font-bold">{part.filler}</mark>
                 )
               )}
             </>
           )}
         </div>
       </div>
-
-      {/* ── Filler word breakdown ────────────────────────────────────────── */}
-      {totalFillers > 0 && (
-        <div className="bg-surface-800/40 rounded-xl border border-white/5 p-3">
-          <p className="metric-label mb-2">Filler Words Detected</p>
-          <div className="flex flex-wrap gap-1.5">
-            {Object.entries(ctx.sessionMetrics.fillerCounts)
-              .sort(([, a], [, b]) => b - a)
-              .slice(0, 8)
-              .map(([word, count]) => (
-                <span key={word}
-                  className="badge bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px]">
-                  "{word}" ×{count}
-                </span>
-              ))
-            }
-          </div>
-        </div>
-      )}
     </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
   );
 }

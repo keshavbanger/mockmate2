@@ -145,33 +145,38 @@ export default function InterviewRoom() {
   if (!ctx.conversationUrl) return null;
 
   return (
-    <div className="h-screen bg-surface-900 flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#f8f9fa] flex flex-col overflow-hidden">
       <ToastContainer />
 
       {/* ── Report generation full-screen overlay ─────────────────────────── */}
       {ending && (
-        <div className="fixed inset-0 bg-surface-900/95 backdrop-blur-md z-50
+        <div className="fixed inset-0 bg-white/90 backdrop-blur-md z-50
                         flex flex-col items-center justify-center gap-6">
           <div className="relative">
-            <div className="h-20 w-20 rounded-full border-2 border-brand-500/20
+            <div className="h-20 w-20 rounded-full border-2 border-purple-200
                             flex items-center justify-center">
-              <Spinner size="lg" />
+              <div className="h-8 w-8 text-[#6B46C1]"><Spinner size="lg" /></div>
             </div>
-            <div className="absolute inset-0 rounded-full border-t-2 border-brand-400
+            <div className="absolute inset-0 rounded-full border-t-2 border-[#6B46C1]
                             animate-spin" style={{ animationDuration: '1.5s' }} />
           </div>
           <div className="text-center">
-            <p className="text-white text-xl font-bold">{stageText}</p>
-            <p className="text-slate-500 text-sm mt-1">
-              This takes about 15–30 seconds
-            </p>
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <div className="h-6 w-6 rounded-full bg-[#6B46C1] flex items-center justify-center text-white">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+                </svg>
+              </div>
+              <span className="text-black font-bold text-sm tracking-tight">MockMate</span>
+            </div>
+            <p className="text-black text-xl font-bold">{stageText}</p>
+            <p className="text-slate-400 text-sm mt-1">This takes about 15–30 seconds</p>
           </div>
-          {/* Animated dots */}
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="h-1.5 w-1.5 rounded-full bg-brand-400"
+                className="h-1.5 w-1.5 rounded-full bg-[#6B46C1]"
                 style={{ animation: `pulse 1.4s ${i * 0.2}s ease-in-out infinite` }}
               />
             ))}
@@ -181,16 +186,24 @@ export default function InterviewRoom() {
 
       {/* ── Top nav bar ───────────────────────────────────────────────────── */}
       <header className="flex-shrink-0 flex items-center justify-between
-                         px-6 py-3 bg-surface-800 border-b border-white/5">
+                         px-6 py-4 bg-white border-b border-black/[0.03] shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="text-brand-400 font-bold text-lg tracking-tight">🎙️ InterviewBot</span>
+          {/* MockMate logo */}
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-full bg-[#6B46C1] flex items-center justify-center text-white">
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+              </svg>
+            </div>
+            <span className="text-black font-bold text-base tracking-tight">MockMate</span>
+          </div>
           {ctx.interviewConfig && (
             <div className="hidden sm:flex items-center gap-2">
               <span className="badge-purple text-[10px]">{ctx.interviewConfig.type}</span>
-              <span className="badge bg-white/5 text-slate-400 border border-white/10 text-[10px]">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-100 font-semibold">
                 {ctx.interviewConfig.difficulty}
               </span>
-              <span className="badge bg-white/5 text-slate-400 border border-white/10 text-[10px]">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-100 font-semibold">
                 {ctx.interviewConfig.language}
               </span>
             </div>
@@ -200,9 +213,9 @@ export default function InterviewRoom() {
         <div className="flex items-center gap-4">
           {/* Recording indicator + timer + speech indicator */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-sm text-slate-400">
-              <span className="h-2 w-2 rounded-full bg-red-500 live-dot" />
-              <span className="font-mono">{timer}</span>
+            <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.03] px-3 py-1.5 rounded-full">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="font-mono text-xs font-bold text-slate-500">{timer}</span>
             </div>
             {audioStream && <SpeechIndicator audioStream={audioStream} />}
           </div>
@@ -211,13 +224,9 @@ export default function InterviewRoom() {
           <button
             onClick={() => setShowConfirm(true)}
             disabled={ending}
-            className="btn-danger flex items-center gap-2 py-2 px-4 text-sm disabled:opacity-40"
+            className="btn-black flex items-center gap-2 py-2 px-6 text-xs disabled:opacity-40"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 10a1 1 0 00-1 1v2a1 1 0 001 1h6a1 1 0 001-1v-2a1 1 0 00-1-1H9z" />
-            </svg>
-            End Interview
+            End Session
           </button>
         </div>
       </header>
@@ -225,7 +234,7 @@ export default function InterviewRoom() {
       {/* ── Main content area ──────────────────────────────────────────────── */}
       <main className="flex-1 flex overflow-hidden min-h-0">
         {/* LEFT — Tavus avatar (60%) */}
-        <div className="w-[60%] flex-shrink-0 p-5 border-r border-white/5 overflow-hidden">
+        <div className="w-[60%] flex-shrink-0 p-5 border-r border-black/[0.03] overflow-hidden">
           <TavusAvatar conversationUrl={ctx.conversationUrl} />
         </div>
 
@@ -237,31 +246,30 @@ export default function InterviewRoom() {
 
       {/* ── Confirm End modal ─────────────────────────────────────────────── */}
       {showConfirm && !ending && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40
                         flex items-center justify-center p-4">
-          <div className="card-glow p-8 max-w-md w-full animate-slide-up text-center">
-            <div className="h-14 w-14 rounded-full bg-red-500/10 flex items-center justify-center
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 max-w-md w-full text-center">
+            <div className="h-14 w-14 rounded-full bg-red-50 border border-red-100 flex items-center justify-center
                             mx-auto mb-5 text-2xl">
               🛑
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">End the Interview?</h2>
-            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+            <h2 className="text-xl font-bold text-black mb-2">End the Interview?</h2>
+            <p className="text-slate-500 text-sm mb-1 leading-relaxed">
               This will stop the session and generate your AI performance report.
-              <br />
-              <span className="text-slate-500">You cannot return once ended.</span>
             </p>
+            <p className="text-red-400 text-xs font-semibold mb-6">You cannot return once ended.</p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => setShowConfirm(false)}
-                className="btn-ghost px-8"
+                className="px-6 py-2.5 rounded-full border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors"
               >
                 Continue Interview
               </button>
               <button
                 onClick={() => { setShowConfirm(false); handleEnd(); }}
-                className="btn-danger px-8"
+                className="px-6 py-2.5 rounded-full bg-[#6B46C1] text-white text-sm font-semibold hover:bg-purple-700 transition-colors shadow-md"
               >
-                End & Get Report
+                End &amp; Get Report
               </button>
             </div>
           </div>

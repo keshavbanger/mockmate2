@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 
 from session_store import get_session, update_session
 import tavus_service
+import google.generativeai as genai
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,6 +53,11 @@ class SaveTurnRequest(BaseModel):
 class EndInterviewRequest(BaseModel):
     session_id: str
     conversation_id: str
+
+
+class SaveEmotionRequest(BaseModel):
+    session_id: str
+    snapshots: list
 
 
 # ---------------------------------------------------------------------------
@@ -193,3 +200,92 @@ async def end_interview(body: EndInterviewRequest):
         "status": "completed",
         "conversation_id": body.conversation_id,
     }
+# ---------------------------------------------------------------------------
+# POST /api/mock-chat
+# ---------------------------------------------------------------------------
+
+class MockChatRequest(BaseModel):
+    session_id: str
+    user_text: str
+
+@router.post("/mock-chat")
+async def mock_chat(body: MockChatRequest):
+    session = get_session(body.session_id)
+    if session is None:
+        raise HTTPException(404, f"Session '{body.session_id}' not found.")
+
+    turns = session.get("turns", [])
+    # 1. Save user turn
+    if body.user_text.strip():
+        turns.append({"role": "candidate", "text": body.user_text, "timestamp_ms": int(time.time() * 1000)})
+        update_session(body.session_id, "turns", turns)
+
+    # 2. Build history
+    history = []
+    for t in turns:
+        history.append(f"{t['role'].upper()}: {t['text']}")
+    history_str = "\n".join(history)
+
+    questions = session.get("questions", [])
+    numbered_questions = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
+
+    prompt = f"""
+    You are InterviewBot, an AI interviewer.
+    Here are the planned questions for the interview:
+    {numbered_questions}
+    
+    Here is the conversation so far:
+    {history_str}
+    
+    Instructions:
+    Evaluate the candidate's last answer. 
+    If the candidate asked to repeat the question, repeat it.
+    If the answer is too short or lacks detail, ask a follow-up question.
+    If the answer is satisfactory, acknowledge it briefly and ask the NEXT question from the planned list.
+    If all questions are asked and answered, say "That concludes our interview. Thank you!".
+    Do not give away the score. Keep your response concise, spoken-style, and professional.
+    
+    Respond only with the exact text you want to speak next. Do not include any other formatting.
+    """
+
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    
+    logger.info(f"MOCK CHAT PROMPT:\n{prompt}")
+    
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        response = model.generate_content(prompt)
+        ai_reply = response.text.strip()
+    except Exception as e1:
+        logger.warning(f"Failed with 1.5-flash-latest: {e1}. Falling back to gemini-pro...")
+        try:
+            model = genai.GenerativeModel("gemini-pro")
+            response = model.generate_content(prompt)
+            ai_reply = response.text.strip()
+        except Exception as e2:
+            logger.error(f"Gemini error in mock-chat: {e2}")
+            ai_reply = "I'm having trouble connecting. Could you please repeat that?"
+
+    logger.info(f"MOCK CHAT REPLY:\n{ai_reply}")
+    
+    # 3. Save AI turn
+    turns.append({"role": "interviewer", "text": ai_reply, "timestamp_ms": int(time.time() * 1000)})
+    update_session(body.session_id, "turns", turns)
+
+    return {"reply": ai_reply}
+
+
+# ---------------------------------------------------------------------------
+# POST /api/save-emotion-snapshots
+# ---------------------------------------------------------------------------
+
+@router.post("/save-emotion-snapshots")
+async def save_emotion_snapshots(body: SaveEmotionRequest):
+    session = get_session(body.session_id)
+    if session is None:
+        raise HTTPException(404, f"Session '{body.session_id}' not found.")
+        
+    snapshots = session.get("emotion_snapshots", [])
+    snapshots.extend(body.snapshots)
+    update_session(body.session_id, "emotion_snapshots", snapshots)
+    return {"ok": True, "count": len(snapshots)}

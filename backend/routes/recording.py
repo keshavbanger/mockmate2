@@ -77,17 +77,16 @@ async def upload_recording(
         raise HTTPException(404, f"Session '{session_id}' not found or expired.")
 
     try:
-        # 1. Save uploaded file
+        # 1. Save uploaded file streaming to disk to avoid OOM
         file_extension = Path(file.filename or "_video.webm").suffix or ".webm"
         filename = f"interview_{session_id}_{int(time.time())}{file_extension}"
         file_path = UPLOADS_DIR / filename
 
-        contents = await file.read()
-        file_size = len(contents)
+        import shutil
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-        # Save file
-        with open(file_path, "wb") as f:
-            f.write(contents)
+        file_size = file_path.stat().st_size
 
         logger.info(
             "Recording saved: %s (size: %.1f MB)",
