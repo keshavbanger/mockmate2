@@ -3,6 +3,7 @@ Interview Question Generator — Gemini 1.5 Flash.
 Generates exactly 7 progressively harder interview questions based on resume data.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -100,8 +101,14 @@ async def generate_questions(
     )
 
     try:
-        response = await gemini_model.generate_content_async(prompt)
+        response = await asyncio.wait_for(
+            gemini_model.generate_content_async(prompt),
+            timeout=30.0,
+        )
         raw = response.text.strip()
+    except asyncio.TimeoutError:
+        logger.error("Gemini API timed out after 30 seconds during question generation.")
+        raise RuntimeError("Gemini API timed out generating questions. Please try again.")
     except Exception as exc:
         logger.error("Gemini API error during question generation: %s", exc)
         raise RuntimeError(f"Gemini API error: {exc}") from exc

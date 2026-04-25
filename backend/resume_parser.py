@@ -7,6 +7,7 @@ import logging
 import re
 from io import BytesIO
 
+import asyncio
 import fitz  # PyMuPDF
 import google.generativeai as genai
 
@@ -93,8 +94,14 @@ async def parse_resume_with_gemini(
 
     # Step 2: call Gemini
     try:
-        response = await gemini_model.generate_content_async(prompt)
+        response = await asyncio.wait_for(
+            gemini_model.generate_content_async(prompt),
+            timeout=25.0,
+        )
         raw_json = response.text.strip()
+    except asyncio.TimeoutError:
+        logger.error("Gemini API timed out after 25 seconds during resume parsing.")
+        raise RuntimeError("Gemini API timed out. Please try again.")
     except Exception as exc:
         logger.error("Gemini API error during resume parsing: %s", exc)
         raise RuntimeError(f"Gemini API error: {exc}") from exc
