@@ -157,12 +157,12 @@ def get_gemini_model():
     # Real Gemini model
     genai.configure(api_key=api_key)
     _gemini_model = genai.GenerativeModel(
-        "gemini-1.5-flash",
+        "gemini-2.0-flash",
         generation_config=genai.GenerationConfig(
             temperature=0.7,
             max_output_tokens=4096,
         ),
     )
     _gemini_api_key_used = api_key
-    logger.info("Gemini 1.5 Flash model initialised.")
+    logger.info("Gemini 2.0 Flash model initialised.")
     return _gemini_model
