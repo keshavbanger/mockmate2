@@ -13,7 +13,8 @@ from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
-_gemini_model = None
+_gemini_model: "genai.GenerativeModel | None" = None
+_gemini_api_key_used: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -128,13 +129,12 @@ class MockGeminiModel:
 
 def get_gemini_model():
     """
-    FastAPI dependency that returns a cached Gemini 1.5 Flash model instance.
+    FastAPI dependency that returns a cached Gemini model instance.
+    Re-initializes if GEMINI_API_KEY has changed since last init.
     Falls back to MockGeminiModel when GEMINI_API_KEY=test.
     Raises HTTP 503 if the API key is missing entirely.
     """
-    global _gemini_model
-    if _gemini_model is not None:
-        return _gemini_model
+    global _gemini_model, _gemini_api_key_used
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
 
@@ -145,6 +145,10 @@ def get_gemini_model():
             detail="Gemini API key is not configured on the server.",
         )
 
+    # Re-initialize if key changed
+    if _gemini_model is not None and api_key == _gemini_api_key_used:
+        return _gemini_model
+
     if api_key.lower() == "test":
         logger.warning("TEST MODE: using MockGeminiModel — no real Gemini calls will be made.")
         _gemini_model = MockGeminiModel()
@@ -153,11 +157,12 @@ def get_gemini_model():
     # Real Gemini model
     genai.configure(api_key=api_key)
     _gemini_model = genai.GenerativeModel(
-        "gemini-2.0-flash",
+        "gemini-1.5-flash",
         generation_config=genai.GenerationConfig(
             temperature=0.7,
             max_output_tokens=4096,
         ),
     )
-    logger.info("Gemini 2.0 Flash model initialised.")
+    _gemini_api_key_used = api_key
+    logger.info("Gemini 1.5 Flash model initialised.")
     return _gemini_model
