@@ -253,13 +253,13 @@ async def mock_chat(body: MockChatRequest):
     logger.info(f"MOCK CHAT PROMPT:\n{prompt}")
     
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-flash-lite-latest")
         response = model.generate_content(prompt)
         ai_reply = response.text.strip()
     except Exception as e1:
-        logger.warning(f"Failed with gemini-2.0-flash: {e1}. Falling back to gemini-flash-latest...")
+        logger.warning(f"Failed with gemini-flash-lite-latest: {e1}. Falling back to gemini-pro-latest...")
         try:
-            model = genai.GenerativeModel("gemini-flash-latest")
+            model = genai.GenerativeModel("gemini-pro-latest")
             response = model.generate_content(prompt)
             ai_reply = response.text.strip()
         except Exception as e2:
