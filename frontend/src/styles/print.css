@@ -1,0 +1,54 @@
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  .report-dark-theme {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+  }
+
+  .premium-card {
+    box-shadow: none !important;
+    border: 1px solid #eee !important;
+    background: white !important;
+    color: black !important;
+    break-inside: avoid;
+  }
+
+  .section-header, .text-slate-500, .text-slate-400, .text-muted {
+    color: #666 !important;
+  }
+
+  .text-white, h1, h2, h3, p {
+    color: black !important;
+  }
+
+  button, .back-button, .share-button {
+    display: none !important;
+  }
+
+  details {
+    display: block !important;
+  }
+
+  details summary {
+    display: none !important;
+  }
+
+  details[open] summary {
+    display: none !important;
+  }
+  
+  .col-3, .col-4, .col-5, .col-6, .col-8, .col-12 {
+    grid-column: span 12 !important;
+    width: 100% !important;
+  }
+
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

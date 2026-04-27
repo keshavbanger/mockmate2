@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from session_store import cleanup_loop
 
@@ -104,6 +105,12 @@ app.include_router(report_router, prefix="/api", tags=["Report"])
 app.include_router(webhook_router, prefix="/api", tags=["Webhook"])
 app.include_router(recording_router, prefix="/api", tags=["Recording"])
 app.include_router(dev_router, prefix="/api", tags=["Development"])
+
+# Serve recordings from uploads folder
+UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+if not os.path.exists(UPLOADS_DIR):
+    os.makedirs(UPLOADS_DIR)
+app.mount("/recordings", StaticFiles(directory=UPLOADS_DIR), name="recordings")
 
 
 # ---------------------------------------------------------------------------

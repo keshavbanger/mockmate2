@@ -14,7 +14,7 @@ async def test_gemini():
     print(f"Testing with API Key: {api_key[:10]}...")
     genai.configure(api_key=api_key)
     
-    model_name = "gemini-flash-lite-latest"
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     print(f"Testing model: {model_name}")
     
     try:
@@ -25,7 +25,7 @@ async def test_gemini():
         print(f"Error with {model_name}: {e}")
         
         # Try fallback
-        fallback_model = "gemini-1.5-flash"
+        fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-latest")
         print(f"Testing fallback model: {fallback_model}")
         try:
             model = genai.GenerativeModel(fallback_model)

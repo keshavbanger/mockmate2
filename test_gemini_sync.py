@@ -13,7 +13,7 @@ def test_gemini():
     print(f"Testing with API Key: {api_key[:10]}...")
     genai.configure(api_key=api_key)
     
-    model_name = "gemini-1.5-flash" # Use a known stable one
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     print(f"Testing model: {model_name}")
     
     try:

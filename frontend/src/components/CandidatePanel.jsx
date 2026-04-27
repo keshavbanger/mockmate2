@@ -373,17 +373,17 @@ export default function CandidatePanel({ audioStream }) {
         </div>
         
         <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-          {questions.map((q, idx) => (
-            <div 
-              key={idx}
-              className={`p-4 rounded-2xl border transition-all duration-500 text-sm font-medium ${
-                idx === currentQuestionIndex
-                  ? 'bg-slate-50 border-black/10 text-black shadow-sm'
-                  : idx < currentQuestionIndex
-                    ? 'bg-purple-50/50 border-purple-500/10 text-slate-400 opacity-60'
-                    : 'bg-transparent border-transparent text-slate-300'
-              }`}
-            >
+          {questions.map((q, idx) => {
+            if (idx !== currentQuestionIndex) return null;
+            return (
+              <div 
+                key={idx}
+                className={`p-4 rounded-2xl border transition-all duration-500 text-sm font-medium ${
+                  idx === currentQuestionIndex
+                    ? 'bg-slate-50 border-black/10 text-black shadow-sm'
+                    : 'bg-purple-50/50 border-purple-500/10 text-slate-400 opacity-60'
+                }`}
+              >
               <div className="flex gap-4">
                 <span className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
                   idx === currentQuestionIndex ? 'bg-black text-white' : 
@@ -394,7 +394,8 @@ export default function CandidatePanel({ audioStream }) {
                 <p className="leading-relaxed">{q}</p>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
 
         {currentQuestionIndex < questions.length && (

@@ -16,8 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from dependencies import get_gemini_model
-from report_generator_enhanced import generate_enhanced_report
 from session_store import get_session, update_session
+from report_pipeline import ReportOrchestrator
+from report_pipeline.models import (
+    Utterance, SpeechMetrics, VisualMetrics, 
+    ResumeData, InterviewConfig, QuestionBankItem
+)
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -81,26 +86,104 @@ async def generate_report_endpoint(
     if not emotion_snapshots:
         logger.warning("Session %s has no emotion snapshots - facial analysis will be empty", body.session_id)
 
-    # Generate
+    # ── Map Session Data to Pipeline Input Models ──────────────────────────────
+    
+    # 1. Transcript Data
+    transcript_data = []
+    for turn in turns:
+        transcript_data.append(Utterance(
+            speaker=turn.get("role", "candidate"),
+            text=turn.get("text", ""),
+            start_time=0.0, # Approximate if missing
+            end_time=0.0,
+            question_id=turn.get("question_id")
+        ))
+
+    # 2. Speech Metrics (Aggregated from turns if not pre-computed)
+    # Note: In a full implementation, you'd calculate these per question.
+    speech_metrics = [SpeechMetrics(
+        total_words=len(t.get("text", "").split()),
+        words_per_minute=120.0, # Default if not tracked
+        filler_words_count=t.get("filler_count", 0),
+        filler_words_breakdown={},
+        silence_durations=[],
+        avg_pause_duration=0.0,
+        longest_pause=0.0,
+        answer_duration=30.0
+    ) for t in turns if t.get("role") == "candidate"]
+
+    # 3. Visual Metrics
+    visual_metrics = [VisualMetrics(
+        dominant_emotion=s.get("emotion", "Neutral"),
+        emotion_distribution={},
+        eye_contact_score=s.get("confidence_score", 0.5),
+        head_stability_score=0.8,
+        smile_frequency=0.1,
+        engagement_score=0.7
+    ) for s in emotion_snapshots] or [VisualMetrics(
+        dominant_emotion="Neutral",
+        emotion_distribution={},
+        eye_contact_score=0.5,
+        head_stability_score=0.8,
+        smile_frequency=0.0,
+        engagement_score=0.5
+    )]
+
+    # 4. Resume Data
+    resume_raw = session.get("resume_data", {})
+    resume_data = ResumeData(
+        candidate_name=resume_raw.get("name", "Candidate"),
+        target_role=resume_raw.get("target_role", "Professional"),
+        years_experience=float(resume_raw.get("total_experience_years", 0)),
+        skills=resume_raw.get("skills", []),
+        projects=[],
+        tools=[],
+        education=[],
+        summary=resume_raw.get("summary", "")
+    )
+
+    # 5. Config & Questions
+    config_raw = session.get("interview_config", {})
+    interview_config = InterviewConfig(
+        interview_type=config_raw.get("type", "General"),
+        difficulty=config_raw.get("difficulty", "Medium"),
+        selected_language=config_raw.get("language", "English"),
+        seniority_level=config_raw.get("difficulty", "Mid")
+    )
+
+    question_bank = [QuestionBankItem(
+        question_id=i + 1,
+        question_text=q,
+        category="General",
+        expected_topics=[],
+        expected_domain_terms=[],
+        evaluation_focus="Communication"
+    ) for i, q in enumerate(questions)]
+
+    # ── Execute Pipeline ───────────────────────────────────────────────────────
     try:
-        report = await generate_enhanced_report(
-            session_id=body.session_id,
-            session_data=session,
-            gemini_model=gemini_model,
+        orchestrator = ReportOrchestrator(api_key=os.getenv("GEMINI_API_KEY"))
+        report_obj = await orchestrator.generate_interview_report(
+            transcript_data=transcript_data,
+            speech_metrics=speech_metrics,
+            visual_metrics=visual_metrics,
+            resume_data=resume_data,
+            interview_config=interview_config,
+            question_bank=question_bank
         )
-    except RuntimeError as exc:
+        report = report_obj.dict()
+    except Exception as exc:
+        logger.error("Report pipeline failed: %s", exc, exc_info=True)
         raise HTTPException(502, f"Report generation failed: {exc}")
-    except ValueError as exc:
-        raise HTTPException(422, f"Report data error: {exc}")
 
     # Cache report in session
     update_session(body.session_id, "report", report)
     update_session(body.session_id, "report_ready", True)
 
     logger.info(
-        "Report generated for session %s. Overall score: %s",
+        "Report generated for session %s using new pipeline. Overall score: %s",
         body.session_id,
-        report.get("scores", {}).get("overall"),
+        report.get("overall_score"),
     )
 
     return report

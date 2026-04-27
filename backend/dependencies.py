@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 _gemini_model: "genai.GenerativeModel | None" = None
 _gemini_api_key_used: str = ""
+_gemini_model_name_used: str = ""
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +136,10 @@ def get_gemini_model():
     Falls back to MockGeminiModel when GEMINI_API_KEY=test.
     Raises HTTP 503 if the API key is missing entirely.
     """
-    global _gemini_model, _gemini_api_key_used
+    global _gemini_model, _gemini_api_key_used, _gemini_model_name_used
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
 
     if not api_key:
         logger.error("GEMINI_API_KEY is not configured.")
@@ -146,23 +149,30 @@ def get_gemini_model():
         )
 
     # Re-initialize if key changed
-    if _gemini_model is not None and api_key == _gemini_api_key_used:
+    if (
+        _gemini_model is not None
+        and api_key == _gemini_api_key_used
+        and model_name == _gemini_model_name_used
+    ):
         return _gemini_model
 
     if api_key.lower() == "test":
         logger.warning("TEST MODE: using MockGeminiModel — no real Gemini calls will be made.")
         _gemini_model = MockGeminiModel()
+        _gemini_api_key_used = api_key
+        _gemini_model_name_used = model_name
         return _gemini_model
 
     # Real Gemini model
     genai.configure(api_key=api_key)
     _gemini_model = genai.GenerativeModel(
-        "gemini-flash-lite-latest",
+        model_name,
         generation_config=genai.GenerationConfig(
             temperature=0.7,
             max_output_tokens=4096,
         ),
     )
     _gemini_api_key_used = api_key
-    logger.info("Gemini Flash Lite model initialised.")
+    _gemini_model_name_used = model_name
+    logger.info("Gemini model initialised: %s", model_name)
     return _gemini_model

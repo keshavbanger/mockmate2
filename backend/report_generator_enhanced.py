@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Enhanced Report Prompt
 # ---------------------------------------------------------------------------
 _ENHANCED_REPORT_PROMPT = """
-You are an expert professional interview coach and linguistic analyst. Analyze the following mock interview data and generate a comprehensive, detailed performance report.
+You are an expert professional interview coach, linguistic analyst, and CEFR-certified English assessor. Analyze the following mock interview data and generate a comprehensive, visually-rich performance report.
 
 Interview Details:
 - Type: {interview_type}
@@ -44,70 +44,68 @@ Communication Metrics:
 - Top fillers: {top_fillers}
 
 Vocabulary Analysis:
-Domain-specific terms detected:
-{domain_terms}
+Domain-specific terms detected: {domain_terms}
 
 Emotion Profile (from facial analysis):
 {emotion_summary}
 
-Based on ALL the above data, generate a comprehensive JSON report with these exact keys:
+Generate a comprehensive JSON report with these exact keys:
 
-1. "executive_summary" (string): 3-4 sentences with overall impression, key strengths, critical improvement area.
+1. "executive_summary": 3-4 sentences summarizing performance.
+2. "overall_score": 1-100 score.
+3. "scores": {{ "communication": 1-10, "confidence": 1-10, "technical": 1-10, "role_fit": 1-10, "grammar": 1-10, "vocabulary": 1-10, "eye_contact": 1-10 }}
 
-2. "overall_score" (integer 1-100): Weighted overall performance score.
+4. "english_coaching":
+    {{
+      "cefr_level": "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
+      "top_strengths": [string],
+      "top_weaknesses": [string],
+      "weekly_focus": string,
+      "recommended_exercises": [string]
+    }}
 
-3. "communication_score" (integer 1-10): Clarity, pace, structure, articulation.
+5. "grammar_analysis":
+    {{
+      "grammar_score": 1-100,
+      "total_errors": int,
+      "tense_consistency": 1-100,
+      "sentence_complexity": 1-100,
+      "detailed_errors": [
+        {{ "original": str, "corrected": str, "rule": str, "time_marker": str }}
+      ]
+    }}
 
-4. "confidence_score" (integer 1-10): Based on assertiveness, lack of hesitation, emotion stability.
+6. "phrase_improvements": [
+    {{ "original": str, "suggested": str, "why": str }}
+  ]
 
-5. "technical_score" (integer 1-10 or null): Technical knowledge depth (null if HR interview).
-
-6. "role_fit_score" (integer 1-10): Alignment with the intended role.
-
-7. "strengths" (array of 3-4 strings): Specific, evidence-based strengths with examples.
-
-8. "weaknesses" (array of 3-4 strings): Areas needing improvement with concrete examples.
-
-9. "recommendations" (array of 4-5 strings): Specific, actionable next steps and practice areas.
-
-10. "question_feedback" (array of objects): For each question, provide:
+7. "question_feedback": [
     {{
       "question": str,
       "answer_score": int 1-100,
-      "assessment": str (1-2 sentences),
-      "key_points_hit": array of str,
-      "key_points_missed": array of str
+      "status": "best" | "weakest" | "normal",
+      "assessment": str (concise summary),
+      "star_feedback": str (evaluate based on Situation, Task, Action, Result),
+      "strong_points": [str],
+      "missed_points": [str]
     }}
+  ]
 
-11. "vocabulary_analysis" (object):
+8. "vocabulary_analysis": 
     {{
-      "domain_terms_used": array of str (technical/domain specific words),
-      "domain_terms_missed": array of str (expected but not mentioned),
-      "vocabulary_richness": int 1-10,
-      "articulation_clarity": int 1-10
+      "richness_score": 1-100,
+      "domain_terms_used": [str],
+      "missing_domain_terms": [str]
     }}
 
-12. "grammar_analysis" (object):
+9. "facial_analysis":
     {{
-      "grammar_score": int 1-10,
-      "common_errors": array of {{ "original": str, "corrected": str, "type": str, "explanation": str }},
-      "sentence_complexity": int 1-10,
-      "filler_score": int 1-10 (lower filler usage = higher score)
+      "dominant_emotion": str,
+      "eye_contact_percent": int,
+      "posture_assessment": str
     }}
 
-13. "communication_patterns" (object):
-    {{
-      "response_initiative": int 1-10 (how proactive/detailed answers are),
-      "technical_depth": int 1-10,
-      "problem_solving_approach": int 1-10,
-      "thinking_process_clarity": int 1-10
-    }}
-
-14. "growth_areas" (array of 2-3 strings): Most impactful areas to focus on for improvement.
-
-15. "positive_indicators" (array of 2-3 strings): Things that went exceptionally well.
-
-Return ONLY valid JSON. No markdown, no extra text, no explanations.
+Return ONLY valid JSON.
 """
 
 
@@ -361,28 +359,16 @@ def _assemble_enhanced_report(
         "executive_summary": gemini_report.get("executive_summary", ""),
         "overall_score": gemini_report.get("overall_score", 0),
         
-        # ---- Scores ----
-        "scores": {
-            "communication": gemini_report.get("communication_score"),
-            "confidence": gemini_report.get("confidence_score"),
-            "technical": gemini_report.get("technical_score"),
-            "role_fit": gemini_report.get("role_fit_score"),
-        },
-        
-        # ---- Feedback sections ----
-        "strengths": gemini_report.get("strengths", []),
-        "weaknesses": gemini_report.get("weaknesses", []),
-        "recommendations": gemini_report.get("recommendations", []),
-        "growth_areas": gemini_report.get("growth_areas", []),
-        "positive_indicators": gemini_report.get("positive_indicators", []),
-        
-        # ---- Question-by-question analysis ----
+        # ---- New Metrics (matching screenshots) ----
+        "scores": gemini_report.get("scores", {}),
+        "english_coaching": gemini_report.get("english_coaching", {}),
+        "phrase_improvements": gemini_report.get("phrase_improvements", []),
+        "facial_analysis": gemini_report.get("facial_analysis", {}),
+
+        # ---- Legacy compatibility / Extra details ----
         "question_feedback": gemini_report.get("question_feedback", []),
-        
-        # ---- Detailed analysis sections ----
         "vocabulary_analysis": gemini_report.get("vocabulary_analysis", {}),
         "grammar_analysis": gemini_report.get("grammar_analysis", {}),
-        "communication_patterns": gemini_report.get("communication_patterns", {}),
         
         # ---- Communication metrics ----
         "communication_metrics": {
