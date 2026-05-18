@@ -1,0 +1,30 @@
+{
+  "reportId" : "04ffb110-cf33-474f-8538-cbf13e1971eb",
+  "userId" : "anonymous",
+  "timestamp" : "2026-05-18T21:11:47.839072300Z",
+  "finalScore" : 81,
+  "verdict" : "Strong fit",
+  "verdictReason" : "The candidate's technical skills, project experience, and achievements align well with the job requirements, demonstrating a strong potential for success as a Fresher Software Developer",
+  "matchedKeywords" : [ "Java", "Spring Boot", "REST APIs", "Problem Solving", "Web Development" ],
+  "missingKeywords" : [ "Agile", "Cloud" ],
+  "sectionFeedback" : {
+    "education" : "present",
+    "summary" : "missing",
+    "skills" : "present",
+    "experience" : "present",
+    "projects" : "present"
+  },
+  "formattingRisks" : [ "Very long unbroken lines detected — possible multi-column format" ],
+  "bulletRewrites" : [ {
+    "original" : "Designed and delivered a premium, fully responsive website for an interior design firm",
+    "rewritten" : "Developed a responsive website for an interior design firm, ensuring high-end UI/UX standards and improved brand presence online",
+    "reason" : "Improved clarity and concision"
+  } ],
+  "strengthLines" : [ "Strong technical skills in Java and Spring Boot", "Impressive project experience with MockMate and StreamSmart", "Achievements in hackathons and innovation challenges" ],
+  "keywordOverlapScore" : 51,
+  "semanticScore" : 85,
+  "roleAlignmentScore" : 92,
+  "sectionScore" : 100,
+  "formattingScore" : 75,
+  "quantificationScore" : 83
+}

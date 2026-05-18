@@ -59,27 +59,30 @@ export default function TavusAvatar({ conversationUrl }) {
         const role = transcriptData?.role; // 'assistant' or 'user'
 
         if (text) {
-          ctx.updateTranscript(text);
-          if (isMock) return; // mock mode handles its own saving to prevent duplicates
-          
           const mappedRole = role === 'assistant' ? 'interviewer' : 'candidate';
-          saveTurn(ctx.sessionId, {
-            role: mappedRole,
-            text: text,
-            timestamp_ms: Date.now()
-          }).catch(err => console.error('Failed to save turn:', err));
+          
+          // If the text comes from the assistant (interviewer), append it and save it
+          if (mappedRole === 'interviewer') {
+            ctx.updateTranscript(text);
+            if (!isMock) {
+              saveTurn(ctx.sessionId, {
+                role: 'interviewer',
+                text: text,
+                timestamp_ms: Date.now()
+              }).catch(err => console.error('Failed to save turn:', err));
+            }
+          }
+          // If candidate speech, let our local speech recognition handle it to prevent duplication
         }
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [ctx]);
+  }, [ctx, isMock]);
 
-  // 2b. Mock STT: Listen to microphone if in mock mode
+  // 2b. Local STT: Listen to microphone to capture candidate speech in real-time
   useEffect(() => {
-    if (!isMock) return;
-    
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -100,24 +103,15 @@ export default function TavusAvatar({ conversationUrl }) {
         
         // Dispatch only new final results to context transcript
         if (event.results[i].isFinal && i > lastProcessedIndexRef.current) {
-          window.postMessage({
-            type: 'transcript',
-            data: { text: event.results[i][0].transcript, role: 'user' }
-          }, '*');
+          ctx.updateTranscript(event.results[i][0].transcript);
           lastProcessedIndexRef.current = i;
+          ctx.setInterimTranscript(''); // clear the interim transcript
         }
       }
       
       setCurrentAnswer(fullTranscript);
       currentAnswerRef.current = fullTranscript;
-
-      // Auto-submit after 4 seconds of silence
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = setTimeout(() => {
-        if (currentAnswerRef.current.trim().length > 0) {
-          autoSubmitAnswer(currentAnswerRef.current);
-        }
-      }, 4000);
+      ctx.setInterimTranscript(fullTranscript); // Update interim transcript in context
     };
 
     recognition.onerror = (event) => {
@@ -126,7 +120,7 @@ export default function TavusAvatar({ conversationUrl }) {
 
     recognition.onend = () => {
       // Auto restart if it died unexpectedly and we aren't muted
-      if (!isMuted && isMock) {
+      if (!isMuted) {
         try { recognition.start(); } catch (e) {}
       }
     };
@@ -140,14 +134,13 @@ export default function TavusAvatar({ conversationUrl }) {
     }
 
     return () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       recognition.onend = null; // Prevent restart loop on unmount
       try { recognition.stop(); } catch (e) {}
     };
-  }, [isMock, isMuted, turnId]);
+  }, [isMuted]);
 
   // 3. Structured Interview Logic: Speak question when index changes
-  const speakQuestion = (text) => {
+  const speakQuestion = (text, revealIndex = -1) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -155,6 +148,20 @@ export default function TavusAvatar({ conversationUrl }) {
       const englishVoice = voices.find(v => v.lang.startsWith('en-') && v.name.toLowerCase().includes('google')) 
                         || voices.find(v => v.lang.startsWith('en-'));
       if (englishVoice) utterance.voice = englishVoice;
+      
+      utterance.onstart = () => {
+        ctx.setAIAsking(true);
+        if (revealIndex !== -1) {
+          ctx.setRevealedQuestionIndex(revealIndex);
+        }
+      };
+      utterance.onend = () => {
+        ctx.setAIAsking(false);
+      };
+      utterance.onerror = () => {
+        ctx.setAIAsking(false);
+      };
+      
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -170,21 +177,23 @@ export default function TavusAvatar({ conversationUrl }) {
       const candidateName = ctx.resumeData?.name || "there";
       const text = `Hello ${candidateName}, welcome to the interview! I'll ask you ${questions.length} questions. Let's start with the first one. ${questions[0]}`;
       
-      speakQuestion(text);
+      ctx.setRevealedQuestionIndex(-1); // hide question during greeting
+      speakQuestion(text, 0); // reveal first question when speaking starts
       saveTurn(ctx.sessionId, { role: 'interviewer', text: text, timestamp_ms: Date.now() });
       setMockIndex(1);
     } 
     // If question index changed, speak the next question
     else if (currentQuestionIndex < questions.length && currentQuestionIndex + 1 > mockIndex) {
       const text = questions[currentQuestionIndex];
-      speakQuestion(text);
+      ctx.setRevealedQuestionIndex(-1); // hide until spoken
+      speakQuestion(text, currentQuestionIndex);
       saveTurn(ctx.sessionId, { role: 'interviewer', text: text, timestamp_ms: Date.now() });
       setMockIndex(currentQuestionIndex + 1);
     }
     // If all done
     else if (currentQuestionIndex >= questions.length && mockIndex === questions.length) {
       const text = "That concludes our interview. Thank you! Please click End Interview to see your report.";
-      speakQuestion(text);
+      speakQuestion(text, -1);
       saveTurn(ctx.sessionId, { role: 'interviewer', text: text, timestamp_ms: Date.now() });
       setMockIndex(mockIndex + 1);
     }
@@ -218,8 +227,8 @@ export default function TavusAvatar({ conversationUrl }) {
             <h3 className="text-black text-2xl font-black mb-2 tracking-tighter">stitch <span className="text-purple-500">interviewer</span></h3>
             
             <div className="bg-white border border-black/[0.03] rounded-3xl p-8 max-w-sm w-full shadow-sm">
-              <p className="text-slate-600 text-sm font-medium leading-relaxed italic">
-                "{currentQuestionIndex < questions.length ? questions[currentQuestionIndex] : "Session concluded."}"
+              <p className="text-slate-600 text-sm font-medium leading-relaxed italic text-center">
+                {ctx.sessionMetrics.isAIAsking ? "🎙️ stitch is speaking..." : "👂 stitch is listening to your answer..."}
               </p>
             </div>
 

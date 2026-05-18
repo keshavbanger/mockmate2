@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const getBaseUrl = () => {
-  let url = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  let url = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   // Remove trailing slash
   url = url.replace(/\/$/, '');
   // Append /api if not already present
@@ -53,6 +53,40 @@ export const saveEmotionSnapshots = (sessionId, snapshots) =>
 
 // ---------- Report ----------
 export const generateReport = (sessionId) =>
-  api.post('/generate-report', { session_id: sessionId });
+  api.post('/generate-report', { session_id: sessionId }, { timeout: 120000 });
+
+// ---------- ATS Resume Checker ----------
+const getToken = () => localStorage.getItem('mockmate_token') || '';
+
+export async function analyzeATS(file, jdText) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('jdText', jdText);
+  const res = await fetch(`${getBaseUrl()}/ats/analyze`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getATSReport(reportId) {
+  const res = await fetch(`${getBaseUrl()}/ats/report/${reportId}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error(`Report not found (${res.status})`);
+  return res.json();
+}
+
+export async function getATSHistory(userId) {
+  const res = await fetch(`${getBaseUrl()}/ats/history/${userId}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  return res.json();
+}
 
 export default api;

@@ -1,0 +1,26 @@
+{
+  "reportId" : "c85b91a0-76df-4348-b118-37758f699016",
+  "userId" : "anonymous",
+  "timestamp" : "2026-05-18T21:10:55.480275600Z",
+  "finalScore" : 41,
+  "verdict" : "Moderate fit",
+  "verdictReason" : "",
+  "matchedKeywords" : [ ],
+  "missingKeywords" : [ ],
+  "sectionFeedback" : {
+    "education" : "present",
+    "summary" : "present",
+    "skills" : "present",
+    "experience" : "present",
+    "projects" : "present"
+  },
+  "formattingRisks" : [ "Very long unbroken lines detected — possible multi-column format" ],
+  "bulletRewrites" : [ ],
+  "strengthLines" : [ ],
+  "keywordOverlapScore" : 50,
+  "semanticScore" : 0,
+  "roleAlignmentScore" : 0,
+  "sectionScore" : 100,
+  "formattingScore" : 75,
+  "quantificationScore" : 83
+}

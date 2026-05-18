@@ -1,8 +1,10 @@
 import { createContext, useContext, useReducer, useCallback } from 'react';
 
 // ─── Initial State ────────────────────────────────────────────────────────────
+const getInitialSessionId = () => localStorage.getItem('mockmate_session_id');
+
 const initialState = {
-  sessionId: null,
+  sessionId: getInitialSessionId(),
   resumeData: null,
   questions: [],
   interviewConfig: { type: 'Technical', difficulty: 'Mid', language: 'English' },
@@ -10,6 +12,9 @@ const initialState = {
   conversationId: null,
   sessionMetrics: {
     transcript: '',          // full rolling transcript text
+    interimTranscript: '',   // real-time active candidate speech
+    revealedQuestionIndex: -1, // hidden until spoken by AI
+    isAIAsking: false,       // true when AI is speaking/asking
     fillerCounts: {},        // { word: count }
     totalFillers: 0,
     wpm: 0,
@@ -45,6 +50,9 @@ const A = {
   SET_STATUS:           'SET_STATUS',
   SET_RECORDING_UPLOADED: 'SET_RECORDING_UPLOADED',
   SET_CURRENT_QUESTION: 'SET_CURRENT_QUESTION',
+  SET_INTERIM_TRANSCRIPT: 'SET_INTERIM_TRANSCRIPT',
+  SET_REVEALED_QUESTION_INDEX: 'SET_REVEALED_QUESTION_INDEX',
+  SET_AI_ASKING:        'SET_AI_ASKING',
   RESET:                'RESET',
 };
 
@@ -52,6 +60,11 @@ const A = {
 function reducer(state, action) {
   switch (action.type) {
     case A.SET_SESSION_ID:
+      if (action.payload) {
+        localStorage.setItem('mockmate_session_id', action.payload);
+      } else {
+        localStorage.removeItem('mockmate_session_id');
+      }
       return { ...state, sessionId: action.payload };
 
     case A.SET_RESUME_DATA:
@@ -76,6 +89,33 @@ function reducer(state, action) {
         sessionMetrics: {
           ...state.sessionMetrics,
           transcript: state.sessionMetrics.transcript + ' ' + action.payload,
+        },
+      };
+
+    case A.SET_INTERIM_TRANSCRIPT:
+      return {
+        ...state,
+        sessionMetrics: {
+          ...state.sessionMetrics,
+          interimTranscript: action.payload,
+        },
+      };
+
+    case A.SET_REVEALED_QUESTION_INDEX:
+      return {
+        ...state,
+        sessionMetrics: {
+          ...state.sessionMetrics,
+          revealedQuestionIndex: action.payload,
+        },
+      };
+
+    case A.SET_AI_ASKING:
+      return {
+        ...state,
+        sessionMetrics: {
+          ...state.sessionMetrics,
+          isAIAsking: action.payload,
         },
       };
 
@@ -157,7 +197,8 @@ function reducer(state, action) {
       };
 
     case A.RESET:
-      return { ...initialState };
+      localStorage.removeItem('mockmate_session_id');
+      return { ...initialState, sessionId: null };
 
     default:
       return state;
@@ -177,6 +218,9 @@ export function InterviewProvider({ children }) {
   const setInterviewConfig= useCallback((cfg)  => dispatch({ type: A.SET_INTERVIEW_CONFIG, payload: cfg }),   []);
   const setConversation   = useCallback((payload) => dispatch({ type: A.SET_CONVERSATION,  payload }),        []);
   const updateTranscript  = useCallback((text) => dispatch({ type: A.UPDATE_TRANSCRIPT,    payload: text }),  []);
+  const setInterimTranscript = useCallback((text) => dispatch({ type: A.SET_INTERIM_TRANSCRIPT, payload: text }), []);
+  const setRevealedQuestionIndex = useCallback((idx) => dispatch({ type: A.SET_REVEALED_QUESTION_INDEX, payload: idx }), []);
+  const setAIAsking       = useCallback((asking) => dispatch({ type: A.SET_AI_ASKING,        payload: asking }), []);
   const updateFillerCounts= useCallback((counts, total) =>
     dispatch({ type: A.UPDATE_FILLER_COUNTS, payload: { counts, total } }), []);
   const updateWPM         = useCallback((wpm)  => dispatch({ type: A.UPDATE_WPM,           payload: wpm }),   []);
@@ -202,6 +246,9 @@ export function InterviewProvider({ children }) {
       setInterviewConfig,
       setConversation,
       updateTranscript,
+      setInterimTranscript,
+      setRevealedQuestionIndex,
+      setAIAsking,
       updateFillerCounts,
       updateWPM,
       pushEmotionSnapshot,

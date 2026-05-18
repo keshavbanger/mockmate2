@@ -233,7 +233,7 @@ function Navbar() {
           <span className="font-bold tracking-tight text-xl text-black">MockMate</span>
         </div>
 
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-500">
+        <div className="hidden md:flex items-center gap-8 text-[13.5px] font-semibold text-slate-500">
           {[
             { label: 'Home', href: '#' },
             { label: 'Features', href: '#features' },
@@ -242,20 +242,46 @@ function Navbar() {
             { label: 'About', href: '#' },
           ].map(({ label, href }) => (
           <a key={label} href={href}
-            className={`nav-link hover:text-black ${label === 'Home' ? 'text-black font-semibold' : ''}`}>
+            className={`relative transition-colors hover:text-[#111] ${label === 'Home' ? 'text-[var(--brand-primary)]' : ''}`}>
             {label}
+            {label === 'Home' && (
+              <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4/5 h-[2px] bg-[var(--brand-primary)] rounded-full" />
+            )}
           </a>
           ))}
         </div>
 
-        <motion.button
-          onClick={() => navigate('/setup')}
-          whileHover={{ scale: 1.04, boxShadow: '0 8px 24px rgba(107,70,193,0.25)' }}
-          whileTap={{ scale: 0.97 }}
-          className="bg-[#111827] text-white px-6 py-2.5 rounded-full text-sm font-semibold transition-colors hover:bg-black"
-        >
-          Start Practicing
-        </motion.button>
+        <div className="flex items-center gap-3">
+          {/* Analyze Resume — outlined pill */}
+          <motion.button
+            onClick={() => navigate('/ats')}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-full text-[13px] font-bold 
+                       border-[1.5px] border-[var(--brand-primary)] text-[var(--brand-primary)]
+                       hover:bg-[var(--brand-light)] transition-colors"
+          >
+            ✦ Analyze Resume
+          </motion.button>
+
+          {/* Practice Now — gradient CTA */}
+          <motion.button
+            onClick={() => navigate('/setup')}
+            whileHover={{ scale: 1.04, boxShadow: '0 8px 24px rgba(107,70,193,0.3)' }}
+            whileTap={{ scale: 0.97 }}
+            className="flex items-center gap-1.5 px-6 py-2 rounded-full text-[13px] font-bold text-white
+                       bg-gradient-to-r from-[#6B46C1] to-[#5b3da6] shadow-md shadow-purple-900/20 transition-all duration-200"
+          >
+            Practice Now
+            <motion.span
+              animate={{ x: [0, 3, 0] }}
+              transition={{ repeat: Infinity, duration: 1.4, ease: 'easeInOut' }}
+              className="inline-block font-medium"
+            >
+              →
+            </motion.span>
+          </motion.button>
+        </div>
       </nav>
     </motion.div>
   );

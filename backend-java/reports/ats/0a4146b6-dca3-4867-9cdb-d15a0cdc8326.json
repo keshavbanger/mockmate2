@@ -1,0 +1,26 @@
+{
+  "reportId" : "0a4146b6-dca3-4867-9cdb-d15a0cdc8326",
+  "userId" : "anonymous",
+  "timestamp" : "2026-05-18T21:17:12.311917600Z",
+  "finalScore" : 35,
+  "verdict" : "Moderate fit",
+  "verdictReason" : "",
+  "matchedKeywords" : [ ],
+  "missingKeywords" : [ ],
+  "sectionFeedback" : {
+    "education" : "present",
+    "summary" : "missing",
+    "skills" : "present",
+    "experience" : "present",
+    "projects" : "present"
+  },
+  "formattingRisks" : [ ],
+  "bulletRewrites" : [ ],
+  "strengthLines" : [ ],
+  "keywordOverlapScore" : 46,
+  "semanticScore" : 0,
+  "roleAlignmentScore" : 0,
+  "sectionScore" : 80,
+  "formattingScore" : 100,
+  "quantificationScore" : 33
+}

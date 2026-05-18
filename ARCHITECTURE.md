@@ -21,7 +21,8 @@
     │  CandidatePanel          │    │  InterviewRoom           │
     │  Detects status='active' │    │  Displays Tavus avatar   │
     └──────────────────────────┘    └──────────────────────────┘
-                │
+                
+                
                 ▼
     ┌──────────────────────────┐
     │  VideoRecorder.start()   │

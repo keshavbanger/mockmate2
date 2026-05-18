@@ -1,0 +1,105 @@
+package com.example.mockmate.service;
+
+import com.example.mockmate.model.ATSReport;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ATSAnalyzerService {
+
+    private final ResumeTextExtractor   resumeTextExtractor;
+    private final ATSScoringService     atsScoringService;
+    private final GroqATSService        groqATSService;
+    private final ATSReportBuilder      atsReportBuilder;
+    private final ObjectMapper          objectMapper;
+
+    private static final String ATS_DIR = "reports/ats";
+
+    // ── Main orchestration ─────────────────────────────────────────────────────
+    public ATSReport analyze(MultipartFile file, String jdText, String userId) {
+        log.info("[ATS] Starting analysis for userId={} file={}", userId, file.getOriginalFilename());
+
+        // Step 1: Extract text
+        String resumeText = resumeTextExtractor.extract(file);
+        if (resumeText.isBlank()) {
+            log.warn("[ATS] Resume text extraction returned empty — file may be unsupported or empty");
+        }
+
+        // Step 2: Deterministic scoring (no API cost)
+        ATSScoringService.ScoringResult scoring = atsScoringService.score(resumeText, jdText);
+
+        // Step 3: Groq semantic analysis (gracefully degrades if key missing)
+        GroqATSService.GroqATSResult groqResult = groqATSService.analyze(resumeText, jdText);
+
+        // Step 4: Build final report
+        ATSReport report = atsReportBuilder.build(userId, scoring, groqResult);
+
+        // Step 5: Persist to disk
+        saveReport(report);
+
+        log.info("[ATS] Report generated: reportId={} score={}", report.getReportId(), report.getFinalScore());
+        return report;
+    }
+
+    // ── Fetch by report ID ─────────────────────────────────────────────────────
+    public Optional<ATSReport> getReport(String reportId) {
+        File file = reportFile(reportId);
+        if (!file.exists()) return Optional.empty();
+        try {
+            return Optional.of(objectMapper.readValue(file, ATSReport.class));
+        } catch (IOException e) {
+            log.error("[ATS] Failed to read report file: {}", file.getPath(), e);
+            return Optional.empty();
+        }
+    }
+
+    // ── History for a user ─────────────────────────────────────────────────────
+    public List<ATSReport> getHistory(String userId) {
+        File dir = new File(ATS_DIR);
+        if (!dir.exists()) return List.of();
+
+        List<ATSReport> results = new ArrayList<>();
+        File[] files = dir.listFiles((d, name) -> name.endsWith(".json"));
+        if (files == null) return List.of();
+
+        for (File f : files) {
+            try {
+                ATSReport r = objectMapper.readValue(f, ATSReport.class);
+                if (userId.equals(r.getUserId())) {
+                    results.add(r);
+                }
+            } catch (IOException e) {
+                log.warn("[ATS] Skipping unreadable report file: {}", f.getName());
+            }
+        }
+
+        // Sort newest first
+        results.sort(Comparator.comparing(ATSReport::getTimestamp).reversed());
+        return results;
+    }
+
+    // ── Disk persistence ───────────────────────────────────────────────────────
+    private void saveReport(ATSReport report) {
+        try {
+            File dir = new File(ATS_DIR);
+            dir.mkdirs();
+            objectMapper.writerWithDefaultPrettyPrinter()
+                    .writeValue(reportFile(report.getReportId()), report);
+        } catch (IOException e) {
+            log.error("[ATS] Failed to save report to disk", e);
+        }
+    }
+
+    private File reportFile(String reportId) {
+        return new File(ATS_DIR + "/" + reportId + ".json");
+    }
+}

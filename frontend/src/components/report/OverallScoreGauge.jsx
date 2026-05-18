@@ -1,82 +1,40 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import React from 'react';
 
 export default function OverallScoreGauge({ score }) {
-  const [displayScore, setDisplayScore] = useState(0);
+  const getLabel = (s) => {
+    if (s >= 90) return 'Exceptional';
+    if (s >= 75) return 'Strong';
+    if (s >= 60) return 'Competent';
+    return 'Developing';
+  };
 
-  useEffect(() => {
-    let start = 0;
-    const end = score;
-    if (start === end) return;
-    
-    const timer = setInterval(() => {
-      start += 1;
-      setDisplayScore(start);
-      if (start >= end) clearInterval(timer);
-    }, 20);
-    
-    return () => clearInterval(timer);
-  }, [score]);
-
-  const radius = 80;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (displayScore / 100) * circumference * 0.75; // 270 degree sweep
-
-  const getColor = (s) => {
-    if (s < 40) return '#EF4444';
-    if (s < 70) return '#F59E0B';
-    return '#10B981';
+  const getLabelColor = (s) => {
+    if (s >= 90) return 'text-emerald-600 bg-emerald-50';
+    if (s >= 75) return 'text-indigo-600 bg-indigo-50';
+    if (s >= 60) return 'text-amber-600 bg-amber-50';
+    return 'text-slate-600 bg-slate-50';
   };
 
   return (
-    <div className="col-3 premium-card flex flex-col items-center justify-center text-center">
-      <h3 className="section-header w-full">Overall Performance</h3>
-      
-      <div className="relative mt-4">
-        <svg className="w-48 h-48 transform -rotate-[225deg]">
-          {/* Background Arc */}
-          <circle
-            cx="96"
-            cy="96"
-            r={radius}
-            fill="transparent"
-            stroke="#1F2937"
-            strokeWidth="12"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * 0.25}
-            strokeLinecap="round"
-          />
-          {/* Progress Arc */}
-          <motion.circle
-            cx="96"
-            cy="96"
-            r={radius}
-            fill="transparent"
-            stroke={getColor(displayScore)}
-            strokeWidth="12"
-            strokeDasharray={circumference}
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset: offset }}
-            transition={{ duration: 1.5, ease: "easeOut" }}
-            strokeLinecap="round"
-          />
-        </svg>
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-6xl font-black tracking-tighter" style={{ color: getColor(displayScore) }}>
-            {displayScore}
-          </span>
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-[-5px]">Score / 100</span>
+    <div className="premium-card flex flex-col justify-between">
+      <div>
+        <p className="kpi-label mb-6">Overall Assessment Score</p>
+        <div className="flex items-baseline gap-3">
+          <span className="kpi-value">{score}</span>
+          <span className="text-xl font-bold text-slate-300">/ 100</span>
         </div>
       </div>
-
-      <div className="mt-8 space-y-1">
-        <p className="text-white font-bold text-sm">
-          {score > 70 ? 'Above Average' : score > 40 ? 'Average' : 'Needs Improvement'}
-        </p>
-        <p className="text-slate-500 text-[10px] font-medium leading-relaxed max-w-[140px]">
-          Based on Senior Developer benchmarks
-        </p>
+      
+      <div className="mt-8 pt-6 border-t border-slate-100">
+        <div className="flex items-center justify-between">
+          <span className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest ${getLabelColor(score)}`}>
+            {getLabel(score)}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Verified by AI</span>
+          </div>
+        </div>
       </div>
     </div>
   );

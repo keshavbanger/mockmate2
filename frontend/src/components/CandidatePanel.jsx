@@ -272,15 +272,23 @@ export default function CandidatePanel({ audioStream }) {
   const [lastTranscriptLen, setLastTranscriptLen] = useState(0);
 
   const handleSubmitAnswer = async () => {
-    const { sessionId, questions, sessionMetrics, setCurrentQuestion, pushTurn } = ctx;
-    const { currentQuestionIndex, transcript } = sessionMetrics;
+    const { sessionId, questions, sessionMetrics, setCurrentQuestion, pushTurn, updateTranscript, setInterimTranscript } = ctx;
+    const { currentQuestionIndex, transcript, interimTranscript } = sessionMetrics;
 
     if (currentQuestionIndex >= questions.length) return;
 
     setSubmitting(true);
     try {
+      // If there's any remaining active interim transcript, finalize it first!
+      let finalTranscript = transcript;
+      if (interimTranscript && interimTranscript.trim().length > 0) {
+        updateTranscript(interimTranscript.trim());
+        setInterimTranscript('');
+        finalTranscript = transcript + ' ' + interimTranscript.trim();
+      }
+
       // Extract the text spoken for THIS question
-      const currentAnswer = transcript.slice(lastTranscriptLen).trim();
+      const currentAnswer = finalTranscript.slice(lastTranscriptLen).trim();
       
       const turnData = {
         role: 'candidate',
@@ -295,7 +303,7 @@ export default function CandidatePanel({ audioStream }) {
 
       // 2. Update local context
       pushTurn(turnData);
-      setLastTranscriptLen(transcript.length);
+      setLastTranscriptLen(finalTranscript.length);
       
       // 3. Move to next
       if (currentQuestionIndex < questions.length - 1) {
@@ -312,11 +320,12 @@ export default function CandidatePanel({ audioStream }) {
   };
 
   // ── 7. Render ──────────────────────────────────────────────────────────────
-  const { currentEmotion, totalFillers, wpm, transcript, currentQuestionIndex } = ctx.sessionMetrics;
+  const { currentEmotion, totalFillers, wpm, transcript, interimTranscript, revealedQuestionIndex, currentQuestionIndex } = ctx.sessionMetrics;
   const { questions } = ctx;
 
-  const highlightedParts = transcript
-    ? highlightFillers(transcript.slice(-600))  // last 600 chars
+  const currentAnswerText = transcript ? transcript.slice(lastTranscriptLen) : '';
+  const highlightedParts = currentAnswerText
+    ? highlightFillers(currentAnswerText)
     : [];
 
   return (
@@ -361,73 +370,21 @@ export default function CandidatePanel({ audioStream }) {
         </div>
       </div>
 
-      {/* ── Structured Interview Questions ────────────────────────────────── */}
-      <div className="flex-shrink-0 premium-card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <span className="step-label">Interview Questions</span>
+      {/* ── Live Transcript & Spoken Answer ─────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-h-0 premium-card p-6">
+        <div className="flex items-center justify-between mb-6 flex-shrink-0">
+          <span className="step-label">Live Transcript / Your Spoken Answer</span>
           <span className="text-[10px] text-purple-500 font-bold uppercase tracking-[0.2em]">
             {currentQuestionIndex < questions.length 
-              ? `${currentQuestionIndex + 1} / ${questions.length}`
+              ? `Question ${currentQuestionIndex + 1} of ${questions.length}`
               : 'DONE'}
           </span>
         </div>
         
-        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-          {questions.map((q, idx) => {
-            if (idx !== currentQuestionIndex) return null;
-            return (
-              <div 
-                key={idx}
-                className={`p-4 rounded-2xl border transition-all duration-500 text-sm font-medium ${
-                  idx === currentQuestionIndex
-                    ? 'bg-slate-50 border-black/10 text-black shadow-sm'
-                    : 'bg-purple-50/50 border-purple-500/10 text-slate-400 opacity-60'
-                }`}
-              >
-              <div className="flex gap-4">
-                <span className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
-                  idx === currentQuestionIndex ? 'bg-black text-white' : 
-                  idx < currentQuestionIndex ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-400'
-                }`}>
-                  {idx < currentQuestionIndex ? '✓' : idx + 1}
-                </span>
-                <p className="leading-relaxed">{q}</p>
-              </div>
-            </div>
-          );
-          })}
-        </div>
-
-        {currentQuestionIndex < questions.length && (
-          <button
-            onClick={handleSubmitAnswer}
-            disabled={submitting}
-            className="w-full mt-6 btn-black flex items-center justify-center gap-2 group text-xs py-3"
-          >
-            {submitting ? (
-              <>
-                <Spinner />
-                <span>Submitting...</span>
-              </>
-            ) : (
-              <>
-                <span>Submit Answer & Next</span>
-                <svg className="h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </>
-            )}
-          </button>
-        )}
-      </div>
-
-      {/* ── Live transcript ──────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-h-0 premium-card p-6">
-        <span className="step-label mb-4">Live Transcript</span>
-        <div className="flex-1 overflow-y-auto text-sm font-medium text-slate-500 leading-relaxed custom-scrollbar">
-          {highlightedParts.length === 0 ? (
+        <div className="flex-1 overflow-y-auto text-sm font-medium text-slate-500 leading-relaxed custom-scrollbar min-h-[120px] p-4 bg-slate-50/50 border border-black/[0.03] rounded-2xl mb-6">
+          {highlightedParts.length === 0 && !interimTranscript ? (
             <span className="text-slate-300 italic font-normal">
-              Waiting for speech input...
+              🎙️ Speak your answer... (Waiting for speech input)
             </span>
           ) : (
             <>
@@ -438,10 +395,38 @@ export default function CandidatePanel({ audioStream }) {
                   <mark key={part.key} className="bg-amber-100 text-amber-700 rounded px-1 font-bold">{part.filler}</mark>
                 )
               )}
+              {interimTranscript && (
+                <span className="text-purple-500/80 italic ml-1 animate-pulse">
+                  {interimTranscript}
+                </span>
+              )}
             </>
           )}
         </div>
+
+        {currentQuestionIndex < questions.length && (
+          <button
+            onClick={handleSubmitAnswer}
+            disabled={submitting}
+            className="w-full btn-black flex items-center justify-center gap-2 group text-xs py-3.5 flex-shrink-0"
+          >
+            {submitting ? (
+              <>
+                <Spinner />
+                <span>Submitting Answer...</span>
+              </>
+            ) : (
+              <>
+                <span>Submit Answer &amp; Next</span>
+                <svg className="h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </>
+            )}
+          </button>
+        )}
       </div>
+
     </div>
   );
 }

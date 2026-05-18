@@ -1,0 +1,30 @@
+{
+  "reportId" : "9b37265b-f3c8-460b-8895-b234814245b9",
+  "userId" : "anonymous",
+  "timestamp" : "2026-05-18T21:04:58.556007900Z",
+  "finalScore" : 81,
+  "verdict" : "Strong fit",
+  "verdictReason" : "The candidate's technical skills, project experience, and problem-solving abilities align well with the job requirements, making them a strong fit for the Fresher Software Developer role.",
+  "matchedKeywords" : [ "Java", "Spring Boot", "REST APIs", "problem-solving", "team environment", "scalable", "user-friendly" ],
+  "missingKeywords" : [ "Agile development", "Cloud computing" ],
+  "sectionFeedback" : {
+    "education" : "present",
+    "summary" : "missing",
+    "skills" : "present",
+    "experience" : "present",
+    "projects" : "present"
+  },
+  "formattingRisks" : [ "Very long unbroken lines detected — possible multi-column format" ],
+  "bulletRewrites" : [ {
+    "original" : "Designed and delivered a premium, fully responsive website for an interior design firm, achieving high-end UI/UX standards and improved brand presence online.",
+    "rewritten" : "Developed a responsive website with high-end UI/UX standards, resulting in enhanced brand presence and user engagement.",
+    "reason" : "Improved clarity and concision"
+  } ],
+  "strengthLines" : [ "Strong proficiency in Java and Spring Boot", "Experience with REST APIs and database management", "Proven problem-solving skills through project work" ],
+  "keywordOverlapScore" : 51,
+  "semanticScore" : 85,
+  "roleAlignmentScore" : 92,
+  "sectionScore" : 100,
+  "formattingScore" : 75,
+  "quantificationScore" : 83
+}

@@ -83,8 +83,12 @@ export default function SetupPage() {
       ctx.setResumeData(data.resume_data);
       setUploadDone(true);
     } catch (e) {
-      addToast(e?.response?.data?.detail ?? 'Resume upload failed. Please try again.', 'error');
+      const detail = e?.response?.data?.detail ?? 'Resume upload failed. Please try again.';
+      addToast(detail, 'error');
       setUploadDone(false);
+      if (e?.response?.status === 404) {
+        ctx.setSessionId(null);
+      }
     } finally {
       setUploading(false);
     }
@@ -124,8 +128,13 @@ export default function SetupPage() {
 
       navigate('/interview');
     } catch (e) {
-      addToast(e?.response?.data?.detail ?? 'Could not start the interview. Please try again.', 'error', 6000);
+      const detail = e?.response?.data?.detail ?? 'Could not start the interview. Please try again.';
+      addToast(detail, 'error', 6000);
       setStarting(false);
+      if (e?.response?.status === 404) {
+        ctx.setSessionId(null);
+        setUploadDone(false);
+      }
     }
   };
 
