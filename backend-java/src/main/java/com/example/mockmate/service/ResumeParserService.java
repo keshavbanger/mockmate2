@@ -98,7 +98,7 @@ public class ResumeParserService {
 
         try {
             log.info("Calling Gemini API for resume parsing with model: gemini-1.5-flash");
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + geminiApiKey;
+            String url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey;
             String rawJsonResponse = webClient.post()
                     .uri(url)
                     .bodyValue(finalBody)

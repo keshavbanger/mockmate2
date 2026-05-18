@@ -108,7 +108,7 @@ public class QuestionGeneratorService {
                 Map.of("parts", List.of(Map.of("text", prompt)))
         ));
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + geminiApiKey;
+        String url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey;
 
         try {
             String rawJsonResponse = webClient.post()
