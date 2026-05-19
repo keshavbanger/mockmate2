@@ -17,6 +17,7 @@ spring:
 # External APIs
 tavus:
   api-key: ${TAVUS_API_KEY:}
+  replica-id: ${TAVUS_REPLICA_ID:r291e545fd67}
 sarvam:
   api-key: ${SARVAM_API_KEY:}
 gemini:

@@ -18,8 +18,8 @@ public class FillerDetectorService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${gemini.api-key}")
-    private String geminiApiKey;
+    @Value("${groq.api-key:}")
+    private String groqApiKey;
 
     private static final List<String> FILLER_WORDS = List.of(
             "you know", "kind of", "sort of", "you see", "i mean", "i guess",
@@ -54,7 +54,7 @@ public class FillerDetectorService {
             """;
 
     public FillerDetectorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
-        this.webClient = webClientBuilder.baseUrl("https://generativelanguage.googleapis.com/v1beta/models").build();
+        this.webClient = webClientBuilder.baseUrl("https://api.groq.com/openai/v1/").build();
         this.objectMapper = objectMapper;
     }
 
@@ -106,21 +106,35 @@ public class FillerDetectorService {
         String safeAnswer = answer.length() > 3000 ? answer.substring(0, 3000) : answer;
         String prompt = String.format(QUALITY_PROMPT, question.trim(), safeAnswer.trim());
 
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
+        Map<String, Object> requestBody = Map.of(
+            "model", "llama-3.1-8b-instant",
+            "temperature", 0.3,
+            "max_tokens", 512,
+            "messages", List.of(
+                Map.of("role", "system", "content", "You are an interview quality scorer. Return ONLY a valid JSON object with the requested keys, no markdown formatting."),
+                Map.of("role", "user",   "content", prompt)
+            )
+        );
 
         try {
-            String url = "/gemini-1.5-flash:generateContent?key=" + geminiApiKey;
             String rawResponse = webClient.post()
-                    .uri(url)
+                    .uri("chat/completions")
+                    .header("Authorization", "Bearer " + groqApiKey.trim())
+                    .header("Content-Type", "application/json")
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
 
             var rootNode = objectMapper.readTree(rawResponse);
-            String extractedText = rootNode.path("candidates").get(0)
-                    .path("content").path("parts").get(0).path("text").asText();
+            
+            if (!rootNode.has("choices") || rootNode.path("choices").isEmpty()) {
+                log.error("Groq response missing choices: {}", rawResponse);
+                throw new RuntimeException("Groq response missing choices");
+            }
+
+            var choice = rootNode.path("choices").get(0);
+            String extractedText = choice.path("message").path("content").asText();
 
             String cleanJson = stripMarkdownFences(extractedText);
             var result = objectMapper.readValue(cleanJson, Map.class);
@@ -131,7 +145,7 @@ public class FillerDetectorService {
             
             return Map.of("score", score, "feedback", feedback);
         } catch (Exception e) {
-            log.error("Gemini error in analyze_answer_quality", e);
+            log.error("Groq error in analyze_answer_quality", e);
             return Map.of("score", 3, "feedback", "Analysis unavailable.");
         }
     }

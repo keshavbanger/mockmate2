@@ -23,19 +23,19 @@ public class ResumeParserService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${gemini.api-key}")
-    private String geminiApiKey;
+    @Value("${groq.api-key:}")
+    private String groqApiKey;
 
     @jakarta.annotation.PostConstruct
     public void init() {
-        if (geminiApiKey != null) {
-            geminiApiKey = geminiApiKey.trim().replace("\"", "").replace("'", "");
+        if (groqApiKey != null) {
+            groqApiKey = groqApiKey.trim().replace("\"", "").replace("'", "");
         }
-        if (geminiApiKey == null || geminiApiKey.isEmpty() || geminiApiKey.contains("your_gemini_api_key")) {
-            log.error("CRITICAL: Gemini API Key is NOT configured correctly. Current value: {}", geminiApiKey);
+        if (groqApiKey == null || groqApiKey.isEmpty()) {
+            log.error("CRITICAL: Groq API Key is NOT configured correctly.");
         } else {
-            log.info("Gemini API Key loaded successfully (Length: {}, starts with: {}...)", 
-                geminiApiKey.length(), geminiApiKey.substring(0, Math.min(5, geminiApiKey.length())));
+            log.info("Groq API Key loaded successfully for ResumeParser (Length: {}, starts with: {}...)", 
+                groqApiKey.length(), groqApiKey.substring(0, Math.min(5, groqApiKey.length())));
         }
     }
 
@@ -61,7 +61,7 @@ public class ResumeParserService {
             """;
 
     public ResumeParserService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
-        this.webClient = webClientBuilder.baseUrl("https://generativelanguage.googleapis.com/v1/models/").build();
+        this.webClient = webClientBuilder.baseUrl("https://api.groq.com/openai/v1/").build();
         this.objectMapper = objectMapper;
     }
 
@@ -88,35 +88,38 @@ public class ResumeParserService {
     }
 
     private ResumeParsedResponse callGeminiApi(String prompt) {
-        Map<String, Object> part = new HashMap<>();
-        part.put("text", prompt);
-        Map<String, Object> content = new HashMap<>();
-        content.put("parts", List.of(part));
-        
-        Map<String, Object> finalBody = new HashMap<>();
-        finalBody.put("contents", List.of(content));
+        Map<String, Object> requestBody = Map.of(
+            "model", "llama-3.1-8b-instant",
+            "temperature", 0.2,
+            "max_tokens", 2048,
+            "messages", List.of(
+                Map.of("role", "system", "content", "You are an ATS parser. Return ONLY valid JSON with no markdown formatting."),
+                Map.of("role", "user",   "content", prompt)
+            )
+        );
 
         try {
-            log.info("Calling Gemini API for resume parsing with model: gemini-1.5-flash");
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey;
+            log.info("Calling Groq API for resume parsing with model: llama-3.1-8b-instant");
             String rawJsonResponse = webClient.post()
-                    .uri(url)
-                    .bodyValue(finalBody)
+                    .uri("chat/completions")
+                    .header("Authorization", "Bearer " + groqApiKey.trim())
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
                     .retrieve()
                     .onStatus(status -> status.isError(), response -> 
                         response.bodyToMono(String.class).flatMap(body -> {
-                            log.error("Gemini API error body: {}", body);
-                            return Mono.error(new RuntimeException("Gemini API error: " + body));
+                            log.error("Groq API error body: {}", body);
+                            return Mono.error(new RuntimeException("Groq API error: " + body));
                         })
                     )
                     .bodyToMono(String.class)
                     .block();
                     
-            log.info("Gemini API responded successfully.");
+            log.info("Groq API responded successfully.");
             return parseGeminiResponse(rawJsonResponse);
         } catch (Exception e) {
-            log.error("Gemini API error during resume parsing: {}", e.getMessage());
-            throw new RuntimeException("Gemini API error: " + e.getMessage(), e);
+            log.error("Groq API error during resume parsing: {}", e.getMessage());
+            throw new RuntimeException("Groq API error: " + e.getMessage(), e);
         }
     }
 
@@ -124,28 +127,20 @@ public class ResumeParserService {
         try {
             var rootNode = objectMapper.readTree(responseJson);
             
-            if (!rootNode.has("candidates") || rootNode.path("candidates").isEmpty()) {
-                log.error("Gemini response missing candidates: {}", responseJson);
-                throw new RuntimeException("Gemini response missing candidates");
+            if (!rootNode.has("choices") || rootNode.path("choices").isEmpty()) {
+                log.error("Groq response missing choices: {}", responseJson);
+                throw new RuntimeException("Groq response missing choices");
             }
 
-            var candidate = rootNode.path("candidates").get(0);
-            var content = candidate.path("content");
-            var parts = content.path("parts");
-            
-            if (parts.isEmpty()) {
-                log.error("Gemini response missing content parts: {}", responseJson);
-                throw new RuntimeException("Gemini response missing content parts");
-            }
-
-            String extractedText = parts.get(0).path("text").asText();
+            var choice = rootNode.path("choices").get(0);
+            String extractedText = choice.path("message").path("content").asText();
 
             String cleanJson = stripMarkdownFences(extractedText);
             return objectMapper.readValue(cleanJson, ResumeParsedResponse.class);
             
         } catch (Exception e) {
-            log.error("Failed to parse Gemini response. Error: {}. Response: {}", e.getMessage(), responseJson);
-            throw new RuntimeException("Failed to parse Gemini response: " + e.getMessage(), e);
+            log.error("Failed to parse Groq response. Error: {}. Response: {}", e.getMessage(), responseJson);
+            throw new RuntimeException("Failed to parse Groq response: " + e.getMessage(), e);
         }
     }
 

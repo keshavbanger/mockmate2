@@ -29,8 +29,8 @@ public class InterviewController {
     private final ObjectMapper objectMapper;
     private final WebClient.Builder webClientBuilder;
 
-    @Value("${gemini.api-key}")
-    private String geminiApiKey;
+    @Value("${groq.api-key:}")
+    private String groqApiKey;
 
     @PostMapping("/start-interview")
     public ResponseEntity<?> startInterview(@RequestBody Map<String, Object> request) {
@@ -191,21 +191,34 @@ public class InterviewController {
             """, numberedQuestions.toString().replace("%", "%%"), history.toString().replace("%", "%%"));
 
         try {
-            WebClient webClient = webClientBuilder.build();
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
+            WebClient webClient = webClientBuilder.baseUrl("https://api.groq.com/openai/v1/").build();
+            Map<String, Object> requestBody = Map.of(
+                "model", "llama-3.1-8b-instant",
+                "temperature", 0.5,
+                "max_tokens", 512,
+                "messages", List.of(
+                    Map.of("role", "system", "content", "You are InterviewBot, an AI interviewer. Respond only with the exact text you want to speak next."),
+                    Map.of("role", "user",   "content", prompt)
+                )
+            );
             
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + geminiApiKey;
             String rawResponse = webClient.post()
-                    .uri(url)
+                    .uri("chat/completions")
+                    .header("Authorization", "Bearer " + groqApiKey.trim())
+                    .header("Content-Type", "application/json")
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
                     
             var rootNode = objectMapper.readTree(rawResponse);
-            String aiReply = rootNode.path("candidates").get(0)
-                    .path("content").path("parts").get(0).path("text").asText().trim();
+            if (!rootNode.has("choices") || rootNode.path("choices").isEmpty()) {
+                log.error("Groq response missing choices: {}", rawResponse);
+                throw new RuntimeException("Groq response missing choices");
+            }
+            
+            var choice = rootNode.path("choices").get(0);
+            String aiReply = choice.path("message").path("content").asText().trim();
 
             Map<String, Object> aiTurn = new HashMap<>();
             aiTurn.put("role", "interviewer");

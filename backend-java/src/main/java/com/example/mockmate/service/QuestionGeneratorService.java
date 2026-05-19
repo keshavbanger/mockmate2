@@ -22,8 +22,8 @@ public class QuestionGeneratorService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${gemini.api-key}")
-    private String geminiApiKey;
+    @Value("${groq.api-key:}")
+    private String groqApiKey;
 
     private static final String QUESTION_PROMPT = """
             Generate exactly 7 interview questions for a %s level %s interview.
@@ -38,18 +38,18 @@ public class QuestionGeneratorService {
             Requirements:
             - Questions must be progressively harder (Q1 easiest -> Q7 hardest).
             - Interview type is "%s": tailor questions accordingly.
-              - Technical: focus on coding, system design, architecture, problem-solving
-              - Behavioral: focus on STAR-method situational questions
-              - HR: focus on culture fit, motivation, salary, goals
-              - Mixed: blend of all three types
+            - Technical: focus on coding, system design, architecture, problem-solving
+            - Behavioral: focus on STAR-method situational questions
+            - HR: focus on culture fit, motivation, salary, goals
+            - Mixed: blend of all three types
             - Difficulty level is "%s":
-              - Junior: foundational concepts, basic scenarios
-              - Mid: intermediate depth, real-world trade-offs
-              - Senior: complex, leadership, architectural decisions
+            - Junior: foundational concepts, basic scenarios
+            - Mid: intermediate depth, real-world trade-offs
+            - Senior: complex, leadership, architectural decisions
             - Language instruction: questions should be asked in %s.
-              - English: standard professional English
-              - Hindi: modern Hindi with technical terms kept in English
-              - Hinglish: natural mix of Hindi and English as spoken in Indian tech interviews
+            - English: standard professional English
+            - Hindi: modern Hindi with technical terms kept in English
+            - Hinglish: natural mix of Hindi and English as spoken in Indian tech interviews
             - Do NOT number the questions inside the strings.
             - Return ONLY a JSON array of exactly 7 strings. No markdown, no explanation, no extra text.
             
@@ -58,15 +58,15 @@ public class QuestionGeneratorService {
             """;
 
     public QuestionGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
-        this.webClient = webClientBuilder.baseUrl("https://generativelanguage.googleapis.com/v1/models/").build();
+        this.webClient = webClientBuilder.baseUrl("https://api.groq.com/openai/v1/").build();
         this.objectMapper = objectMapper;
     }
 
     @PostConstruct
     public void init() {
-        if (geminiApiKey != null) {
-            geminiApiKey = geminiApiKey.trim().replace("\"", "").replace("'", "");
-            log.info("QuestionGeneratorService: Gemini API Key sanitized.");
+        if (groqApiKey != null) {
+            groqApiKey = groqApiKey.trim().replace("\"", "").replace("'", "");
+            log.info("QuestionGeneratorService: Groq API Key sanitized.");
         }
     }
 
@@ -99,49 +99,49 @@ public class QuestionGeneratorService {
                 language
         );
 
-        return callGeminiApi(prompt);
+        return callGroqApi(prompt);
     }
 
-    private List<String> callGeminiApi(String prompt) {
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("contents", List.of(
-                Map.of("parts", List.of(Map.of("text", prompt)))
-        ));
-
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey;
+    private List<String> callGroqApi(String prompt) {
+        Map<String, Object> requestBody = Map.of(
+            "model", "llama-3.1-8b-instant",
+            "temperature", 0.5,
+            "max_tokens", 2048,
+            "messages", List.of(
+                Map.of("role", "system", "content", "You are an interview question generator. Return ONLY a valid JSON array of strings, no markdown formatting."),
+                Map.of("role", "user",   "content", prompt)
+            )
+        );
 
         try {
+            log.info("Calling Groq API for question generation with model: llama-3.1-8b-instant");
             String rawJsonResponse = webClient.post()
-                    .uri(url)
+                    .uri("chat/completions")
+                    .header("Authorization", "Bearer " + groqApiKey.trim())
+                    .header("Content-Type", "application/json")
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
 
-            return parseGeminiResponse(rawJsonResponse);
+            return parseGroqResponse(rawJsonResponse);
         } catch (Exception e) {
-            log.error("Gemini API error during question generation", e);
-            throw new RuntimeException("Gemini API error: " + e.getMessage(), e);
+            log.error("Groq API error during question generation", e);
+            throw new RuntimeException("Groq API error: " + e.getMessage(), e);
         }
     }
 
-    private List<String> parseGeminiResponse(String responseJson) {
+    private List<String> parseGroqResponse(String responseJson) {
         try {
             var rootNode = objectMapper.readTree(responseJson);
             
-            if (!rootNode.has("candidates") || rootNode.path("candidates").isEmpty()) {
-                log.error("Gemini response missing candidates: {}", responseJson);
-                throw new RuntimeException("Gemini response missing candidates");
+            if (!rootNode.has("choices") || rootNode.path("choices").isEmpty()) {
+                log.error("Groq response missing choices: {}", responseJson);
+                throw new RuntimeException("Groq response missing choices");
             }
 
-            String extractedText = rootNode
-                    .path("candidates")
-                    .get(0)
-                    .path("content")
-                    .path("parts")
-                    .get(0)
-                    .path("text")
-                    .asText();
+            var choice = rootNode.path("choices").get(0);
+            String extractedText = choice.path("message").path("content").asText();
 
             String cleanJson = stripMarkdownFences(extractedText);
             

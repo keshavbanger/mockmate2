@@ -20,13 +20,13 @@ public class ReportGeneratorService {
     private final ObjectMapper objectMapper;
     private final FillerDetectorService fillerDetectorService;
 
-    @Value("${gemini.api-key}")
-    private String geminiApiKey;
+    @Value("${groq.api-key:}")
+    private String groqApiKey;
 
     @jakarta.annotation.PostConstruct
     public void init() {
-        if (geminiApiKey != null) {
-            geminiApiKey = geminiApiKey.trim().replace("\"", "").replace("'", "");
+        if (groqApiKey != null) {
+            groqApiKey = groqApiKey.trim().replace("\"", "").replace("'", "");
         }
     }
 
@@ -193,7 +193,7 @@ public class ReportGeneratorService {
 
     public ReportGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper,
                                    FillerDetectorService fillerDetectorService) {
-        this.webClient = webClientBuilder.baseUrl("https://generativelanguage.googleapis.com").build();
+        this.webClient = webClientBuilder.baseUrl("https://api.groq.com/openai/v1/").build();
         this.objectMapper = objectMapper;
         this.fillerDetectorService = fillerDetectorService;
     }
@@ -266,46 +266,51 @@ public class ReportGeneratorService {
         log.info("[Report] Session={} | wpm={:.1f} fillers={} totalWords={}", sessionId, wpm, fillerWordCount, totalWords);
 
         Map<String, Object> geminiReport = callGeminiApi(SYSTEM_PROMPT, userPrompt);
-        log.info("[Report] Gemini responded. Keys: {}", geminiReport.keySet());
+        log.info("[Report] Groq responded. Keys: {}", geminiReport.keySet());
 
         return assembleReport(sessionId, sessionData, geminiReport,
                 fillerStats, fillerCounts, wpm, pauseCount, durationSec,
                 questions, turns, answerMap);
     }
 
-    // ── Gemini API Call ────────────────────────────────────────────────────────
+    // ── Groq API Call ──────────────────────────────────────────────────────────
     private Map<String, Object> callGeminiApi(String systemPrompt, String userPrompt) {
-        Map<String, Object> systemInstruction = Map.of(
-                "parts", List.of(Map.of("text", systemPrompt)));
-        Map<String, Object> userContent = Map.of(
-                "role", "user",
-                "parts", List.of(Map.of("text", userPrompt)));
-        Map<String, Object> requestBody = new LinkedHashMap<>();
-        requestBody.put("system_instruction", systemInstruction);
-        requestBody.put("contents", List.of(userContent));
+        Map<String, Object> requestBody = Map.of(
+            "model", "llama-3.1-8b-instant",
+            "temperature", 0.3,
+            "max_tokens", 4096,
+            "messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user",   "content", userPrompt)
+            )
+        );
 
         try {
-            String url = "/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey;
+            log.info("Calling Groq API for report generation with model: llama-3.1-8b-instant");
             String rawResponse = webClient.post()
-                    .uri(url)
+                    .uri("chat/completions")
+                    .header("Authorization", "Bearer " + groqApiKey.trim())
+                    .header("Content-Type", "application/json")
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
 
             var rootNode = objectMapper.readTree(rawResponse);
-            if (!rootNode.has("candidates") || rootNode.path("candidates").isEmpty()) {
-                log.error("Gemini response missing candidates: {}", rawResponse);
-                throw new RuntimeException("Gemini response missing candidates");
+            
+            if (!rootNode.has("choices") || rootNode.path("choices").isEmpty()) {
+                log.error("Groq response missing choices: {}", rawResponse);
+                throw new RuntimeException("Groq response missing choices");
             }
-            String rawText = rootNode.path("candidates").get(0)
-                    .path("content").path("parts").get(0).path("text").asText();
+
+            var choice = rootNode.path("choices").get(0);
+            String rawText = choice.path("message").path("content").asText();
 
             return objectMapper.readValue(stripMarkdownFences(rawText),
                     new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
-            log.error("Gemini API error during report generation", e);
-            throw new RuntimeException("Gemini report generation failed: " + e.getMessage(), e);
+            log.error("Groq API error during report generation", e);
+            throw new RuntimeException("Groq report generation failed: " + e.getMessage(), e);
         }
     }
 
