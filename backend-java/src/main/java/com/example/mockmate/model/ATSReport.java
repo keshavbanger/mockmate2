@@ -24,14 +24,21 @@ public class ATSReport {
     @Builder.Default
     private String timestamp = Instant.now().toString();
 
+    private String resumeFileName;
+
     // ── Final weighted score ──
-    private int finalScore;
+    private int    finalScore;
     private String verdict;
     private String verdictReason;
 
+    // ── AI-generated content ──
+    private String tailoredSummary;
+
     // ── Keyword analysis ──
-    private List<String> matchedKeywords;
-    private List<String> missingKeywords;
+    private List<String>          matchedKeywords;
+    private List<String>          missingKeywords;
+    private Map<String, Double>   weightedMatchedKeywords;
+    private Map<String, Double>   weightedMissingKeywords;
 
     // ── Section health ──
     private Map<String, String> sectionFeedback;  // key → "present"|"weak"|"missing"
@@ -45,6 +52,15 @@ public class ATSReport {
     // ── Strength lines ──
     private List<String> strengthLines;
 
+    // ── Skill depth map ──
+    private Map<String, Integer> skillDepthMap;  // skill → 1(basic)|2(intermediate)|3(expert)
+
+    // ── Role level gap ──
+    private RoleLevelGap roleLevelGap;
+
+    // ── Quantification suggestions ──
+    private List<QuantSuggestion> quantificationSuggestions;
+
     // ── Sub-scores (all 0-100) ──
     private int keywordOverlapScore;
     private int semanticScore;
@@ -52,6 +68,12 @@ public class ATSReport {
     private int sectionScore;
     private int formattingScore;
     private int quantificationScore;
+
+    // ── Flags ──
+    @Builder.Default
+    private boolean aiAnalysisAvailable = true;
+
+    // ── Nested classes ──
 
     @Data
     @Builder
@@ -61,5 +83,24 @@ public class ATSReport {
         private String original;
         private String rewritten;
         private String reason;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RoleLevelGap {
+        private String       detectedLevel; // Junior|Mid|Senior
+        private String       requiredLevel; // Junior|Mid|Senior
+        private List<String> gaps;          // empty list if none
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuantSuggestion {
+        private String original;
+        private String suggestion;
     }
 }
