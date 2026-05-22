@@ -42,7 +42,7 @@ public class ATSAnalyzerService {
 
         // Step 4: Build final report
         String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "resume";
-        ATSReport report = atsReportBuilder.build(userId, fileName, scoring, groqResult);
+        ATSReport report = atsReportBuilder.build(userId, fileName, resumeText, scoring, groqResult);
 
         // Step 5: Persist to disk
         saveReport(report);

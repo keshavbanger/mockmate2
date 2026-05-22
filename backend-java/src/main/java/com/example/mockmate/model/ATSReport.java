@@ -25,6 +25,7 @@ public class ATSReport {
     private String timestamp = Instant.now().toString();
 
     private String resumeFileName;
+    private String originalText;
 
     // ── Final weighted score ──
     private int    finalScore;

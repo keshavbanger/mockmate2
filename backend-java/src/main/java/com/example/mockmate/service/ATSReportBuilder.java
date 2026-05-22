@@ -32,6 +32,7 @@ public class ATSReportBuilder {
      */
     public ATSReport build(String userId,
                            String resumeFileName,
+                           String originalText,
                            ScoringResult scoring,
                            GroqATSResult groq) {
 
@@ -70,6 +71,7 @@ public class ATSReportBuilder {
         ATSReport.ATSReportBuilder builder = ATSReport.builder()
                 .userId(userId)
                 .resumeFileName(resumeFileName)
+                .originalText(originalText)
                 .finalScore(finalScore)
                 .verdict(verdict)
                 .verdictReason(verdictReason)

@@ -12,8 +12,10 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -22,147 +24,350 @@ public class ATSDownloadService {
 
     private final ATSAnalyzerService atsAnalyzerService;
 
-    /**
-     * Generates an improved DOCX resume by applying AI-rewritten bullets
-     * and the tailored summary from the stored ATSReport.
-     */
-    public ResponseEntity<byte[]> generateImprovedDocx(String reportId) {
+    static final String FONT = "Calibri";
+    static final String COLOR_NAME = "1A1A2E";
+    static final String COLOR_ACCENT = "2C5F8A";
+    static final String COLOR_BODY = "222222";
+    static final String COLOR_GRAY = "555555";
 
+    private static final Map<String, Pattern> SECTION_PATTERNS = new LinkedHashMap<>();
+    static {
+        SECTION_PATTERNS.put("summary", Pattern.compile("(?i)^(summary|objective|profile|about\\s+me|professional\\s+summary)$"));
+        SECTION_PATTERNS.put("skills", Pattern.compile("(?i)^(skills|technologies|tech\\s+stack|technical\\s+skills|core\\s+competencies|expertise)$"));
+        SECTION_PATTERNS.put("experience", Pattern.compile("(?i)^(experience|work\\s+history|employment|work\\s+experience|professional\\s+background|career\\s+history|positions\\s+held)$"));
+        SECTION_PATTERNS.put("projects", Pattern.compile("(?i)^(projects?|portfolio|personal\\s+projects?|key\\s+projects?)$"));
+        SECTION_PATTERNS.put("achievements", Pattern.compile("(?i)^(achievements|awards|certifications|honors)$"));
+        SECTION_PATTERNS.put("leadership", Pattern.compile("(?i)^(leadership|extracurriculars|volunteering|activities|leadership\\s+&\\s+extracurriculars)$"));
+        SECTION_PATTERNS.put("education", Pattern.compile("(?i)^(education|degree|university|college|academic\\s+background|qualifications)$"));
+    }
+
+    public byte[] generate(String reportId) {
         Optional<ATSReport> maybeReport = atsAnalyzerService.getReport(reportId);
         if (maybeReport.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new RuntimeException("Report not found");
         }
 
         ATSReport report = maybeReport.get();
-
         try {
-            byte[] docxBytes = buildDocx(report);
-            String safeName  = sanitize(report.getResumeFileName());
-
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"improved_" + safeName + ".docx\"")
-                    .contentType(MediaType.parseMediaType(
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-                    .body(docxBytes);
-
+            return buildDocx(report);
         } catch (Exception e) {
             log.error("[ATSDownload] Failed to generate DOCX for reportId={}", reportId, e);
-            return ResponseEntity.internalServerError().build();
+            throw new RuntimeException("Failed to generate resume DOCX", e);
         }
     }
 
-    // ── DOCX builder ──────────────────────────────────────────────────────────────
     private byte[] buildDocx(ATSReport report) throws Exception {
         try (XWPFDocument doc = new XWPFDocument();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-            // ── Title ─────────────────────────────────────────────────────────────
-            addStyledParagraph(doc, "Improved Resume", 22, true, "1F1F2E", ParagraphAlignment.CENTER);
-            addEmptyLine(doc);
+            // Set Page Margins
+            CTSectPr sectPr = doc.getDocument().getBody().addNewSectPr();
+            CTPageMar pageMar = sectPr.addNewPgMar();
+            pageMar.setTop(BigInteger.valueOf(900));
+            pageMar.setBottom(BigInteger.valueOf(900));
+            pageMar.setLeft(BigInteger.valueOf(1080));
+            pageMar.setRight(BigInteger.valueOf(1080));
 
-            // ── Tailored Summary ──────────────────────────────────────────────────
+            String originalText = report.getOriginalText();
+            if (originalText == null) originalText = "";
+
+            Map<String, List<String>> sections = parseSections(originalText);
+
+            // Contact Info defaults
+            String name = "YOUR NAME";
+            String title = "Software Engineer";
+            String contact = "phone • email • location • github";
+
+            if (sections.containsKey("contact_info")) {
+                List<String> contactLines = sections.get("contact_info");
+                if (!contactLines.isEmpty()) name = contactLines.get(0);
+                if (contactLines.size() > 1) title = contactLines.get(1);
+                if (contactLines.size() > 2) contact = String.join(" • ", contactLines.subList(2, contactLines.size()));
+            }
+
+            // 1. NAME
+            addNameParagraph(doc, name);
+
+            // 2. TITLE
+            addTitleParagraph(doc, title);
+
+            // 3. CONTACT
+            addContactParagraph(doc, contact);
+            addSpacing(doc);
+
+            // 4. SUMMARY
+            String summaryText = null;
             if (report.getTailoredSummary() != null && !report.getTailoredSummary().isBlank()) {
-                addSectionHeading(doc, "Professional Summary");
-                addBodyParagraph(doc, report.getTailoredSummary());
-                addEmptyLine(doc);
+                summaryText = report.getTailoredSummary();
+            } else if (sections.containsKey("summary") && !sections.get("summary").isEmpty()) {
+                summaryText = String.join(" ", sections.get("summary"));
+            }
+            if (summaryText != null && !summaryText.isBlank()) {
+                addSectionHeader(doc, "PROFESSIONAL SUMMARY");
+                addBulletPoint(doc, summaryText, false);
+                addSpacing(doc);
             }
 
-            // ── AI-Rewritten Bullet Points ────────────────────────────────────────
-            List<ATSReport.BulletRewrite> rewrites = report.getBulletRewrites();
-            if (rewrites != null && !rewrites.isEmpty()) {
-                addSectionHeading(doc, "Improved Experience Bullets");
-                for (ATSReport.BulletRewrite rewrite : rewrites) {
-                    addBulletParagraph(doc, rewrite.getRewritten());
+            // 5. SKILLS
+            if (sections.containsKey("skills")) {
+                addSectionHeader(doc, "TECHNICAL SKILLS");
+                List<String> skills = new ArrayList<>(sections.get("skills"));
+                
+                // Add missing keywords
+                List<String> missing = report.getMissingKeywords();
+                if (missing != null && !missing.isEmpty()) {
+                    skills.add("Added Keywords: " + String.join(", ", missing));
                 }
-                addEmptyLine(doc);
+
+                for (String skillLine : skills) {
+                    if (skillLine.contains(":")) {
+                        String[] parts = skillLine.split(":", 2);
+                        addSkillRow(doc, parts[0].trim(), parts[1].trim());
+                    } else {
+                        addSkillRow(doc, "Skills", skillLine);
+                    }
+                }
+                addSpacing(doc);
             }
 
-            // ── Matched Keywords ──────────────────────────────────────────────────
-            List<String> matched = report.getMatchedKeywords();
-            if (matched != null && !matched.isEmpty()) {
-                addSectionHeading(doc, "Key Skills (ATS Optimized)");
-                addBodyParagraph(doc, String.join("  ·  ", matched));
-                addEmptyLine(doc);
+            // 6. EXPERIENCE
+            if (sections.containsKey("experience")) {
+                addSectionHeader(doc, "EXPERIENCE");
+                processSection(doc, sections.get("experience"), report);
+                addSpacing(doc);
             }
 
-            // ── Missing Keywords (add these) ──────────────────────────────────────
-            List<String> missing = report.getMissingKeywords();
-            if (missing != null && !missing.isEmpty()) {
-                addSectionHeading(doc, "Keywords to Add");
-                addBodyParagraph(doc, "Consider weaving these naturally into your experience: "
-                        + String.join(", ", missing));
-                addEmptyLine(doc);
+            // 7. PROJECTS
+            if (sections.containsKey("projects")) {
+                addSectionHeader(doc, "PROJECTS");
+                processSection(doc, sections.get("projects"), report);
+                addSpacing(doc);
             }
 
-            // ── Footer note ───────────────────────────────────────────────────────
-            addStyledParagraph(doc,
-                    "Generated by MockMate ATS Resume Checker · Score: " + report.getFinalScore() + "/100",
-                    8, false, "999999", ParagraphAlignment.CENTER);
+            // 8. ACHIEVEMENTS
+            if (sections.containsKey("achievements")) {
+                addSectionHeader(doc, "ACHIEVEMENTS");
+                processSection(doc, sections.get("achievements"), report);
+                addSpacing(doc);
+            }
+
+            // 9. LEADERSHIP
+            if (sections.containsKey("leadership")) {
+                addSectionHeader(doc, "LEADERSHIP & EXTRACURRICULARS");
+                processSection(doc, sections.get("leadership"), report);
+                addSpacing(doc);
+            }
+
+            // 10. EDUCATION
+            if (sections.containsKey("education")) {
+                addSectionHeader(doc, "EDUCATION");
+                processSection(doc, sections.get("education"), report);
+            }
 
             doc.write(out);
             return out.toByteArray();
         }
     }
 
-    // ── Styling helpers ───────────────────────────────────────────────────────────
+    private Map<String, List<String>> parseSections(String text) {
+        Map<String, List<String>> parsed = new LinkedHashMap<>();
+        String[] lines = text.split("\\n");
+        String currentSection = "contact_info";
+        parsed.put(currentSection, new ArrayList<>());
 
-    private void addSectionHeading(XWPFDocument doc, String text) {
+        for (String line : lines) {
+            line = line.trim();
+            if (line.isBlank()) continue;
+
+            boolean isHeader = false;
+            for (Map.Entry<String, Pattern> entry : SECTION_PATTERNS.entrySet()) {
+                if (entry.getValue().matcher(line).find()) {
+                    currentSection = entry.getKey();
+                    parsed.putIfAbsent(currentSection, new ArrayList<>());
+                    isHeader = true;
+                    break;
+                }
+            }
+
+            if (!isHeader) {
+                parsed.get(currentSection).add(line);
+            }
+        }
+        return parsed;
+    }
+
+    private void processSection(XWPFDocument doc, List<String> lines, ATSReport report) {
+        for (String line : lines) {
+            if (line.matches("(?i).*(\\||\\d{4}).*") && !line.startsWith("•") && !line.startsWith("-")) {
+                // Heuristic for role header
+                String[] parts = line.split("\\|");
+                if (parts.length >= 2) {
+                    addRoleHeader(doc, parts[0].trim(), parts[1].trim());
+                } else {
+                    addRoleHeader(doc, line, "");
+                }
+            } else {
+                String bullet = line.replaceAll("^[•\\-\\*]\\s*", "");
+                
+                // Replace with rewritten bullet if exists
+                if (report.getBulletRewrites() != null) {
+                    for (ATSReport.BulletRewrite br : report.getBulletRewrites()) {
+                        if (bullet.contains(br.getOriginal()) || br.getOriginal().contains(bullet)) {
+                            bullet = br.getRewritten();
+                            log.info("[ATSDownload] Replaced bullet: {}", bullet);
+                            break;
+                        }
+                    }
+                }
+
+                // Replace with quantified suggestion if exists
+                if (report.getQuantificationSuggestions() != null) {
+                    for (ATSReport.QuantSuggestion qs : report.getQuantificationSuggestions()) {
+                        if (bullet.contains(qs.getOriginal()) || qs.getOriginal().contains(bullet)) {
+                            bullet = qs.getSuggestion();
+                            log.info("[ATSDownload] Quantified bullet: {}", bullet);
+                            break;
+                        }
+                    }
+                }
+
+                addBulletPoint(doc, bullet, true);
+            }
+        }
+    }
+
+    private void addNameParagraph(XWPFDocument doc, String name) {
         XWPFParagraph para = doc.createParagraph();
-        para.setSpacingBefore(200);
+        para.setAlignment(ParagraphAlignment.CENTER);
         XWPFRun run = para.createRun();
-        run.setText(text.toUpperCase());
+        run.setText(name.toUpperCase());
+        run.setBold(true);
+        run.setFontSize(28);
+        run.setColor(COLOR_NAME);
+        run.setFontFamily(FONT);
+    }
+
+    private void addTitleParagraph(XWPFDocument doc, String title) {
+        XWPFParagraph para = doc.createParagraph();
+        para.setAlignment(ParagraphAlignment.CENTER);
+        XWPFRun run = para.createRun();
+        run.setText(title);
+        run.setFontSize(11);
+        run.setColor(COLOR_ACCENT);
+        run.setFontFamily(FONT);
+    }
+
+    private void addContactParagraph(XWPFDocument doc, String contact) {
+        XWPFParagraph para = doc.createParagraph();
+        para.setAlignment(ParagraphAlignment.CENTER);
+        XWPFRun run = para.createRun();
+        run.setText(contact);
+        run.setFontSize(10);
+        run.setColor(COLOR_GRAY);
+        run.setFontFamily(FONT);
+    }
+
+    private void addSectionHeader(XWPFDocument doc, String title) {
+        XWPFParagraph para = doc.createParagraph();
+        para.setSpacingBefore(120);
+        setSectionBorderBottom(para, COLOR_ACCENT);
+        XWPFRun run = para.createRun();
+        run.setText(title);
         run.setBold(true);
         run.setFontSize(11);
-        run.setColor("6B46C1");
-        run.setFontFamily("Calibri");
-        // underline as separator
-        run.setUnderline(UnderlinePatterns.SINGLE);
+        run.setColor(COLOR_NAME);
+        run.setFontFamily(FONT);
     }
 
-    private void addBodyParagraph(XWPFDocument doc, String text) {
+    private void addRoleHeader(XWPFDocument doc, String left, String right) {
         XWPFParagraph para = doc.createParagraph();
         para.setSpacingBefore(80);
-        XWPFRun run = para.createRun();
-        run.setText(text);
-        run.setFontSize(11);
-        run.setColor("1F1F2E");
-        run.setFontFamily("Calibri");
+        
+        CTP ctp = para.getCTP();
+        CTPPr ppr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
+        CTTabs tabs = ppr.isSetTabs() ? ppr.getTabs() : ppr.addNewTabs();
+        CTTabStop tab = tabs.addNewTab();
+        tab.setVal(STTabJc.RIGHT);
+        tab.setPos(BigInteger.valueOf(9000)); // Right align at ~9000 twips
+
+        XWPFRun leftRun = para.createRun();
+        leftRun.setText(left);
+        leftRun.setBold(true);
+        leftRun.setFontSize(11);
+        leftRun.setColor(COLOR_BODY);
+        leftRun.setFontFamily(FONT);
+
+        if (!right.isEmpty()) {
+            leftRun.addTab();
+            XWPFRun rightRun = para.createRun();
+            rightRun.setText(right);
+            rightRun.setItalic(true);
+            rightRun.setFontSize(10);
+            rightRun.setColor(COLOR_BODY);
+            rightRun.setFontFamily(FONT);
+        }
     }
 
-    private void addBulletParagraph(XWPFDocument doc, String text) {
+    private void addBulletPoint(XWPFDocument doc, String text, boolean isBullet) {
         XWPFParagraph para = doc.createParagraph();
-        para.setIndentationLeft(360);
-        para.setSpacingBefore(60);
+        if (isBullet) {
+            para.setIndentationLeft(440);
+            para.setIndentationHanging(280);
+        }
+        para.setSpacingBefore(40);
         XWPFRun run = para.createRun();
-        // Using Unicode bullet character — no numbering XML needed
-        run.setText("• " + text);
-        run.setFontSize(11);
-        run.setColor("1F1F2E");
-        run.setFontFamily("Calibri");
+        if (isBullet) {
+            run.setText("• " + text);
+        } else {
+            run.setText(text);
+        }
+        run.setFontSize(10);
+        run.setColor(COLOR_BODY);
+        run.setFontFamily(FONT);
     }
 
-    private void addStyledParagraph(XWPFDocument doc, String text,
-                                     int fontSize, boolean bold,
-                                     String hexColor, ParagraphAlignment align) {
+    private void addSkillRow(XWPFDocument doc, String label, String skills) {
         XWPFParagraph para = doc.createParagraph();
-        para.setAlignment(align);
-        XWPFRun run = para.createRun();
-        run.setText(text);
-        run.setBold(bold);
-        run.setFontSize(fontSize);
-        run.setColor(hexColor);
-        run.setFontFamily("Calibri");
+        para.setSpacingBefore(40);
+        
+        CTP ctp = para.getCTP();
+        CTPPr ppr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
+        CTTabs tabs = ppr.isSetTabs() ? ppr.getTabs() : ppr.addNewTabs();
+        CTTabStop tab = tabs.addNewTab();
+        tab.setVal(STTabJc.LEFT);
+        tab.setPos(BigInteger.valueOf(1440));
+
+        XWPFRun labelRun = para.createRun();
+        labelRun.setText(label + ":");
+        labelRun.setBold(true);
+        labelRun.setFontSize(10);
+        labelRun.setColor(COLOR_BODY);
+        labelRun.setFontFamily(FONT);
+
+        labelRun.addTab();
+
+        XWPFRun skillsRun = para.createRun();
+        skillsRun.setText(skills);
+        skillsRun.setFontSize(10);
+        skillsRun.setColor(COLOR_BODY);
+        skillsRun.setFontFamily(FONT);
     }
 
-    private void addEmptyLine(XWPFDocument doc) {
+    private void addSpacing(XWPFDocument doc) {
         XWPFParagraph para = doc.createParagraph();
         para.createRun().setText("");
+        para.setSpacingAfter(0);
+        para.setSpacingBefore(0);
     }
 
-    private String sanitize(String fileName) {
-        if (fileName == null || fileName.isBlank()) return "resume";
-        String name = fileName.replaceAll("\\.(pdf|docx)$", "");
-        return name.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+    private void setSectionBorderBottom(XWPFParagraph para, String hexColor) {
+        CTP ctp = para.getCTP();
+        CTPPr ppr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
+        CTPBdr bdr = ppr.isSetPBdr() ? ppr.getPBdr() : ppr.addNewPBdr();
+        CTBorder bottom = bdr.isSetBottom() ? bdr.getBottom() : bdr.addNewBottom();
+        bottom.setVal(STBorder.SINGLE);
+        bottom.setSz(BigInteger.valueOf(4));
+        bottom.setSpace(BigInteger.valueOf(1));
+        bottom.setColor(hexColor);
     }
 }

@@ -78,17 +78,17 @@ public class ATSController {
 
     // ── GET /api/ats/report/{reportId}/download ───────────────────────────────────
     @GetMapping("/report/{reportId}/download")
-    public ResponseEntity<?> downloadImprovedResume(
-            @PathVariable String reportId,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
-
+    public ResponseEntity<byte[]> downloadImproved(@PathVariable String reportId) {
         log.info("[ATS] /download reportId={}", reportId);
         try {
-            return atsDownloadService.generateImprovedDocx(reportId);
+            byte[] docxBytes = atsDownloadService.generate(reportId);
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"improved_resume.docx\"")
+                    .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                    .body(docxBytes);
         } catch (Exception e) {
             log.error("[ATS] Download failed for reportId={}", reportId, e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Failed to generate download: " + e.getMessage()));
+            return ResponseEntity.internalServerError().build();
         }
     }
 
