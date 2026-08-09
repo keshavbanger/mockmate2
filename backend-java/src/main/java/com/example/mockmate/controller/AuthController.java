@@ -7,8 +7,8 @@ import com.example.mockmate.dto.response.TokenResponse;
 import com.example.mockmate.dto.response.UserResponse;
 import com.example.mockmate.model.User;
 import com.example.mockmate.service.AuthService;
+import com.example.mockmate.service.ResendEmailService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,11 +16,15 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-    private final com.example.mockmate.service.ResendEmailService resendEmailService;
+    private final ResendEmailService resendEmailService;
+
+    public AuthController(AuthService authService, ResendEmailService resendEmailService) {
+        this.authService = authService;
+        this.resendEmailService = resendEmailService;
+    }
 
     @GetMapping("/trial-email")
     public ResponseEntity<java.util.Map<String, Object>> trialEmail(@RequestParam(required = false) String email) {
