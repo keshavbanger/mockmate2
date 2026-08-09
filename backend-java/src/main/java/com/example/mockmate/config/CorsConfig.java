@@ -13,17 +13,25 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    // Comma-separated allowlist, e.g. "http://localhost:5173,https://mockmate.vercel.app"
-    @Value("${cors.allowed-origins:http://localhost:5173}")
+    // Comma-separated allowlist, e.g. "http://localhost:5173,https://mockmate2.vercel.app,*"
+    @Value("${cors.allowed-origins:*}")
     private String allowedOrigins;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(Arrays.stream(allowedOrigins.split(","))
+        
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .toList());
+                .toList();
+
+        if (origins.isEmpty() || origins.contains("*")) {
+            config.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            config.setAllowedOriginPatterns(origins);
+        }
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
