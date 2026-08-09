@@ -36,6 +36,10 @@ supabase:
   jwks-url: https://sslnbmgjgxcztqtzeonj.supabase.co/auth/v1/.well-known/jwks.json
 
 # External APIs
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from-email: ${RESEND_FROM_EMAIL:MockMate <onboarding@resend.dev>}
+
 tavus:
   api-key: ${TAVUS_API_KEY:}
   replica-id: ${TAVUS_REPLICA_ID:r291e545fd67}

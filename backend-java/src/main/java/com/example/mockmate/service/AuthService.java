@@ -27,6 +27,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final SupabaseJwtVerifier supabaseJwtVerifier;
+    private final ResendEmailService resendEmailService;
 
     @Transactional
     public TokenResponse verify(TokenVerificationRequest request) {
@@ -49,6 +50,7 @@ public class AuthService {
 
         // Idempotent upsert
         Optional<User> userOpt = userRepository.findBySupabaseUserId(supabaseUserId);
+        boolean isNewUser = false;
         User user;
         if (userOpt.isPresent()) {
             user = userOpt.get();
@@ -65,6 +67,7 @@ public class AuthService {
                 if (avatarUrl != null) user.setAvatarUrl(avatarUrl);
                 user.setLastLogin(LocalDateTime.now());
             } else {
+                isNewUser = true;
                 user = User.builder()
                         .supabaseUserId(supabaseUserId)
                         .email(email)
@@ -79,6 +82,10 @@ public class AuthService {
         }
 
         User savedUser = userRepository.save(user);
+        if (isNewUser) {
+            resendEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName());
+        }
+
         String mockMateToken = jwtUtil.generateToken(savedUser.getEmail());
 
         return TokenResponse.builder()
@@ -112,6 +119,8 @@ public class AuthService {
                 .build();
 
         User savedUser = userRepository.save(user);
+        resendEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName());
+
         String token = jwtUtil.generateToken(savedUser.getEmail());
 
         return TokenResponse.builder()
