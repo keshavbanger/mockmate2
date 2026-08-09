@@ -74,6 +74,32 @@ public class ResendEmailService {
         }
     }
 
+    public String testWelcomeEmail(String toEmail) {
+        String displayName = "Test Developer";
+        String template = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 40px 20px; }
+                .card { max-width: 560px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 32px; border: 1px solid #334155; }
+                .logo { font-size: 24px; font-weight: 800; color: #6366f1; margin-bottom: 24px; }
+                h1 { color: #f8fafc; font-size: 22px; margin-bottom: 16px; }
+                p { color: #94a3b8; font-size: 15px; line-height: 1.6; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="logo">🚀 MockMate</div>
+                <h1>Welcome to MockMate, {{NAME}}! 👋</h1>
+                <p>This is a diagnostic test email to verify your Resend API configuration.</p>
+              </div>
+            </body>
+            </html>
+            """;
+        return sendEmailDebug(toEmail, "MockMate Test Email 🚀", template.replace("{{NAME}}", displayName));
+    }
+
     public boolean sendVerificationEmail(String toEmail, String code) {
         try {
             if (apiKey == null || apiKey.isBlank()) {
@@ -112,6 +138,16 @@ public class ResendEmailService {
     }
 
     public boolean sendEmail(String toEmail, String subject, String htmlContent) {
+        String result = sendEmailDebug(toEmail, subject, htmlContent);
+        return result.startsWith("SUCCESS");
+    }
+
+    public String sendEmailDebug(String toEmail, String subject, String htmlContent) {
+        if (apiKey == null || apiKey.isBlank()) {
+            String msg = "ERROR: RESEND_API_KEY is not configured or empty in environment variables.";
+            log.warn("[ResendEmailService] {}", msg);
+            return msg;
+        }
         try {
             Map<String, Object> payload = Map.of(
                     "from", fromEmail,
@@ -129,10 +165,14 @@ public class ResendEmailService {
                     .body(String.class);
 
             log.info("[ResendEmailService] Email sent successfully. Response: {}", response);
-            return true;
+            return "SUCCESS: " + response;
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            String errorMsg = "HTTP " + e.getStatusCode() + " - " + e.getResponseBodyAsString();
+            log.error("[ResendEmailService] Resend API Error sending to {}: {}", toEmail, errorMsg);
+            return "ERROR: " + errorMsg;
         } catch (Exception e) {
-            log.error("[ResendEmailService] Failed to send email to: {}. Error: {}", toEmail, e.getMessage());
-            return false;
+            log.error("[ResendEmailService] Failed to send email to {}: {}", toEmail, e.getMessage(), e);
+            return "ERROR: " + e.getMessage();
         }
     }
 }
