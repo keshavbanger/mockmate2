@@ -83,7 +83,9 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
         if (isNewUser) {
-            resendEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName());
+            java.util.concurrent.CompletableFuture.runAsync(() ->
+                resendEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName())
+            );
         }
 
         String mockMateToken = jwtUtil.generateToken(savedUser.getEmail());
@@ -119,7 +121,9 @@ public class AuthService {
                 .build();
 
         User savedUser = userRepository.save(user);
-        resendEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName());
+        java.util.concurrent.CompletableFuture.runAsync(() ->
+            resendEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName())
+        );
 
         String token = jwtUtil.generateToken(savedUser.getEmail());
 

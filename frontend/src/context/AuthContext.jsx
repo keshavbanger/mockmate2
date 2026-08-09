@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
   // Create axios instance with auth header
   const api = axios.create({
     baseURL: API_BASE,
-    timeout: 10000, // 10 seconds timeout to prevent hanging requests
+    timeout: 30000, // 30 seconds timeout to accommodate Render cold starts
     headers: {
       'Content-Type': 'application/json',
     },
