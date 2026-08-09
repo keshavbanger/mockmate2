@@ -13,15 +13,17 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    // Using a default secret for development, in production this should be in application.yml
-    @Value("${jwt.secret:mockmate_super_secret_key_needs_to_be_long_enough_for_hs256}")
+    // Must be set via the JWT_SECRET env var (see .env) — no fallback, so a
+    // misconfigured deployment fails to start instead of silently signing
+    // tokens with a secret that's sitting in source control / git history.
+    @Value("${jwt.secret}")
     private String secret;
 
     @Value("${jwt.expiration:86400000}") // 24 hours default
     private long jwtExpiration;
 
     private SecretKey getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secret);
+        byte[] keyBytes = Decoders.BASE64URL.decode(secret);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 

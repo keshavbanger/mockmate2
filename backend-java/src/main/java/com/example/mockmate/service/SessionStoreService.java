@@ -127,4 +127,15 @@ public class SessionStoreService {
             log.info("Cleanup removed expired sessions.");
         }
     }
+
+    public String findSessionIdByConversationId(String conversationId) {
+        if (conversationId == null) return null;
+        for (Map.Entry<String, SessionRecord> entry : sessions.entrySet()) {
+            Map<String, Object> data = entry.getValue().getData();
+            if (data != null && conversationId.equals(data.get("conversation_id"))) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
 }

@@ -1,6 +1,9 @@
 package com.example.mockmate.service;
 
 import com.example.mockmate.model.ATSReport;
+import com.example.mockmate.model.AtsAnalysis;
+import com.example.mockmate.model.HonestResumeAssessment;
+import com.example.mockmate.repository.AtsAnalysisRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +23,9 @@ public class ATSAnalyzerService {
     private final ATSScoringService   atsScoringService;
     private final GroqATSService      groqATSService;
     private final ATSReportBuilder    atsReportBuilder;
+    private final ATSDownloadService  atsDownloadService;
     private final ObjectMapper        objectMapper;
+    private final AtsAnalysisRepository atsAnalysisRepository;
 
     static final String ATS_DIR = "reports/ats";
 
@@ -37,15 +42,30 @@ public class ATSAnalyzerService {
         // Step 2: Deterministic scoring (no API cost)
         ATSScoringService.ScoringResult scoring = atsScoringService.score(resumeText, jdText);
 
-        // Step 3: Groq semantic analysis (gracefully degrades if key missing or API fails)
-        GroqATSService.GroqATSResult groqResult = groqATSService.analyze(resumeText, jdText);
+        // Step 3: JD-calibrated AI assessment (gracefully degrades if key missing or API fails)
+        HonestResumeAssessment assessment = groqATSService.analyze(resumeText, jdText, scoring);
 
         // Step 4: Build final report
         String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "resume";
-        ATSReport report = atsReportBuilder.build(userId, fileName, resumeText, scoring, groqResult);
+        ATSReport report = atsReportBuilder.build(userId, fileName, resumeText, scoring, assessment);
 
         // Step 5: Persist to disk
         saveReport(report);
+
+        // Step 6: Save raw text for Resume Studio (needed for DOCX generation)
+        atsDownloadService.saveRawText(report.getReportId(), resumeText);
+        
+        // Step 7: Log to Database
+        if (!"anonymous".equals(userId)) {
+            AtsAnalysis analysis = AtsAnalysis.builder()
+                    .userId(userId)
+                    .reportId(report.getReportId())
+                    .resumeFileName(fileName)
+                    .finalScore(report.getFinalScore())
+                    .verdict(report.getVerdict())
+                    .build();
+            atsAnalysisRepository.save(analysis);
+        }
 
         log.info("[ATS] Report generated reportId={} score={} aiAvailable={}",
                 report.getReportId(), report.getFinalScore(), report.isAiAnalysisAvailable());

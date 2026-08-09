@@ -27,7 +27,8 @@ public class ResumeController {
     @PostMapping("/parse-resume")
     public ResponseEntity<?> uploadResume(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("session_id") String sessionId) {
+            @RequestParam("session_id") String sessionId,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.example.mockmate.model.User user) {
         
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Please upload a file"));
@@ -48,8 +49,11 @@ public class ResumeController {
                 session = new java.util.HashMap<>();
                 session.put("status", "initialized");
                 session.put("created_at", System.currentTimeMillis() / 1000.0);
-                sessionStoreService.saveSession(sessionId, session);
             }
+            if (user != null) {
+                session.put("user_id", user.getId());
+            }
+            sessionStoreService.saveSession(sessionId, session);
             
             Map<String, Object> resumeMap = new java.util.HashMap<>();
             resumeMap.put("name", parsedData.getName() != null ? parsedData.getName() : "");

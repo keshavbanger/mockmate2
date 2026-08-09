@@ -1,0 +1,34 @@
+<USER_REQUEST>
+i wants to give my users more options in generated template currently there is 3 templates where we are giving the resume generated now i wants to add this more templates "<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATS-Friendly Resume Template</title>
+<style>
+  /* ATS-safe: single column, standard fonts, no tables/columns/graphics.
+     Everything is real text in normal top-to-bottom flow. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: Arial, Calibri, "Helvetica Neue", sans-serif;
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #000;
+    background: #fff;
+    max-width: 8.5in;
+    margin: 0 auto;
+    padding: 0.5in 0.6in;
+  }
+
+  /* Contact block — plain text in the body, NOT a header/footer */
+  .name {
+    font-size: 20pt;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  .contact {
+    font-size: 10.5pt;
+    margin-bottom: 16px;
+  }
+<truncated 15680 bytes>

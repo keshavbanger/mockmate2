@@ -69,7 +69,7 @@ function VoiceOrbContent() {
 
       {/* Status Text */}
       <div className="text-center z-10">
-        <h3 className="text-white text-xl font-bold mb-1">Stitch AI</h3>
+        <h3 className="text-white text-xl font-bold mb-1">MockMate</h3>
         <p className={`text-sm font-medium uppercase tracking-widest ${
           isSpeaking ? 'text-purple-400' : 
           isListening ? 'text-purple-300' : 

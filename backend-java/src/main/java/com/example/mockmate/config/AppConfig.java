@@ -13,7 +13,10 @@ public class AppConfig {
 
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.findAndRegisterModules();
+        mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return mapper;
     }
 
     @Bean

@@ -17,11 +17,14 @@ public class SessionController {
     private final SessionStoreService sessionStoreService;
 
     @PostMapping("/create")
-    public ResponseEntity<?> createSession() {
+    public ResponseEntity<?> createSession(@RequestBody(required = false) Map<String, Object> request) {
         String sessionId = UUID.randomUUID().toString();
         Map<String, Object> sessionData = new HashMap<>();
         sessionData.put("status", "initialized");
         sessionData.put("created_at", System.currentTimeMillis() / 1000.0);
+        if (request != null && request.containsKey("user_id")) {
+            sessionData.put("user_id", request.get("user_id"));
+        }
         sessionStoreService.saveSession(sessionId, sessionData);
         
         return ResponseEntity.ok(Map.of("session_id", sessionId));

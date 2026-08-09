@@ -6,13 +6,34 @@ spring:
     name: mockmate
   config:
     import: "optional:file:.env[.properties]"
-  data:
-    mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/mockmate}
+  datasource:
+    url: ${SUPABASE_DB_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SUPABASE_DB_USERNAME:postgres}
+    password: ${SUPABASE_DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
   servlet:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+
+# JWT Config — JWT_SECRET must be set in the environment (.env locally); no
+# fallback default so the app fails fast instead of signing with a secret
+# that's been committed to source control.
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000
+
+# Supabase Config
+supabase:
+  jwks-url: https://sslnbmgjgxcztqtzeonj.supabase.co/auth/v1/.well-known/jwks.json
 
 # External APIs
 tavus:
@@ -24,3 +45,16 @@ gemini:
   api-key: ${GEMINI_API_KEY:}
 groq:
   api-key: ${GROQ_API_KEY:}
+# Last-resort fallback for the tech-interview AI calls (conversation, plan
+# generation, report generation) — tried only after every Groq model/attempt
+# has already failed. Groq's rate limit is shared across all Groq models on
+# one API key, so a same-provider fallback gives no protection against Groq
+# itself being rate-limited or down; OpenRouter is a separate provider.
+openrouter:
+  api-key: ${OPENROUTER_API_KEY:}
+  model: ${OPENROUTER_MODEL:openai/gpt-oss-20b:free}
+piston:
+  # emkc.org's free public Piston API went whitelist-only on 2026-02-15.
+  # Defaults to a self-hosted instance (see docker-compose.piston.yml);
+  # override via PISTON_URL if pointing at a different host/provider.
+  url: ${PISTON_URL:http://localhost:2000/api/v2/execute}

@@ -227,3 +227,75 @@
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   will-change: transform;
 }
+
+@media print {
+  /* Hide interactive/floating elements */
+  nav, 
+  .floating-nav, 
+  .relative.h-\[340px\] button {
+    display: none !important;
+  }
+
+  /* Force background colors and print exact colors */
+  body, html {
+    background-color: #fafafa !important;
+    color: #111827 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Bypass framer-motion opacity/transform hide effects on load/scroll */
+  .scroll-reveal,
+  .scroll-card,
+  [style*="opacity"] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Wrap companies marquee logos so they are all laid out nicely */
+  .marquee-track {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 2rem !important;
+    width: 100% !important;
+    animation: none !important;
+  }
+
+  /* Define page margins and sizing */
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm;
+  }
+
+  /* Section breaks for structured multi-page document layout */
+  header, 
+  section, 
+  footer {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #features, 
+  #how-it-works, 
+  #pricing, 
+  footer {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  /* Ensure text colors are printed perfectly */
+  .text-slate-500 {
+    color: #64748b !important;
+  }
+  .text-slate-400 {
+    color: #94a3b8 !important;
+  }
+  .text-black {
+    color: #000000 !important;
+  }
+  .text-brand, .text-purple-600, .text-indigo-600, .text-violet-600, .text-orange-600 {
+    color: #6B46C1 !important;
+  }
+}

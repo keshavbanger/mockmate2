@@ -19,8 +19,10 @@ __pycache__/
 # Frontend builds
 dist/
 build/
-# Logs
+# Logs & Scratch
 *.log
 backend/*.log
 frontend/*.log
-
+*.txt.log
+start_error.txt
+*.docx

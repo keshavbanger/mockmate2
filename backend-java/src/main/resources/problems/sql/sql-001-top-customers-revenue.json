@@ -1,0 +1,50 @@
+{
+  "id": "sql-001",
+  "title": "Top 5 Customers by Revenue",
+  "difficulty": "INTERMEDIATE",
+  "domain": "ecommerce",
+  "description": "You are working with an e-commerce database. Find the top 5 customers by total order revenue, along with the number of orders they placed. Return customer name, total revenue, and order count, sorted by total revenue descending.",
+  "schema": [
+    {
+      "name": "customers",
+      "columns": [
+        {"name": "id", "type": "INT", "primaryKey": true, "nullable": false},
+        {"name": "name", "type": "VARCHAR(100)", "primaryKey": false, "nullable": false},
+        {"name": "email", "type": "VARCHAR(150)", "primaryKey": false, "nullable": false},
+        {"name": "created_at", "type": "DATE", "primaryKey": false, "nullable": true}
+      ],
+      "createSql": "CREATE TABLE customers (id INT PRIMARY KEY, name VARCHAR(100) NOT NULL, email VARCHAR(150) NOT NULL, created_at DATE)",
+      "insertSql": "INSERT INTO customers VALUES (1,'Alice Johnson','alice@email.com','2023-01-15'); INSERT INTO customers VALUES (2,'Bob Smith','bob@email.com','2023-02-20'); INSERT INTO customers VALUES (3,'Carol Davis','carol@email.com','2023-03-10'); INSERT INTO customers VALUES (4,'David Lee','david@email.com','2023-04-05'); INSERT INTO customers VALUES (5,'Emma Wilson','emma@email.com','2023-05-12'); INSERT INTO customers VALUES (6,'Frank Brown','frank@email.com','2023-06-18'); INSERT INTO customers VALUES (7,'Grace Kim','grace@email.com','2023-07-22'); INSERT INTO customers VALUES (8,'Henry Chen','henry@email.com','2023-08-30')",
+      "previewRows": [[1,"Alice Johnson","alice@email.com","2023-01-15"],[2,"Bob Smith","bob@email.com","2023-02-20"],[3,"Carol Davis","carol@email.com","2023-03-10"]]
+    },
+    {
+      "name": "orders",
+      "columns": [
+        {"name": "id", "type": "INT", "primaryKey": true, "nullable": false},
+        {"name": "customer_id", "type": "INT", "primaryKey": false, "nullable": false, "foreignKey": "customers.id"},
+        {"name": "total_amount", "type": "DECIMAL(10,2)", "primaryKey": false, "nullable": false},
+        {"name": "order_date", "type": "DATE", "primaryKey": false, "nullable": false},
+        {"name": "status", "type": "VARCHAR(20)", "primaryKey": false, "nullable": false}
+      ],
+      "createSql": "CREATE TABLE orders (id INT PRIMARY KEY, customer_id INT NOT NULL, total_amount DECIMAL(10,2) NOT NULL, order_date DATE NOT NULL, status VARCHAR(20) NOT NULL)",
+      "insertSql": "INSERT INTO orders VALUES (1,1,250.00,'2024-01-10','completed'); INSERT INTO orders VALUES (2,1,150.00,'2024-02-05','completed'); INSERT INTO orders VALUES (3,2,500.00,'2024-01-20','completed'); INSERT INTO orders VALUES (4,3,800.00,'2024-03-01','completed'); INSERT INTO orders VALUES (5,3,200.00,'2024-03-15','completed'); INSERT INTO orders VALUES (6,4,1200.00,'2024-01-05','completed'); INSERT INTO orders VALUES (7,5,300.00,'2024-02-20','completed'); INSERT INTO orders VALUES (8,5,450.00,'2024-03-10','completed'); INSERT INTO orders VALUES (9,5,600.00,'2024-04-01','completed'); INSERT INTO orders VALUES (10,6,100.00,'2024-01-25','completed'); INSERT INTO orders VALUES (11,7,950.00,'2024-02-15','completed'); INSERT INTO orders VALUES (12,8,75.00,'2024-03-20','completed')",
+      "previewRows": [[1,1,250.00,"2024-01-10","completed"],[2,1,150.00,"2024-02-05","completed"],[3,2,500.00,"2024-01-20","completed"]]
+    }
+  ],
+  "seedDataSql": [],
+  "question": "Write a SQL query to find the top 5 customers by total order revenue. Return customer name (as 'customer_name'), total revenue (as 'total_revenue'), and number of orders (as 'order_count'). Only include completed orders. Sort by total_revenue descending.",
+  "expectedQuery": "SELECT c.name AS customer_name, SUM(o.total_amount) AS total_revenue, COUNT(o.id) AS order_count FROM customers c JOIN orders o ON c.id = o.customer_id WHERE o.status = 'completed' GROUP BY c.id, c.name ORDER BY total_revenue DESC LIMIT 5",
+  "expectedResult": [
+    {"values": ["David Lee", 1200.00, 1]},
+    {"values": ["Emma Wilson", 1350.00, 3]},
+    {"values": ["Grace Kim", 950.00, 1]},
+    {"values": ["Carol Davis", 1000.00, 2]},
+    {"values": ["Bob Smith", 500.00, 1]}
+  ],
+  "followUpQuestions": [
+    "How would you also include customers with no orders (using LEFT JOIN)?",
+    "What index would you add to optimize this query?",
+    "How would you modify this to show results by month?"
+  ],
+  "interviewerNotes": "Tests JOIN, GROUP BY, WHERE filtering, aggregate functions, ORDER BY, LIMIT. Common mistakes: forgetting WHERE status='completed', wrong alias names, missing GROUP BY customer id."
+}

@@ -7,7 +7,15 @@
     <title>InterviewBot — AI Mock Interview Platform</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Loaded non-blocking: media="print" makes the browser fetch it without
+         waiting on it for first paint, then onload swaps it to "all" once it
+         arrives. font-display=swap (already in the URL) covers the brief gap
+         with a fallback font instead of invisible text. -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+          rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    </noscript>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>" />
   </head>
   <body class="antialiased">

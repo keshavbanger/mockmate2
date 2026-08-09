@@ -4,9 +4,11 @@ import { useAuth } from '../context/AuthContext';
 
 export default function SignupPage() {
   const navigate = useNavigate();
-  const { signup } = useAuth();
+  const { signupWithEmail, loginWithGoogle, signup } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
+  const [sentTo, setSentTo] = useState('');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -38,15 +40,11 @@ export default function SignupPage() {
       return;
     }
     if (!formData.email.includes('@')) {
-      setError('Enter a valid email address');
-      return;
-    }
-    if (!formData.username.trim()) {
-      setError('Username is required');
+      setError('Please enter a valid email address');
       return;
     }
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError('Password must be at least 8 characters long');
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -56,15 +54,31 @@ export default function SignupPage() {
 
     try {
       setLoading(true);
-      await signup(
-        formData.email,
-        formData.firstName,
-        formData.lastName,
-        formData.username,
-        formData.password
-      );
-      // Redirect to dashboard on successful signup
-      navigate('/dashboard');
+      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+
+      try {
+        const result = await signupWithEmail(formData.email, formData.password, fullName);
+        // If we got a session back (auto-confirm enabled), go straight to dashboard
+        if (result && result.id && !result.email_confirmed_at === undefined) {
+          navigate('/');
+        } else {
+          // Email confirmation required
+          setSentTo(formData.email);
+          setEmailSent(true);
+        }
+      } catch (err) {
+        // If Supabase error is about existing user, try legacy backend
+        const msg = err.message || '';
+        if (msg.includes('already registered') || msg.includes('already been registered')) {
+          setError('An account with this email already exists. Please log in instead.');
+          setLoading(false);
+          return;
+        }
+        console.warn('Supabase signup failed, trying legacy backend signup:', err);
+        const username = formData.username?.trim() || formData.email.split('@')[0];
+        await signup(formData.email, formData.firstName, formData.lastName, username, formData.password);
+        navigate('/');
+      }
     } catch (err) {
       setError(err.message || 'Signup failed. Please try again.');
     } finally {
@@ -72,94 +86,218 @@ export default function SignupPage() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      await loginWithGoogle();
+    } catch (err) {
+      setError(err.message || 'Google login failed.');
+      setLoading(false);
+    }
+  };
+
+  // --- Email Sent Confirmation Screen ---
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-[#0d0e12] flex items-center justify-center px-4 relative overflow-hidden font-sans">
+        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-indigo-600/30 to-purple-600/30 blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-emerald-600/20 to-blue-600/20 blur-[120px]" />
+        <div className="w-full max-w-md bg-[#161821]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-10 shadow-2xl relative z-10 text-center">
+          <div className="flex items-center justify-center w-16 h-16 mx-auto mb-5 rounded-full bg-indigo-500/10 border border-indigo-500/20">
+            <span className="text-3xl">📧</span>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Check your inbox!</h2>
+          <p className="text-gray-400 text-sm mb-4">
+            We sent a confirmation link to
+          </p>
+          <p className="text-indigo-400 font-semibold mb-6 break-all">{sentTo}</p>
+          <p className="text-gray-500 text-xs mb-8">
+            Click the link in the email to activate your account, then come back to log in.
+          </p>
+          <Link
+            to="/login"
+            className="inline-block w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3 rounded-xl transition duration-300 shadow-lg"
+          >
+            Go to Login
+          </Link>
+          <p className="text-gray-600 text-xs mt-4">
+            Didn't receive it? Check your spam folder.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-2xl p-8">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">
-          Keiyeta
-        </h1>
-        <p className="text-center text-gray-600 mb-8">Create your account</p>
+    <div className="min-h-screen bg-[#0d0e12] flex items-center justify-center px-4 py-12 relative overflow-hidden font-sans">
+      {/* Background Glows */}
+      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-indigo-600/30 to-purple-600/30 blur-[120px]" />
+      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-emerald-600/20 to-blue-600/20 blur-[120px]" />
+
+      <div className="w-full max-w-md bg-[#161821]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl relative z-10 transition-all duration-300 hover:border-white/20">
+        
+        {/* Brand/Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold mb-3 tracking-wide uppercase">
+            Create Account
+          </div>
+          <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-100 to-gray-400 mb-2">
+            MockMate
+          </h1>
+          <p className="text-gray-400 text-sm">
+            AI-Powered Mock Interview Platform
+          </p>
+        </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-            {error}
+          <div className="bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-3 rounded-xl text-sm mb-6 flex items-start space-x-2 animate-pulse">
+            <span className="font-semibold">⚠️</span>
+            <span>{error}</span>
           </div>
         )}
 
+        {/* Google OAuth Button */}
+        <button
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3 px-4 rounded-xl transition duration-300 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              fill="#4285F4"
+            />
+            <path
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              fill="#34A853"
+            />
+            <path
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+              fill="#FBBC05"
+            />
+            <path
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+              fill="#EA4335"
+            />
+          </svg>
+          Sign Up with Google
+        </button>
+
+        {/* Divider */}
+        <div className="relative flex items-center justify-center mb-6">
+          <div className="border-t border-white/10 w-full" />
+          <span className="absolute bg-[#161821] px-3 text-xs text-gray-500 uppercase tracking-widest">
+            or use credentials
+          </span>
+        </div>
+
+        {/* Credentials Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                First Name
+              </label>
+              <input
+                type="text"
+                name="firstName"
+                placeholder="John"
+                value={formData.firstName}
+                onChange={handleChange}
+                className="w-full px-4 py-3 bg-[#1c1e29] border border-white/5 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                disabled={loading}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Last Name
+              </label>
+              <input
+                type="text"
+                name="lastName"
+                placeholder="Doe"
+                value={formData.lastName}
+                onChange={handleChange}
+                className="w-full px-4 py-3 bg-[#1c1e29] border border-white/5 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+                disabled={loading}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Email Address
+            </label>
             <input
-              type="text"
-              name="firstName"
-              placeholder="First Name"
-              value={formData.firstName}
+              type="email"
+              name="email"
+              placeholder="john.doe@company.com"
+              value={formData.email}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 bg-[#1c1e29] border border-white/5 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
               disabled={loading}
-            />
-            <input
-              type="text"
-              name="lastName"
-              placeholder="Last Name"
-              value={formData.lastName}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
+              required
             />
           </div>
 
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={loading}
-          />
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              name="password"
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={handleChange}
+              className="w-full px-4 py-3 bg-[#1c1e29] border border-white/5 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+              disabled={loading}
+              required
+            />
+          </div>
 
-          <input
-            type="text"
-            name="username"
-            placeholder="Username"
-            value={formData.username}
-            onChange={handleChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={loading}
-          />
-
-          <input
-            type="password"
-            name="password"
-            placeholder="Password (min 8 characters)"
-            value={formData.password}
-            onChange={handleChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={loading}
-          />
-
-          <input
-            type="password"
-            name="confirmPassword"
-            placeholder="Confirm Password"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={loading}
-          />
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              name="confirmPassword"
+              placeholder="••••••••"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              className="w-full px-4 py-3 bg-[#1c1e29] border border-white/5 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
+              disabled={loading}
+              required
+            />
+          </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 rounded-lg transition duration-200"
+            className="w-full mt-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition duration-300 shadow-lg hover:shadow-indigo-500/20"
           >
-            {loading ? 'Creating account...' : 'Sign Up'}
+            {loading ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Creating your account...</span>
+              </div>
+            ) : (
+              'Create Account'
+            )}
           </button>
         </form>
 
-        <p className="text-center text-gray-600 mt-6">
+        {/* Footer */}
+        <p className="text-center text-gray-400 text-sm mt-8">
           Already have an account?{' '}
-          <Link to="/login" className="text-blue-600 hover:underline font-semibold">
+          <Link
+            to="/login"
+            className="text-indigo-400 hover:text-indigo-300 hover:underline font-semibold transition"
+          >
             Login
           </Link>
         </p>

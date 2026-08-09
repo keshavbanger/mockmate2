@@ -1,0 +1,48 @@
+{
+  "id": "lc-121",
+  "leetcodeId": 121,
+  "leetcodeUrl": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock/",
+  "title": "Best Time to Buy and Sell Stock",
+  "difficulty": "EASY",
+  "topics": ["array", "sliding-window", "greedy"],
+  "companies": ["Amazon", "Goldman Sachs", "Facebook", "Microsoft"],
+  "frequency": "VERY_HIGH",
+  "neetcodeListNumber": 8,
+  "description": "You are given an array prices where prices[i] is the price of a given stock on the ith day. You want to maximize your profit by choosing a single day to buy one stock and choosing a different day in the future to sell that stock. Return the maximum profit you can achieve from this transaction. If you cannot achieve any profit, return 0.",
+  "examples": [
+    {"input": "prices = [7,1,5,3,6,4]", "output": "5", "explanation": "Buy on day 2 (price=1), sell on day 5 (price=6), profit=5."},
+    {"input": "prices = [7,6,4,3,1]", "output": "0", "explanation": "No transactions possible for profit."}
+  ],
+  "constraints": ["1 <= prices.length <= 10^5", "0 <= prices[i] <= 10^4"],
+  "hints": ["Think about tracking the minimum price seen so far.", "At each step, calculate if selling today gives max profit."],
+  "starterCode": {
+    "java": "class Solution {\n    public int maxProfit(int[] prices) {\n        // Your solution here\n    }\n}",
+    "python": "class Solution:\n    def maxProfit(self, prices: List[int]) -> int:\n        # Your solution here\n        pass",
+    "cpp": "class Solution {\npublic:\n    int maxProfit(vector<int>& prices) {\n        // Your solution here\n    }\n};",
+    "javascript": "var maxProfit = function(prices) {\n    // Your solution here\n};",
+    "go": "func maxProfit(prices []int) int {\n    // Your solution here\n}"
+  },
+  "testCases": [
+    {"input": "[7,1,5,3,6,4]", "expectedOutput": "5", "isHidden": false, "description": "Normal case"},
+    {"input": "[7,6,4,3,1]", "expectedOutput": "0", "isHidden": false, "description": "No profit"},
+    {"input": "[1]", "expectedOutput": "0", "isHidden": true, "description": "Single element"},
+    {"input": "[2,4,1]", "expectedOutput": "2", "isHidden": true, "description": "Short array"}
+  ],
+  "optimalSolution": {
+    "approach": "Single pass. Track minimum price seen so far (minPrice) and maximum profit (maxProfit). For each price, update maxProfit = max(maxProfit, price - minPrice), then update minPrice.",
+    "timeComplexity": "O(n)",
+    "spaceComplexity": "O(1)",
+    "code": {
+      "java": "class Solution {\n    public int maxProfit(int[] prices) {\n        int minPrice = Integer.MAX_VALUE, maxProfit = 0;\n        for (int price : prices) {\n            minPrice = Math.min(minPrice, price);\n            maxProfit = Math.max(maxProfit, price - minPrice);\n        }\n        return maxProfit;\n    }\n}",
+      "python": "class Solution:\n    def maxProfit(self, prices):\n        min_price, max_profit = float('inf'), 0\n        for price in prices:\n            min_price = min(min_price, price)\n            max_profit = max(max_profit, price - min_price)\n        return max_profit"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(n^2)", "spaceComplexity": "O(1)", "acceptable": false},
+  "followUpQuestions": [
+    "What if you can complete at most 2 transactions? (LC-123)",
+    "What if you can complete as many transactions as you like? (LC-122)",
+    "Why doesn't sorting help here?"
+  ],
+  "interviewerNotes": "Greedy problem that tests if candidate can identify optimal substructure. Look for O(n) single-pass approach. Great follow-up: what if we allow multiple buy/sell?",
+  "roleRelevance": {"backend": "HIGH", "frontend": "MEDIUM", "fullstack": "HIGH", "dataScience": "HIGH", "devops": "LOW"}
+}

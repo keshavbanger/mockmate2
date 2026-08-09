@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useInterview } from '../context/InterviewContext.jsx';
 import { reportData as mockData } from '../data/mockReportData.js';
 import { getSession } from '../utils/api.js';
@@ -34,7 +34,11 @@ export default function ReportPage() {
   const ctx = useInterview();
   const navigate = useNavigate();
   const [fetching, setFetching] = useState(false);
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
   
+  const { sessionId: routeSessionId } = useParams();
+  const activeSessionId = routeSessionId || ctx.sessionId;
+
   // Use real data if available
   const data = ctx.reportData;
 
@@ -44,47 +48,73 @@ export default function ReportPage() {
 
   // Attempt to recover report data if it's missing from context (e.g. on refresh)
   useEffect(() => {
-    if (!ctx.reportData && ctx.sessionId && !fetching) {
+    if (!ctx.reportData && activeSessionId && !fetching && !recoveryFailed) {
       const recoverReport = async () => {
         setFetching(true);
         try {
-          const { data: sessionInfo } = await getSession(ctx.sessionId);
-          if (sessionInfo.report) {
+          const { data: sessionInfo } = await getSession(activeSessionId);
+          if (sessionInfo?.report) {
             ctx.setReportData(sessionInfo.report);
+          } else {
+            // Session exists but has no report (e.g. still generating or in-memory store cleared)
+            setRecoveryFailed(true);
           }
         } catch (err) {
-          console.error("Failed to recover report data:", err);
+          console.error('Failed to recover report data:', err);
+          setRecoveryFailed(true);
         } finally {
           setFetching(false);
         }
       };
       recoverReport();
     }
-  }, [ctx.reportData, ctx.sessionId, ctx.setReportData, fetching]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.reportData, activeSessionId]);
 
   const handleRetake = () => {
-    // Reset session metrics and navigate back home
     ctx.setSessionId(null);
     ctx.setReportData(null);
     navigate('/');
   };
 
-  // While fetching or if we truly have no data and no session to fetch from
-  if (fetching || (!data && !ctx.sessionId)) {
+  // Loading state while recovering
+  if (fetching) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#0A0E1A] text-white">
-        <div className="animate-pulse flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4">
           <div className="h-12 w-12 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
-          <p className="font-bold tracking-widest uppercase text-xs text-purple-400">
-            {fetching ? 'Retrieving Your Report...' : 'No Report Found'}
-          </p>
+          <p className="font-bold tracking-widest uppercase text-xs text-purple-400">Retrieving Your Report...</p>
         </div>
       </div>
     );
   }
 
-  // Fallback to mock only if we explicitly have no data and no way to get it
-  const finalData = data || mockData;
+  // Session expired / not found — never show mock data
+  if (!data) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#0A0E1A] text-white">
+        <div className="flex flex-col items-center gap-6 max-w-sm text-center px-6">
+          <div className="h-16 w-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-3xl">⏱️</div>
+          <div>
+            <h2 className="text-xl font-black tracking-tight mb-2">Session Expired</h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              This report is no longer available. The backend session store is cleared on restart.
+              Complete a new interview to generate a fresh report.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl text-sm transition-colors shadow-lg"
+          >
+            Start New Interview
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Real report data — use it directly (no mock fallback)
+  const finalData = data;
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-20">
@@ -114,6 +144,23 @@ export default function ReportPage() {
       {/* 1. PROFESSIONAL HERO BANNER (Full Width) */}
       <HeroBanner candidate={finalData.candidate} />
 
+      {/* ── COMPANY MODE BADGE ──────────────────────────────────────────────── */}
+      {finalData.companyDisplay && finalData.companyDisplay !== 'General' && (
+        <div className="flex justify-center -mt-3 mb-2 no-print">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-[#5235A2]/20 shadow-md">
+            <span className="text-base">
+              {finalData.companyId === 'google' && '🔍'}
+              {finalData.companyId === 'amazon' && '📦'}
+              {finalData.companyId === 'microsoft' && '🪟'}
+              {finalData.companyId === 'flipkart' && '🛒'}
+              {finalData.companyId === 'startup' && '🚀'}
+            </span>
+            <span className="text-xs font-black text-[#5235A2] uppercase tracking-wider">{finalData.companyDisplay} Interview</span>
+            <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Company Mode</span>
+          </div>
+        </div>
+      )}
+
       <div className="report-grid">
 
         {/* ── TIER 1: SUMMARY SIGNALS ─────────────────────────────────── */}
@@ -128,6 +175,22 @@ export default function ReportPage() {
         {/* 3. PERFORMANCE SUMMARY */}
         <div className="col-4">
           <OverallScoreGauge score={finalData.overallScore} />
+
+          {/* Amazon LP quick-reference (company mode only) */}
+          {finalData.companyId === 'amazon' && finalData.richQuestions?.length > 0 && (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl">
+              <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-3">📦 Amazon LPs Covered</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...new Set(
+                  finalData.richQuestions
+                    .filter(q => q.leadershipPrinciple)
+                    .map(q => q.leadershipPrinciple)
+                )].map((lp, i) => (
+                  <span key={i} className="text-[10px] font-bold px-2 py-1 bg-amber-100 text-amber-800 rounded-full border border-amber-200">{lp}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="col-8">
           <ScoreRingsRow scores={finalData.scores} />
@@ -264,12 +327,67 @@ export default function ReportPage() {
         </div>
 
         {/* 7. EMOTION ANALYSIS (Optional/Subtle) */}
-        {finalData.facialAnalysis && (
+        {finalData.facialAnalysis?.available && finalData.facialAnalysis?.emotionDistribution && (
           <div className="col-12">
             <EmotionPieChart 
               distribution={finalData.facialAnalysis.emotionDistribution} 
               dominant={finalData.facialAnalysis.dominantEmotion} 
             />
+          </div>
+        )}
+        {/* ── TIER 7: JD SKILL GAP ANALYSIS (only when JD was provided) ────── */}
+        {(finalData.skillGaps?.length > 0 || finalData.matchedSkills?.length > 0) && (
+          <div className="col-12">
+            <div className="premium-card p-8 border border-slate-100/80 shadow-md rounded-3xl bg-white space-y-6">
+              <h2 className="section-title">JD Skill Gap Analysis</h2>
+              <p className="text-xs text-slate-500 font-medium -mt-4">
+                Based on the job description you provided — shows where you stand.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Skill Gaps */}
+                {finalData.skillGaps?.length > 0 && (
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest block">
+                      ⚠ Skill Gaps Identified ({finalData.skillGaps.length})
+                    </span>
+                    <p className="text-xs text-slate-500 font-medium">Skills required by the JD that are missing or weak in your resume.</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {finalData.skillGaps.map((gap, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-600 border border-red-100"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                          {gap}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Matched Skills */}
+                {finalData.matchedSkills?.length > 0 && (
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest block">
+                      ✓ Matched Skills ({finalData.matchedSkills.length})
+                    </span>
+                    <p className="text-xs text-slate-500 font-medium">Skills from your resume that directly align with the job requirements.</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {finalData.matchedSkills.map((skill, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

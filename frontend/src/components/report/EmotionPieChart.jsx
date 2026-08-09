@@ -3,16 +3,17 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-export default function EmotionPieChart({ distribution, dominant }) {
+export default function EmotionPieChart({ distribution = {}, dominant = 'Neutral' }) {
+  const dist = distribution || {};
   const data = {
     labels: ['Neutral', 'Confident', 'Nervous', 'Focused'],
     datasets: [
       {
         data: [
-          distribution.neutral || 0,
-          distribution.confident || 0,
-          distribution.nervous || 0,
-          distribution.focused || 0
+          dist.neutral || 0,
+          dist.confident || 0,
+          dist.nervous || 0,
+          dist.focused || 0
         ],
         backgroundColor: ['#94A3B8', '#4F46E5', '#EF4444', '#6366F1'],
         borderColor: '#FFFFFF',

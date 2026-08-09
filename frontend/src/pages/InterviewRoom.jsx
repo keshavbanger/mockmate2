@@ -4,7 +4,7 @@ import { useInterview } from '../context/InterviewContext.jsx';
 import TavusAvatar from '../components/TavusAvatar.jsx';
 import CandidatePanel from '../components/CandidatePanel.jsx';
 import { useToast } from '../components/Toast.jsx';
-import { endInterview, generateReport, saveEmotionSnapshots } from '../utils/api.js';
+import { endInterview, generateReport, saveEmotionSnapshots, getSession } from '../utils/api.js';
 import { useAudioStream } from '../utils/audioVisualizer.jsx';
 import SpeechIndicator from '../utils/speechIndicator.jsx';
 
@@ -88,8 +88,8 @@ export default function InterviewRoom() {
     return () => clearInterval(syncInterval);
   }, [ctx.sessionId, ctx.sessionMetrics.emotionSnapshots, ctx.sessionMetrics.status]);
 
-  // ── Handle End Interview ──────────────────────────────────────────────────
-  const handleEnd = useCallback(async () => {
+  // ── Trigger Report Generation ─────────────────────────────────────────────
+  const triggerReportGeneration = useCallback(async (skipEndAPI = false) => {
     if (ending) return;
     setEnding(true);
     setStageText(REPORT_STAGES[0].text);
@@ -102,7 +102,7 @@ export default function InterviewRoom() {
     const clearTimers = () => timers.forEach(clearTimeout);
 
     try {
-      // 1. Mark end time and status
+      // 1. Mark end time and status — this triggers CandidatePanel's completion flush
       ctx.setEndTime(Date.now());
       ctx.setStatus('completed');
 
@@ -119,19 +119,27 @@ export default function InterviewRoom() {
         }
       }
 
-      // 3. End Tavus conversation
-      await endInterview(ctx.sessionId, ctx.conversationId);
+      // 3. End Tavus conversation if requested
+      if (!skipEndAPI) {
+        await endInterview(ctx.sessionId, ctx.conversationId);
+      }
 
-      // 4. Wait 2 seconds for the Tavus webhook to fire & store final transcript
+      // 4. Wait for CandidatePanel's status-change effect to fire and flush the last
+      //    in-progress answer to the backend via saveTurn. This MUST happen before
+      //    generateReport is called, otherwise the last answer will be missing.
+      //    1500ms covers: React re-render (16ms) + saveTurn HTTP round-trip (~200ms) + margin.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // 5. Wait for Tavus webhook to fire & store final transcript (if using live Tavus)
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // 5. Generate report (now with complete data)
+      // 6. Generate report (now with complete data)
       setStageText('Generating your report ✨');
       const { data: report } = await generateReport(ctx.sessionId);
       ctx.setReportData(report);
 
       clearTimers();
-      navigate('/report');
+      navigate(`/report/${ctx.sessionId}`);
     } catch (e) {
       clearTimers();
       console.error('End interview error:', e);
@@ -141,6 +149,35 @@ export default function InterviewRoom() {
       setStageText('');
     }
   }, [ctx, ending, navigate, addToast]);
+
+  // ── Handle End Interview (manual click) ───────────────────────────────────
+  const handleEnd = useCallback(() => {
+    triggerReportGeneration(false);
+  }, [triggerReportGeneration]);
+
+  // ── Poll for automatic completion (e.g. system.shutdown webhook) ──────────
+  useEffect(() => {
+    if (!ctx.sessionId || ctx.sessionMetrics.status !== 'active') return;
+
+    let active = true;
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: session } = await getSession(ctx.sessionId);
+        if (session && session.status === 'completed' && active) {
+          clearInterval(pollInterval);
+          console.log('[Poll] Session status became completed. Triggering automatic report transition...');
+          triggerReportGeneration(true);
+        }
+      } catch (err) {
+        console.warn('[Poll] Failed to check session status:', err);
+      }
+    }, 4000);
+
+    return () => {
+      active = false;
+      clearInterval(pollInterval);
+    };
+  }, [ctx.sessionId, ctx.sessionMetrics.status, triggerReportGeneration]);
 
   if (!ctx.conversationUrl) return null;
 
@@ -240,7 +277,7 @@ export default function InterviewRoom() {
 
         {/* RIGHT — Candidate panel (40%) */}
         <div className="flex-1 p-5 overflow-y-auto">
-          <CandidatePanel audioStream={audioStream} />
+          <CandidatePanel />
         </div>
       </main>
 

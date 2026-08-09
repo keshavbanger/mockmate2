@@ -1,0 +1,49 @@
+{
+  "id": "lc-15",
+  "leetcodeId": 15,
+  "leetcodeUrl": "https://leetcode.com/problems/3sum/",
+  "title": "3Sum",
+  "difficulty": "MEDIUM",
+  "topics": ["array", "two-pointer", "sorting"],
+  "companies": ["Amazon", "Google", "Facebook", "Adobe"],
+  "frequency": "VERY_HIGH",
+  "neetcodeListNumber": 11,
+  "description": "Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]] such that i != j, i != k, j != k, and nums[i] + nums[j] + nums[k] == 0. Notice that the solution set must not contain duplicate triplets.",
+  "examples": [
+    {"input": "nums = [-1,0,1,2,-1,-4]", "output": "[[-1,-1,2],[-1,0,1]]", "explanation": "The distinct triplets are [-1,-1,2] and [-1,0,1]."},
+    {"input": "nums = [0,1,1]", "output": "[]", "explanation": "No triplet sums to zero."},
+    {"input": "nums = [0,0,0]", "output": "[[0,0,0]]", "explanation": "The only triplet is [0,0,0]."}
+  ],
+  "constraints": ["3 <= nums.length <= 3000", "-10^5 <= nums[i] <= 10^5"],
+  "hints": ["Sort the array first. Then for each element, use two pointers to find pairs that sum to its negative."],
+  "starterCode": {
+    "java": "class Solution {\n    public List<List<Integer>> threeSum(int[] nums) {\n        // Your solution here\n    }\n}",
+    "python": "class Solution:\n    def threeSum(self, nums: List[int]) -> List[List[int]]:\n        pass",
+    "cpp": "class Solution {\npublic:\n    vector<vector<int>> threeSum(vector<int>& nums) {\n        // Your solution here\n    }\n};",
+    "javascript": "var threeSum = function(nums) {\n    // Your solution here\n};",
+    "go": "func threeSum(nums []int) [][]int {\n    // Your solution here\n}"
+  },
+  "testCases": [
+    {"input": "[-1,0,1,2,-1,-4]", "expectedOutput": "[[-1,-1,2],[-1,0,1]]", "isHidden": false, "description": "Normal case"},
+    {"input": "[0,1,1]", "expectedOutput": "[]", "isHidden": false, "description": "No solution"},
+    {"input": "[0,0,0]", "expectedOutput": "[[0,0,0]]", "isHidden": true, "description": "All zeros"},
+    {"input": "[-2,0,0,2,2]", "expectedOutput": "[[-2,0,2]]", "isHidden": true, "description": "Duplicates"}
+  ],
+  "optimalSolution": {
+    "approach": "Sort array. For each index i, use two pointers l=i+1, r=n-1. Skip duplicates at each pointer. Adjust pointers based on sum comparison.",
+    "timeComplexity": "O(n^2)",
+    "spaceComplexity": "O(1) (ignoring output)",
+    "code": {
+      "java": "class Solution {\n    public List<List<Integer>> threeSum(int[] nums) {\n        Arrays.sort(nums);\n        List<List<Integer>> res = new ArrayList<>();\n        for (int i = 0; i < nums.length - 2; i++) {\n            if (i > 0 && nums[i] == nums[i-1]) continue;\n            int l = i + 1, r = nums.length - 1;\n            while (l < r) {\n                int sum = nums[i] + nums[l] + nums[r];\n                if (sum == 0) {\n                    res.add(Arrays.asList(nums[i], nums[l], nums[r]));\n                    while (l < r && nums[l] == nums[l+1]) l++;\n                    while (l < r && nums[r] == nums[r-1]) r--;\n                    l++; r--;\n                } else if (sum < 0) l++;\n                else r--;\n            }\n        }\n        return res;\n    }\n}",
+      "python": "class Solution:\n    def threeSum(self, nums):\n        nums.sort()\n        res = []\n        for i in range(len(nums) - 2):\n            if i > 0 and nums[i] == nums[i-1]:\n                continue\n            l, r = i + 1, len(nums) - 1\n            while l < r:\n                s = nums[i] + nums[l] + nums[r]\n                if s == 0:\n                    res.append([nums[i], nums[l], nums[r]])\n                    while l < r and nums[l] == nums[l+1]: l += 1\n                    while l < r and nums[r] == nums[r-1]: r -= 1\n                    l += 1; r -= 1\n                elif s < 0: l += 1\n                else: r -= 1\n        return res"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(n^3)", "spaceComplexity": "O(n)", "acceptable": false},
+  "followUpQuestions": [
+    "How do you handle duplicate triplets?",
+    "Why do we sort first?",
+    "Can you do better than O(n^2)?"
+  ],
+  "interviewerNotes": "Combines sorting + two pointers + duplicate handling. Common failure points: forgetting to skip duplicates, off-by-one errors on pointer movement. Key test for medium-level candidates.",
+  "roleRelevance": {"backend": "VERY_HIGH", "frontend": "MEDIUM", "fullstack": "HIGH", "dataScience": "HIGH", "devops": "LOW"}
+}

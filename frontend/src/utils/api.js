@@ -13,8 +13,31 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Add token to requests if it exists
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token') || localStorage.getItem('mockmate_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Clear stale/invalid tokens on 401 so the app re-prompts for login instead of
+// silently continuing to send a rejected token (this client has no other
+// auth-state awareness, unlike the one in AuthContext).
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('mockmate_token');
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ---------- Session ----------
-export const createSession = () => api.post('/session/create');
+export const createSession = (payload = {}) => api.post('/session/create', payload);
 export const getSession    = (sessionId) => api.get(`/session/${sessionId}`);
 
 // ---------- Resume ----------
@@ -42,10 +65,22 @@ export const saveEmotionSnapshots = (sessionId, snapshots) =>
 export const generateReport = (sessionId) =>
   api.post('/generate-report', { session_id: sessionId }, { timeout: 120000 });
 
+// ---------- History ----------
+export const getInterviewHistory = (userId) =>
+  api.get(`/interviews/history?userId=${userId}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('mockmate_token')}` }
+  });
+
+// ---------- Dashboard ----------
+export const getDashboardSummary = (userId) =>
+  api.get(`/dashboard/summary?userId=${userId}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('mockmate_token')}` }
+  });
+
 // ============================================================
 // ATS Resume Checker
 // ============================================================
-const getToken = () => localStorage.getItem('mockmate_token') || '';
+const getToken = () => localStorage.getItem('token') || localStorage.getItem('mockmate_token') || '';
 
 /** Analyze a single resume against a job description */
 export async function analyzeATS(file, jdText) {
@@ -115,4 +150,171 @@ export async function downloadImprovedResume(reportId) {
   window.URL.revokeObjectURL(url);
 }
 
+// ============================================================
+// Resume HTML Generator
+// ============================================================
+
+/** Check confidence of parsed fields and get the resume data */
+export async function getResumeConfidence(reportId, jd = '', template = 'classic') {
+  const params = new URLSearchParams({ jd, template });
+  const res = await fetch(`${getBaseUrl()}/resume-studio/confidence/${reportId}?${params}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error(`Confidence check failed (${res.status})`);
+  return res.json(); // { confidence: {...}, resume: {...} }
+}
+
+/** Get HTML preview string (inline, for srcdoc iframe) */
+export async function previewResumeHtml(resume, template = 'classic') {
+  const res = await fetch(`${getBaseUrl()}/resume-studio/preview-html?template=${template}`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    body:    JSON.stringify(resume),
+  });
+  if (!res.ok) throw new Error(`Preview failed (${res.status})`);
+  return res.json(); // { html: '...' }
+}
+
+/** Download HTML file */
+export async function downloadResumeHtml(resume, template = 'classic') {
+  const res = await fetch(`${getBaseUrl()}/resume-studio/generate-html?template=${template}`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    body:    JSON.stringify(resume),
+  });
+  if (!res.ok) throw new Error(`HTML download failed (${res.status})`);
+  const blob = await res.blob();
+  const url  = window.URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const name = (resume.name || 'resume').replace(/\s+/g, '_').toLowerCase();
+  a.download = `${name}_resume.html`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+/** Download LaTeX file */
+export async function downloadResumeLatex(resume, template = 'classic') {
+  const res = await fetch(`${getBaseUrl()}/resume-studio/generate-latex?template=${template}`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    body:    JSON.stringify(resume),
+  });
+  if (!res.ok) throw new Error(`LaTeX download failed (${res.status})`);
+  const blob = await res.blob();
+  const url  = window.URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const name = (resume.name || 'resume').replace(/\s+/g, '_').toLowerCase();
+  a.download = `${name}_resume.tex`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// Resume Generator (Fill Gaps Wizard → writer pipeline) — a
+// deliberately separate code path from resume-studio/reconstruction
+// above: the writer never critiques, so it must never share a
+// service/prompt with the AI-reconstruction or ATS-analysis engines.
+// ============================================================
+
+/** Parsed resume + gate result + skill suggestions, the wizard's starting point */
+export async function getResumeGeneratorParsed(reportId) {
+  const res = await fetch(`${getBaseUrl()}/resume-generator/parsed/${reportId}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json(); // { resume, suggestedSkills, blockingFields }
+}
+
+/** Generate the final resume from a Fill-Gaps-Wizard-verified record */
+export async function generateVerifiedResume(verified) {
+  const res = await fetch(`${getBaseUrl()}/resume-generator/generate`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    body:    JSON.stringify(verified),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.violations = data.violations;
+    throw err;
+  }
+  return data; // { resume, omittedFields, unresolvedPlaceholders }
+}
+
+/**
+ * Switch template for a resume (zero AI, <1s).
+ * Calls PUT /api/resume-studio/{resumeId}/template?templateId=...
+ * Returns the DOCX bytes as a downloadable blob.
+ */
+export async function switchTemplate(resumeId, templateId) {
+  const res = await fetch(
+    `${getBaseUrl()}/resume-studio/${resumeId}/template?templateId=${templateId}`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Template switch failed' }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const renderTime = res.headers.get('X-Render-Time-Ms');
+  const atsScore = res.headers.get('X-ATS-Score');
+  const blob = await res.blob();
+  return { blob, renderTime, atsScore, templateId };
+}
+
+/** Save a candidate's audio turn for a question index */
+export const saveAudioTurn = (sessionId, questionIndex, audioBlob) => {
+  const form = new FormData();
+  form.append('session_id', sessionId);
+  form.append('question_index', questionIndex);
+  form.append('file', audioBlob, `audio_${questionIndex}.webm`);
+  return api.post('/save-audio-turn', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+
+// ---------- Technical Interview ----------
+
+export const generateInterviewPlan = (formData) =>
+  api.post('/tech-interview/plan', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000, // plan generation can take up to 60s
+  });
+
+export const startTechInterview = (payload) =>
+  api.post('/tech-interview/start', payload);
+
+export const submitTechAnswer = (sessionId, payload) =>
+  api.post(`/tech-interview/${sessionId}/answer`, payload);
+
+export const executeTechCode = (sessionId, payload) =>
+  api.post(`/tech-interview/${sessionId}/execute-code`, payload, { timeout: 15000 });
+
+export const executeTechSQL = (sessionId, payload) =>
+  api.post(`/tech-interview/${sessionId}/execute-sql`, payload);
+
+export const saveWhiteboard = (sessionId, snapshot) =>
+  api.post(`/tech-interview/${sessionId}/save-whiteboard`, { snapshot });
+
+export const endTechInterview = (sessionId) =>
+  api.post(`/tech-interview/${sessionId}/end`, {}, { timeout: 60000 });
+
+export const getTechInterviewReport = (sessionId) =>
+  api.get(`/tech-interview/report/${sessionId}`);
+
+export const getTechInterviewHistory = (userId) =>
+  api.get(`/tech-interview/history/${userId}`);
+
+export const getDsaProblem = (problemId) =>
+  api.get(`/tech-interview/problems/dsa/${problemId}`);
+
+export const getSqlProblem = (problemId) =>
+  api.get(`/tech-interview/problems/sql/${problemId}`);
+
 export default api;
+

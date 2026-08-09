@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.example.mockmate.service.ReportGeneratorService.castMapList;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,8 +28,7 @@ public class TranscriptProcessorService {
                 throw new IllegalArgumentException("Session " + sessionId + " not found");
             }
 
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> turns = (List<Map<String, Object>>) session.getOrDefault("turns", new ArrayList<>());
+            List<Map<String, Object>> turns = castMapList(session.getOrDefault("turns", new ArrayList<>()));
             
             if (!turns.isEmpty()) {
                 String transcriptText = turns.stream()
@@ -101,22 +102,36 @@ public class TranscriptProcessorService {
 
     public void updateSessionWithTranscript(String sessionId, Map<String, Object> transcriptData) {
         try {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> turns = (List<Map<String, Object>>) transcriptData.getOrDefault("turns", new ArrayList<>());
+            List<Map<String, Object>> incomingTurns = castMapList(transcriptData.getOrDefault("turns", new ArrayList<>()));
             String transcriptText = (String) transcriptData.getOrDefault("transcript", "");
-            
-            if (transcriptText.isEmpty() && !turns.isEmpty()) {
-                transcriptText = turns.stream()
+
+            if (transcriptText.isEmpty() && !incomingTurns.isEmpty()) {
+                transcriptText = incomingTurns.stream()
                         .map(t -> (String) t.getOrDefault("text", ""))
                         .collect(Collectors.joining(" "));
             }
 
             sessionStoreService.updateSession(sessionId, "transcript_raw", transcriptText);
-            sessionStoreService.updateSession(sessionId, "turns", turns);
-            sessionStoreService.updateSession(sessionId, "filler_analysis", transcriptData.getOrDefault("filler_analysis", new HashMap<>()));
-            sessionStoreService.updateSession(sessionId, "transcript_source", transcriptData.getOrDefault("source", "unknown"));
+            sessionStoreService.updateSession(sessionId, "filler_analysis",
+                transcriptData.getOrDefault("filler_analysis", new HashMap<>()));
+            sessionStoreService.updateSession(sessionId, "transcript_source",
+                transcriptData.getOrDefault("source", "unknown"));
 
-            log.info("Session {} updated with transcript ({} chars, {} turns)", sessionId, transcriptText.length(), turns.size());
+            // Only overwrite turns if the incoming list is non-empty AND at least as large as
+            // what is already stored. This prevents the transcript processor from erasing
+            // per-question-indexed turns saved by saveAudioTurn / saveTurn.
+            Map<String, Object> existingSession = sessionStoreService.getSession(sessionId);
+            List<Map<String, Object>> existingTurns = existingSession != null
+                    ? castMapList(existingSession.getOrDefault("turns", new ArrayList<>()))
+                    : new ArrayList<>();
+            if (!incomingTurns.isEmpty() && incomingTurns.size() >= existingTurns.size()) {
+                sessionStoreService.updateSession(sessionId, "turns", incomingTurns);
+                log.info("Session {} turns updated ({} turns, {} chars transcript)",
+                    sessionId, incomingTurns.size(), transcriptText.length());
+            } else {
+                log.info("Session {} keeping existing {} turns (incoming had {}); transcript_raw updated ({} chars)",
+                    sessionId, existingTurns.size(), incomingTurns.size(), transcriptText.length());
+            }
         } catch (Exception e) {
             log.error("Failed to update session with transcript: {}", e.getMessage());
         }

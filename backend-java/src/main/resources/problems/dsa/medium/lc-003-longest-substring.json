@@ -1,0 +1,50 @@
+{
+  "id": "lc-3",
+  "leetcodeId": 3,
+  "leetcodeUrl": "https://leetcode.com/problems/longest-substring-without-repeating-characters/",
+  "title": "Longest Substring Without Repeating Characters",
+  "difficulty": "MEDIUM",
+  "topics": ["sliding-window", "string", "hash-set"],
+  "companies": ["Amazon", "Google", "Microsoft", "Adobe", "Bloomberg"],
+  "frequency": "VERY_HIGH",
+  "neetcodeListNumber": 5,
+  "description": "Given a string s, find the length of the longest substring without repeating characters.",
+  "examples": [
+    {"input": "s = \"abcabcbb\"", "output": "3", "explanation": "The answer is \"abc\", with length 3."},
+    {"input": "s = \"bbbbb\"", "output": "1", "explanation": "The answer is \"b\", length 1."},
+    {"input": "s = \"pwwkew\"", "output": "3", "explanation": "The answer is \"wke\", length 3."}
+  ],
+  "constraints": ["0 <= s.length <= 5 * 10^4", "s consists of English letters, digits, symbols and spaces."],
+  "hints": ["Use a sliding window. Maintain a window [left, right] with no duplicates.", "Use a HashSet to track characters in the current window."],
+  "starterCode": {
+    "java": "class Solution {\n    public int lengthOfLongestSubstring(String s) {\n        // Your solution here\n    }\n}",
+    "python": "class Solution:\n    def lengthOfLongestSubstring(self, s: str) -> int:\n        pass",
+    "cpp": "class Solution {\npublic:\n    int lengthOfLongestSubstring(string s) {\n        // Your solution here\n    }\n};",
+    "javascript": "var lengthOfLongestSubstring = function(s) {\n    // Your solution here\n};",
+    "go": "func lengthOfLongestSubstring(s string) int {\n    // Your solution here\n}"
+  },
+  "testCases": [
+    {"input": "abcabcbb", "expectedOutput": "3", "isHidden": false, "description": "Repeating chars"},
+    {"input": "bbbbb", "expectedOutput": "1", "isHidden": false, "description": "All same"},
+    {"input": "pwwkew", "expectedOutput": "3", "isHidden": false, "description": "Partial repeat"},
+    {"input": "", "expectedOutput": "0", "isHidden": true, "description": "Empty string"},
+    {"input": "au", "expectedOutput": "2", "isHidden": true, "description": "Two unique chars"}
+  ],
+  "optimalSolution": {
+    "approach": "Sliding window with HashMap. Map stores char → last seen index. When duplicate found, move left pointer past the duplicate. Track maxLen = right - left + 1.",
+    "timeComplexity": "O(n)",
+    "spaceComplexity": "O(min(m,n)) where m is character set size",
+    "code": {
+      "java": "class Solution {\n    public int lengthOfLongestSubstring(String s) {\n        Map<Character, Integer> charIndex = new HashMap<>();\n        int maxLen = 0, left = 0;\n        for (int right = 0; right < s.length(); right++) {\n            char c = s.charAt(right);\n            if (charIndex.containsKey(c)) {\n                left = Math.max(left, charIndex.get(c) + 1);\n            }\n            charIndex.put(c, right);\n            maxLen = Math.max(maxLen, right - left + 1);\n        }\n        return maxLen;\n    }\n}",
+      "python": "class Solution:\n    def lengthOfLongestSubstring(self, s: str) -> int:\n        char_index = {}\n        left = max_len = 0\n        for right, char in enumerate(s):\n            if char in char_index:\n                left = max(left, char_index[char] + 1)\n            char_index[char] = right\n            max_len = max(max_len, right - left + 1)\n        return max_len"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(n^3)", "spaceComplexity": "O(min(m,n))", "acceptable": false},
+  "followUpQuestions": [
+    "What is the time complexity of your sliding window solution?",
+    "What if we want the actual substring, not just the length?",
+    "How does your solution handle Unicode characters?"
+  ],
+  "interviewerNotes": "Canonical sliding window problem. Key indicator of algorithm skill. Look for correct handling of left pointer update (must take max with current left, not just set to charIndex+1). Most common mistake is incorrect left pointer management.",
+  "roleRelevance": {"backend": "VERY_HIGH", "frontend": "HIGH", "fullstack": "VERY_HIGH", "dataScience": "MEDIUM", "devops": "LOW"}
+}

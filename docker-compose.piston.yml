@@ -1,0 +1,28 @@
+version: "3.2"
+
+# Self-hosted Piston code-execution engine, replacing the free public
+# emkc.org API which went whitelist-only on 2026-02-15. Used by
+# backend-java's CodeExecutionService for running candidate DSA submissions.
+#
+# Start:  docker compose -f docker-compose.piston.yml up -d
+# Stop:   docker compose -f docker-compose.piston.yml down
+#
+# After starting, install the language runtimes CodeExecutionService needs
+# (see backend-java's PISTON_LANGUAGE_MAP) via the packages API, e.g.:
+#   curl -X POST http://localhost:2000/api/v2/packages -H "Content-Type: application/json" -d "{\"language\":\"java\",\"version\":\"15.0.2\"}"
+
+services:
+  piston:
+    image: ghcr.io/engineer-man/piston
+    container_name: piston_api
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "2000:2000"
+    volumes:
+      - piston_packages:/piston/packages
+    tmpfs:
+      - /piston/jobs:exec
+
+volumes:
+  piston_packages:

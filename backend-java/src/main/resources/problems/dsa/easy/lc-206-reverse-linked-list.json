@@ -1,0 +1,54 @@
+{
+  "id": "lc-206",
+  "leetcodeId": 206,
+  "leetcodeUrl": "https://leetcode.com/problems/reverse-linked-list/",
+  "title": "Reverse Linked List",
+  "difficulty": "EASY",
+  "topics": ["Linked List", "Recursion"],
+  "companies": ["Amazon", "Google", "Microsoft", "Apple", "Meta"],
+  "frequency": "HIGH",
+  "neetcodeListNumber": 0,
+  "description": "Given the head of a singly linked list, reverse the list, and return the reversed list.",
+  "examples": [
+    {"input": "head = [1,2,3,4,5]", "output": "[5,4,3,2,1]", "explanation": "Pointers are flipped in place."}
+  ],
+  "constraints": [
+    "The number of nodes in the list is the range [0, 5000].",
+    "-5000 <= Node.val <= 5000"
+  ],
+  "hints": [
+    "Maintain three pointers: prev, current, next.",
+    "Iterate through the list reversing links at each step."
+  ],
+  "starterCode": {
+    "java": "class Solution {\n    public ListNode reverseList(ListNode head) {\n        // Your code here\n        return null;\n    }\n}",
+    "python": "class Solution:\n    def reverseList(self, head: Optional[ListNode]) -> Optional[ListNode]:\n        pass",
+    "cpp": "class Solution {\npublic:\n    ListNode* reverseList(ListNode* head) {\n        return nullptr;\n    }\n};"
+  },
+  "testCases": [
+    {"input": "[1,2,3,4,5]", "expectedOutput": "[5,4,3,2,1]", "isHidden": false, "description": "Basic case"},
+    {"input": "[1,2]", "expectedOutput": "[2,1]", "isHidden": false, "description": "Two nodes"}
+  ],
+  "optimalSolution": {
+    "approach": "Maintain prev/current/next pointers and flip each link while walking the list once.",
+    "timeComplexity": "O(n)",
+    "spaceComplexity": "O(1)",
+    "code": {}
+  },
+  "bruteForce": {
+    "timeComplexity": "O(n)",
+    "spaceComplexity": "O(n)",
+    "acceptable": false
+  },
+  "followUpQuestions": [
+    "Can you reverse the list recursively instead of iteratively?"
+  ],
+  "interviewerNotes": "Watch for off-by-one pointer errors and whether candidate handles an empty or single-node list.",
+  "roleRelevance": {
+    "backend": "MEDIUM",
+    "frontend": "LOW",
+    "fullstack": "MEDIUM",
+    "dataScience": "LOW",
+    "devops": "LOW"
+  }
+}

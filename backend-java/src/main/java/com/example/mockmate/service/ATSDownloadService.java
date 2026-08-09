@@ -1,373 +1,425 @@
 package com.example.mockmate.service;
 
-import com.example.mockmate.model.ATSReport;
+import com.example.mockmate.model.*;
+import com.example.mockmate.registry.TemplateRegistry;
+import com.example.mockmate.renderer.DocxRenderer;
+import com.example.mockmate.renderer.HtmlRenderer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.xwpf.usermodel.*;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayOutputStream;
-import java.math.BigInteger;
+import java.io.*;
+import java.nio.file.*;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
+/**
+ * ATSDownloadService — the ORCHESTRATOR of the new layered pipeline.
+ * <p>
+ * Pipeline flow:
+ * <pre>
+ *   1. Content Layer  → ResumeReconstructionService (Groq AI, one-time)
+ *   2. Enforcement    → ATSEnforcementService (deterministic, always runs)
+ *   3. Persistence    → Save NormalizedResume to disk (resumes/{id}/normalized.json)
+ *   4. Rendering      → DocxRenderer / HtmlRenderer / LatexRenderer (from TemplateConfig)
+ *   5. Validation     → ATSDocxValidator (on DOCX output)
+ * </pre>
+ * <p>
+ * Template switching (Step 4 only, no AI) is achieved via {@link #switchTemplate}.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ATSDownloadService {
 
-    private final ATSAnalyzerService atsAnalyzerService;
+    // ── Dependencies ────────────────────────────────────────────────────────
+    private final ResumeParser                resumeParser;
+    private final ResumeReconstructionService reconstructionService;
+    private final ATSEnforcementService       enforcementService;
+    private final ATSDocxValidator            atsValidator;
+    private final ATSScoringService           atsScoringService;
+    private final ObjectMapper                objectMapper;
 
-    static final String FONT = "Calibri";
-    static final String COLOR_NAME = "1A1A2E";
-    static final String COLOR_ACCENT = "2C5F8A";
-    static final String COLOR_BODY = "222222";
-    static final String COLOR_GRAY = "555555";
+    // New pipeline renderers
+    private final DocxRenderer     docxRenderer;
+    private final HtmlRenderer     htmlRenderer;
+    private final TemplateRegistry templateRegistry;
 
-    private static final Map<String, Pattern> SECTION_PATTERNS = new LinkedHashMap<>();
-    static {
-        SECTION_PATTERNS.put("summary", Pattern.compile("(?i)^(summary|objective|profile|about\\s+me|professional\\s+summary)$"));
-        SECTION_PATTERNS.put("skills", Pattern.compile("(?i)^(skills|technologies|tech\\s+stack|technical\\s+skills|core\\s+competencies|expertise)$"));
-        SECTION_PATTERNS.put("experience", Pattern.compile("(?i)^(experience|work\\s+history|employment|work\\s+experience|professional\\s+background|career\\s+history|positions\\s+held)$"));
-        SECTION_PATTERNS.put("projects", Pattern.compile("(?i)^(projects?|portfolio|personal\\s+projects?|key\\s+projects?)$"));
-        SECTION_PATTERNS.put("achievements", Pattern.compile("(?i)^(achievements|awards|certifications|honors)$"));
-        SECTION_PATTERNS.put("leadership", Pattern.compile("(?i)^(leadership|extracurriculars|volunteering|activities|leadership\\s+&\\s+extracurriculars)$"));
-        SECTION_PATTERNS.put("education", Pattern.compile("(?i)^(education|degree|university|college|academic\\s+background|qualifications)$"));
-    }
+    // Legacy renderer — kept for backward compat until all callers migrate
+    private final ResumeTemplateRenderer templateRenderer;
+    private final ResumeATSEnforcer      atsEnforcer;
 
-    public byte[] generate(String reportId) {
-        Optional<ATSReport> maybeReport = atsAnalyzerService.getReport(reportId);
-        if (maybeReport.isEmpty()) {
-            throw new RuntimeException("Report not found");
-        }
+    static final String ATS_DIR = "reports/ats";
 
-        ATSReport report = maybeReport.get();
-        try {
-            return buildDocx(report);
-        } catch (Exception e) {
-            log.error("[ATSDownload] Failed to generate DOCX for reportId={}", reportId, e);
-            throw new RuntimeException("Failed to generate resume DOCX", e);
-        }
-    }
+    // ══════════════════════════════════════════════════════════════════════════
+    // MAIN PIPELINE: generate() → Content → Enforce → Persist → Render → Validate
+    // ══════════════════════════════════════════════════════════════════════════
 
-    private byte[] buildDocx(ATSReport report) throws Exception {
-        try (XWPFDocument doc = new XWPFDocument();
-             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+    public ATSDownloadResult generate(String reportId, String jobDescription, String templateId) throws Exception {
+        String tid = templateId != null ? templateId : "classic";
+        log.info("[Download] reportId={} template={}", reportId, tid);
 
-            // Set Page Margins
-            CTSectPr sectPr = doc.getDocument().getBody().addNewSectPr();
-            CTPageMar pageMar = sectPr.addNewPgMar();
-            pageMar.setTop(BigInteger.valueOf(900));
-            pageMar.setBottom(BigInteger.valueOf(900));
-            pageMar.setLeft(BigInteger.valueOf(1080));
-            pageMar.setRight(BigInteger.valueOf(1080));
+        // Try loading cached NormalizedResume first
+        NormalizedResume normalized = loadNormalized(reportId);
 
-            String originalText = report.getOriginalText();
-            if (originalText == null) originalText = "";
-
-            Map<String, List<String>> sections = parseSections(originalText);
-
-            // Contact Info defaults
-            String name = "YOUR NAME";
-            String title = "Software Engineer";
-            String contact = "phone • email • location • github";
-
-            if (sections.containsKey("contact_info")) {
-                List<String> contactLines = sections.get("contact_info");
-                if (!contactLines.isEmpty()) name = contactLines.get(0);
-                if (contactLines.size() > 1) title = contactLines.get(1);
-                if (contactLines.size() > 2) contact = String.join(" • ", contactLines.subList(2, contactLines.size()));
-            }
-
-            // 1. NAME
-            addNameParagraph(doc, name);
-
-            // 2. TITLE
-            addTitleParagraph(doc, title);
-
-            // 3. CONTACT
-            addContactParagraph(doc, contact);
-            addSpacing(doc);
-
-            // 4. SUMMARY
-            String summaryText = null;
-            if (report.getTailoredSummary() != null && !report.getTailoredSummary().isBlank()) {
-                summaryText = report.getTailoredSummary();
-            } else if (sections.containsKey("summary") && !sections.get("summary").isEmpty()) {
-                summaryText = String.join(" ", sections.get("summary"));
-            }
-            if (summaryText != null && !summaryText.isBlank()) {
-                addSectionHeader(doc, "PROFESSIONAL SUMMARY");
-                addBulletPoint(doc, summaryText, false);
-                addSpacing(doc);
-            }
-
-            // 5. SKILLS
-            if (sections.containsKey("skills")) {
-                addSectionHeader(doc, "TECHNICAL SKILLS");
-                List<String> skills = new ArrayList<>(sections.get("skills"));
-                
-                // Add missing keywords
-                List<String> missing = report.getMissingKeywords();
-                if (missing != null && !missing.isEmpty()) {
-                    skills.add("Added Keywords: " + String.join(", ", missing));
-                }
-
-                for (String skillLine : skills) {
-                    if (skillLine.contains(":")) {
-                        String[] parts = skillLine.split(":", 2);
-                        addSkillRow(doc, parts[0].trim(), parts[1].trim());
-                    } else {
-                        addSkillRow(doc, "Skills", skillLine);
-                    }
-                }
-                addSpacing(doc);
-            }
-
-            // 6. EXPERIENCE
-            if (sections.containsKey("experience")) {
-                addSectionHeader(doc, "EXPERIENCE");
-                processSection(doc, sections.get("experience"), report);
-                addSpacing(doc);
-            }
-
-            // 7. PROJECTS
-            if (sections.containsKey("projects")) {
-                addSectionHeader(doc, "PROJECTS");
-                processSection(doc, sections.get("projects"), report);
-                addSpacing(doc);
-            }
-
-            // 8. ACHIEVEMENTS
-            if (sections.containsKey("achievements")) {
-                addSectionHeader(doc, "ACHIEVEMENTS");
-                processSection(doc, sections.get("achievements"), report);
-                addSpacing(doc);
-            }
-
-            // 9. LEADERSHIP
-            if (sections.containsKey("leadership")) {
-                addSectionHeader(doc, "LEADERSHIP & EXTRACURRICULARS");
-                processSection(doc, sections.get("leadership"), report);
-                addSpacing(doc);
-            }
-
-            // 10. EDUCATION
-            if (sections.containsKey("education")) {
-                addSectionHeader(doc, "EDUCATION");
-                processSection(doc, sections.get("education"), report);
-            }
-
-            doc.write(out);
-            return out.toByteArray();
-        }
-    }
-
-    private Map<String, List<String>> parseSections(String text) {
-        Map<String, List<String>> parsed = new LinkedHashMap<>();
-        String[] lines = text.split("\\n");
-        String currentSection = "contact_info";
-        parsed.put(currentSection, new ArrayList<>());
-
-        for (String line : lines) {
-            line = line.trim();
-            if (line.isBlank()) continue;
-
-            boolean isHeader = false;
-            for (Map.Entry<String, Pattern> entry : SECTION_PATTERNS.entrySet()) {
-                if (entry.getValue().matcher(line).find()) {
-                    currentSection = entry.getKey();
-                    parsed.putIfAbsent(currentSection, new ArrayList<>());
-                    isHeader = true;
-                    break;
-                }
-            }
-
-            if (!isHeader) {
-                parsed.get(currentSection).add(line);
-            }
-        }
-        return parsed;
-    }
-
-    private void processSection(XWPFDocument doc, List<String> lines, ATSReport report) {
-        for (String line : lines) {
-            if (line.matches("(?i).*(\\||\\d{4}).*") && !line.startsWith("•") && !line.startsWith("-")) {
-                // Heuristic for role header
-                String[] parts = line.split("\\|");
-                if (parts.length >= 2) {
-                    addRoleHeader(doc, parts[0].trim(), parts[1].trim());
-                } else {
-                    addRoleHeader(doc, line, "");
-                }
-            } else {
-                String bullet = line.replaceAll("^[•\\-\\*]\\s*", "");
-                
-                // Replace with rewritten bullet if exists
-                if (report.getBulletRewrites() != null) {
-                    for (ATSReport.BulletRewrite br : report.getBulletRewrites()) {
-                        if (bullet.contains(br.getOriginal()) || br.getOriginal().contains(bullet)) {
-                            bullet = br.getRewritten();
-                            log.info("[ATSDownload] Replaced bullet: {}", bullet);
-                            break;
-                        }
-                    }
-                }
-
-                // Replace with quantified suggestion if exists
-                if (report.getQuantificationSuggestions() != null) {
-                    for (ATSReport.QuantSuggestion qs : report.getQuantificationSuggestions()) {
-                        if (bullet.contains(qs.getOriginal()) || qs.getOriginal().contains(bullet)) {
-                            bullet = qs.getSuggestion();
-                            log.info("[ATSDownload] Quantified bullet: {}", bullet);
-                            break;
-                        }
-                    }
-                }
-
-                addBulletPoint(doc, bullet, true);
-            }
-        }
-    }
-
-    private void addNameParagraph(XWPFDocument doc, String name) {
-        XWPFParagraph para = doc.createParagraph();
-        para.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun run = para.createRun();
-        run.setText(name.toUpperCase());
-        run.setBold(true);
-        run.setFontSize(28);
-        run.setColor(COLOR_NAME);
-        run.setFontFamily(FONT);
-    }
-
-    private void addTitleParagraph(XWPFDocument doc, String title) {
-        XWPFParagraph para = doc.createParagraph();
-        para.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun run = para.createRun();
-        run.setText(title);
-        run.setFontSize(11);
-        run.setColor(COLOR_ACCENT);
-        run.setFontFamily(FONT);
-    }
-
-    private void addContactParagraph(XWPFDocument doc, String contact) {
-        XWPFParagraph para = doc.createParagraph();
-        para.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun run = para.createRun();
-        run.setText(contact);
-        run.setFontSize(10);
-        run.setColor(COLOR_GRAY);
-        run.setFontFamily(FONT);
-    }
-
-    private void addSectionHeader(XWPFDocument doc, String title) {
-        XWPFParagraph para = doc.createParagraph();
-        para.setSpacingBefore(120);
-        setSectionBorderBottom(para, COLOR_ACCENT);
-        XWPFRun run = para.createRun();
-        run.setText(title);
-        run.setBold(true);
-        run.setFontSize(11);
-        run.setColor(COLOR_NAME);
-        run.setFontFamily(FONT);
-    }
-
-    private void addRoleHeader(XWPFDocument doc, String left, String right) {
-        XWPFParagraph para = doc.createParagraph();
-        para.setSpacingBefore(80);
-        
-        CTP ctp = para.getCTP();
-        CTPPr ppr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
-        CTTabs tabs = ppr.isSetTabs() ? ppr.getTabs() : ppr.addNewTabs();
-        CTTabStop tab = tabs.addNewTab();
-        tab.setVal(STTabJc.RIGHT);
-        tab.setPos(BigInteger.valueOf(9000)); // Right align at ~9000 twips
-
-        XWPFRun leftRun = para.createRun();
-        leftRun.setText(left);
-        leftRun.setBold(true);
-        leftRun.setFontSize(11);
-        leftRun.setColor(COLOR_BODY);
-        leftRun.setFontFamily(FONT);
-
-        if (!right.isEmpty()) {
-            leftRun.addTab();
-            XWPFRun rightRun = para.createRun();
-            rightRun.setText(right);
-            rightRun.setItalic(true);
-            rightRun.setFontSize(10);
-            rightRun.setColor(COLOR_BODY);
-            rightRun.setFontFamily(FONT);
-        }
-    }
-
-    private void addBulletPoint(XWPFDocument doc, String text, boolean isBullet) {
-        XWPFParagraph para = doc.createParagraph();
-        if (isBullet) {
-            para.setIndentationLeft(440);
-            para.setIndentationHanging(280);
-        }
-        para.setSpacingBefore(40);
-        XWPFRun run = para.createRun();
-        if (isBullet) {
-            run.setText("• " + text);
+        if (normalized != null) {
+            log.info("[Download] Loaded cached NormalizedResume for reportId={}", reportId);
         } else {
-            run.setText(text);
+            // Fall back to legacy cached ReconstructedResume
+            normalized = loadFromLegacyCache(reportId, tid, jobDescription);
         }
-        run.setFontSize(10);
-        run.setColor(COLOR_BODY);
-        run.setFontFamily(FONT);
+
+        if (normalized == null) {
+            // Full pipeline: Content Layer → Enforcement Layer
+            normalized = runFullPipeline(reportId, jobDescription, tid);
+        }
+
+        // Persist
+        saveNormalized(reportId, normalized);
+
+        // Render → Validate
+        return renderAndValidate(normalized, tid);
     }
 
-    private void addSkillRow(XWPFDocument doc, String label, String skills) {
-        XWPFParagraph para = doc.createParagraph();
-        para.setSpacingBefore(40);
-        
-        CTP ctp = para.getCTP();
-        CTPPr ppr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
-        CTTabs tabs = ppr.isSetTabs() ? ppr.getTabs() : ppr.addNewTabs();
-        CTTabStop tab = tabs.addNewTab();
-        tab.setVal(STTabJc.LEFT);
-        tab.setPos(BigInteger.valueOf(1440));
+    /**
+     * Runs the full content + enforcement pipeline.
+     */
+    private NormalizedResume runFullPipeline(String reportId, String jobDescription, String templateId) throws Exception {
+        ATSReport report = readReport(reportId);
+        String rawText = loadRawText(reportId, report);
+        if (rawText == null || rawText.isBlank())
+            throw new RuntimeException("Raw resume text not found for reportId: " + reportId);
 
-        XWPFRun labelRun = para.createRun();
-        labelRun.setText(label + ":");
-        labelRun.setBold(true);
-        labelRun.setFontSize(10);
-        labelRun.setColor(COLOR_BODY);
-        labelRun.setFontFamily(FONT);
+        ResumeData parsed = resumeParser.parse(rawText);
 
-        labelRun.addTab();
+        // Content Layer (AI)
+        NormalizedResume normalized;
+        try {
+            normalized = reconstructionService.reconstructToNormalized(parsed, report, jobDescription, templateId);
+        } catch (Exception e) {
+            log.error("[Download] Groq reconstruction failed, falling back: {}", e.getMessage());
+            normalized = reconstructionService.buildFallbackNormalized(parsed, report);
+            normalized.setTemplateId(templateId);
+        }
+        normalized.setSourceReportId(reportId);
 
-        XWPFRun skillsRun = para.createRun();
-        skillsRun.setText(skills);
-        skillsRun.setFontSize(10);
-        skillsRun.setColor(COLOR_BODY);
-        skillsRun.setFontFamily(FONT);
+        // Enforcement Layer (deterministic)
+        log.info("[Download] Running ATS enforcement for reportId={}", reportId);
+        normalized = enforcementService.enforce(normalized, parsed, report, jobDescription);
+
+        // Score Validation Loop
+        int originalScore = report.getFinalScore();
+        int generatedScore = enforcementService.computeScore(normalized, jobDescription);
+        log.info("[Download] ATS Score Check: original={} generated={}", originalScore, generatedScore);
+
+        int maxRefinements = 2;
+        int refinement = 0;
+        while (generatedScore < originalScore && refinement < maxRefinements) {
+            refinement++;
+            log.warn("[Download] Generated score ({}) < original ({}). Refinement pass {}/{}",
+                    generatedScore, originalScore, refinement, maxRefinements);
+            normalized = enforcementService.enforce(normalized, parsed, report, jobDescription);
+            generatedScore = enforcementService.computeScore(normalized, jobDescription);
+            log.info("[Download] After refinement {}: score={}", refinement, generatedScore);
+        }
+
+        if (generatedScore < originalScore) {
+            log.warn("[Download] Final score ({}) still lower than original ({}) after {} refinements.",
+                    generatedScore, originalScore, maxRefinements);
+        } else {
+            log.info("[Download] ✅ ATS score parity achieved: original={} generated={}", originalScore, generatedScore);
+        }
+
+        normalized.setAtsScore(generatedScore);
+        normalized.setValidationPassed(generatedScore >= originalScore);
+        return normalized;
     }
 
-    private void addSpacing(XWPFDocument doc) {
-        XWPFParagraph para = doc.createParagraph();
-        para.createRun().setText("");
-        para.setSpacingAfter(0);
-        para.setSpacingBefore(0);
+    // ══════════════════════════════════════════════════════════════════════════
+    // STUDIO: Load / Save / Render
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public ReconstructedResume loadForStudio(String reportId, String jd, String templateId) throws Exception {
+        // Try new pipeline first
+        NormalizedResume normalized = loadNormalized(reportId);
+
+        if (normalized == null) {
+            // Fall back to legacy cache
+            normalized = loadFromLegacyCache(reportId, templateId, jd);
+        }
+
+        if (normalized == null) {
+            // Full pipeline
+            normalized = runFullPipelineForStudio(reportId, jd, templateId);
+        }
+
+        if (templateId != null && !templateId.isBlank()) {
+            normalized.setTemplateId(templateId);
+        }
+
+        saveNormalized(reportId, normalized);
+
+        // Return as ReconstructedResume for backward compat with controller/frontend JSON shape
+        return NormalizedResumeMapper.toReconstructed(normalized);
     }
 
-    private void setSectionBorderBottom(XWPFParagraph para, String hexColor) {
-        CTP ctp = para.getCTP();
-        CTPPr ppr = ctp.isSetPPr() ? ctp.getPPr() : ctp.addNewPPr();
-        CTPBdr bdr = ppr.isSetPBdr() ? ppr.getPBdr() : ppr.addNewPBdr();
-        CTBorder bottom = bdr.isSetBottom() ? bdr.getBottom() : bdr.addNewBottom();
-        bottom.setVal(STBorder.SINGLE);
-        bottom.setSz(BigInteger.valueOf(4));
-        bottom.setSpace(BigInteger.valueOf(1));
-        bottom.setColor(hexColor);
+    private NormalizedResume runFullPipelineForStudio(String reportId, String jd, String templateId) throws Exception {
+        ATSReport report = readReport(reportId);
+        String rawText = loadRawText(reportId, report);
+
+        if (rawText != null && !rawText.isBlank()) {
+            ResumeData parsed = resumeParser.parse(rawText);
+            NormalizedResume normalized;
+            try {
+                normalized = reconstructionService.reconstructToNormalized(
+                    parsed, report, jd, templateId != null ? templateId : "classic");
+            } catch (Exception e) {
+                log.error("[Studio] Groq reconstruction failed, using fallback: {}", e.getMessage());
+                normalized = reconstructionService.buildFallbackNormalized(parsed, report);
+            }
+            normalized.setSourceReportId(reportId);
+            normalized = enforcementService.enforce(normalized, parsed, report, jd != null ? jd : "");
+            return normalized;
+        } else {
+            log.warn("[Studio] No raw text for reportId={}, building report-only stub", reportId);
+            return buildStubNormalized(report, templateId);
+        }
+    }
+
+    /**
+     * Builds a minimal NormalizedResume from ATSReport fields alone.
+     */
+    private NormalizedResume buildStubNormalized(ATSReport report, String templateId) {
+        NormalizedResume n = NormalizedResume.builder()
+            .templateId(templateId != null ? templateId : "classic")
+            .build();
+        if (report.getMatchedKeywords() != null && !report.getMatchedKeywords().isEmpty()) {
+            n.setSkills(List.of(
+                NormalizedResume.NSkillCategory.builder()
+                    .label("Matched Skills")
+                    .value(String.join(", ", report.getMatchedKeywords()))
+                    .priority(1)
+                    .jdRelevant(true)
+                    .build()
+            ));
+        }
+        log.info("[Studio] Stub built from report — all contact/personal fields left blank for user input");
+        return n;
+    }
+
+    // ── Save & Load (NEW format: normalized.json) ───────────────────────────
+
+    public void saveNormalized(String reportId, NormalizedResume resume) {
+        try {
+            Path dir = Path.of(ATS_DIR);
+            Files.createDirectories(dir);
+            Path filePath = dir.resolve(reportId + "_normalized.json");
+            objectMapper.writeValue(filePath.toFile(), resume);
+            log.info("[Download] Saved NormalizedResume for reportId={}", reportId);
+        } catch (Exception e) {
+            log.error("[Download] Failed to save NormalizedResume for {}: {}", reportId, e.getMessage());
+        }
+    }
+
+    private NormalizedResume loadNormalized(String reportId) {
+        Path path = Path.of(ATS_DIR, reportId + "_normalized.json");
+        if (Files.exists(path)) {
+            try {
+                return objectMapper.readValue(path.toFile(), NormalizedResume.class);
+            } catch (Exception e) {
+                log.warn("[Download] Failed to load normalized resume: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Loads a legacy _reconstructed.json and converts it to NormalizedResume.
+     */
+    private NormalizedResume loadFromLegacyCache(String reportId, String templateId, String jd) {
+        Path path = Path.of(ATS_DIR, reportId + "_reconstructed.json");
+        if (Files.exists(path)) {
+            try {
+                ReconstructedResume legacy = objectMapper.readValue(path.toFile(), ReconstructedResume.class);
+                log.info("[Download] Loaded legacy _reconstructed.json, converting to NormalizedResume");
+                if (!legacy.isImprovementsApplied()) {
+                    ATSReport report = readReport(reportId);
+                    reconstructionService.postApplyReportSuggestions(legacy, report);
+                    legacy.setImprovementsApplied(true);
+                }
+                NormalizedResume normalized = NormalizedResumeMapper.fromReconstructed(legacy);
+                normalized.setSourceReportId(reportId);
+                normalized.setTemplateId(templateId != null ? templateId : "classic");
+                return normalized;
+            } catch (Exception e) {
+                log.warn("[Download] Failed to load legacy cache: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    // ── Backward compat: save as ReconstructedResume ─────────────────────────
+
+    public void saveReconstructed(String reportId, ReconstructedResume resume) {
+        try {
+            Path dir = Path.of(ATS_DIR);
+            Files.createDirectories(dir);
+            Path filePath = dir.resolve(reportId + "_reconstructed.json");
+            objectMapper.writeValue(filePath.toFile(), resume);
+            log.info("[Studio] Saved reconstructed resume for reportId={}", reportId);
+            // Also save as NormalizedResume
+            NormalizedResume normalized = NormalizedResumeMapper.fromReconstructed(resume);
+            normalized.setSourceReportId(reportId);
+            saveNormalized(reportId, normalized);
+        } catch (Exception e) {
+            log.error("[Studio] Failed to save reconstructed resume for {}: {}", reportId, e.getMessage());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // TEMPLATE SWITCHING (zero AI, <1s)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Switches the template for a resume. Loads the persisted NormalizedResume,
+     * updates the templateId, and re-renders. No AI call.
+     *
+     * @return The re-rendered ATSDownloadResult with new template
+     */
+    public ATSDownloadResult switchTemplate(String reportId, String newTemplateId) throws Exception {
+        NormalizedResume normalized = loadNormalized(reportId);
+        if (normalized == null) {
+            normalized = loadFromLegacyCache(reportId, newTemplateId, "");
+        }
+        if (normalized == null) {
+            throw new RuntimeException("No cached resume found for reportId: " + reportId + ". Generate first.");
+        }
+        normalized.setTemplateId(newTemplateId);
+        saveNormalized(reportId, normalized);
+        return renderAndValidate(normalized, newTemplateId);
+    }
+
+    /**
+     * Returns an HTML preview string for a NormalizedResume + template.
+     * No AI call, pure rendering.
+     */
+    public String previewHtml(NormalizedResume resume, String templateId) {
+        TemplateConfig config = templateRegistry.get(templateId);
+        return htmlRenderer.renderToString(resume, config);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // STUDIO: render from edited data + live scoring
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Renders DOCX from a ReconstructedResume (called from controller).
+     * Backward compatible — converts internally.
+     */
+    public ATSDownloadResult renderFromStudio(ReconstructedResume resume, String templateId) {
+        String tid = templateId != null ? templateId : "classic";
+        // Use new pipeline internally
+        NormalizedResume normalized = NormalizedResumeMapper.fromReconstructed(resume);
+        return renderAndValidate(normalized, tid);
+    }
+
+    /**
+     * Live ATS score computation for studio editing.
+     */
+    public ATSScoreResult scoreLocally(ReconstructedResume resume, String jd) {
+        String resumeText = atsEnforcer.buildResumeText(resume);
+        ATSScoringService.ScoringResult scoring = atsScoringService.score(resumeText, jd != null ? jd : "");
+
+        int overall = (int) Math.round(
+            scoring.getKeywordOverlapScore() * 0.35 +
+            scoring.getSectionScore()        * 0.25 +
+            scoring.getFormattingScore()     * 0.20 +
+            scoring.getQuantificationScore() * 0.20
+        );
+        overall = Math.max(0, Math.min(100, overall));
+
+        List<String> fixes = new ArrayList<>();
+        if (resume.getProfessionalSummary() == null || resume.getProfessionalSummary().isBlank())
+            fixes.add("Add a professional summary");
+        if (scoring.getMissingKeywords().size() > 3)
+            fixes.add("Add missing keywords: " + String.join(", ",
+                scoring.getMissingKeywords().subList(0, Math.min(5, scoring.getMissingKeywords().size()))));
+        if (scoring.getSectionScore() < 80)
+            fixes.add("Ensure all key sections are present (education, skills, experience, projects)");
+        if (scoring.getFormattingScore() < 80 && scoring.getFormattingRisks() != null && !scoring.getFormattingRisks().isEmpty())
+            fixes.add("Fix formatting issues: " + String.join("; ",
+                scoring.getFormattingRisks().subList(0, Math.min(2, scoring.getFormattingRisks().size()))));
+        if (scoring.getQuantificationScore() < 50)
+            fixes.add("Add more quantified metrics (percentages, numbers, team sizes)");
+
+        return ATSScoreResult.builder()
+            .overallScore(overall)
+            .keywordScore(scoring.getKeywordOverlapScore())
+            .sectionScore(scoring.getSectionScore())
+            .formattingScore(scoring.getFormattingScore())
+            .missingKeywords(scoring.getMissingKeywords().subList(0, Math.min(8, scoring.getMissingKeywords().size())))
+            .quickFixes(fixes)
+            .build();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // INTERNAL HELPERS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Renders a NormalizedResume to DOCX via the NEW DocxRenderer pipeline,
+     * then validates the output via ATSDocxValidator.
+     */
+    private ATSDownloadResult renderAndValidate(NormalizedResume normalized, String templateId) {
+        TemplateConfig config = templateRegistry.get(templateId);
+        byte[] docxBytes = docxRenderer.renderToBytes(normalized, config);
+        ATSValidationResult validation = atsValidator.validate(docxBytes);
+
+        log.info("[Download] Rendered template={} atsScore={} criticals={}",
+            templateId, validation.getAtsScore(), validation.getCriticalFails().size());
+
+        // Return with legacy ReconstructedResume for API compat
+        ReconstructedResume legacy = NormalizedResumeMapper.toReconstructed(normalized);
+        return new ATSDownloadResult(docxBytes, validation, legacy);
+    }
+
+    public void saveRawText(String reportId, String rawText) {
+        try {
+            Path dir = Path.of(ATS_DIR);
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve(reportId + "_raw.txt"), rawText);
+            log.info("[Download] Raw text saved for reportId={} chars={}", reportId, rawText.length());
+        } catch (IOException e) {
+            log.error("[Download] Failed to save raw text for {}: {}", reportId, e.getMessage());
+        }
+    }
+
+    /**
+     * Loads and parses the raw resume text for a report — the ResumeData
+     * shape the pipeline gate (see ResumeGenerationGateService) and the Fill
+     * Gaps Wizard both need, without going through AI reconstruction.
+     */
+    public ResumeData loadParsedResumeData(String reportId) throws Exception {
+        ATSReport report = readReport(reportId);
+        String rawText = loadRawText(reportId, report);
+        return resumeParser.parse(rawText);
+    }
+
+    public ATSReport loadReport(String reportId) throws Exception {
+        return readReport(reportId);
+    }
+
+    private ATSReport readReport(String reportId) throws Exception {
+        File f = new File(ATS_DIR, reportId + ".json");
+        if (!f.exists()) throw new RuntimeException("Report not found: " + reportId);
+        return objectMapper.readValue(f, ATSReport.class);
+    }
+
+    private String loadRawText(String reportId, ATSReport report) {
+        Path rawPath = Path.of(ATS_DIR, reportId + "_raw.txt");
+        if (Files.exists(rawPath)) {
+            try { return Files.readString(rawPath); } catch (IOException ignored) {}
+        }
+        return report.getOriginalText();
     }
 }

@@ -1,0 +1,594 @@
+package com.example.mockmate.controller;
+
+import com.example.mockmate.dto.techinterview.AnswerRequest;
+import com.example.mockmate.dto.techinterview.CodeExecuteRequest;
+import com.example.mockmate.dto.techinterview.SQLExecuteRequest;
+import com.example.mockmate.model.User;
+import com.example.mockmate.model.techinterview.*;
+import com.example.mockmate.service.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/tech-interview")
+@RequiredArgsConstructor
+public class TechnicalInterviewController {
+
+    private final InterviewPlanGeneratorService planGeneratorService;
+    private final TechInterviewStateService stateService;
+    private final AIInterviewerService aiInterviewerService;
+    private final CodeExecutionService codeExecutionService;
+    private final SQLExecutionService sqlExecutionService;
+    private final InterviewEvaluationService evaluationService;
+    private final DSAProblemService dsaProblemService;
+    private final ResumeTextExtractor resumeTextExtractor;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    // ── POST /plan — Generate + preview plan ──────────────────
+    @PostMapping(value = "/plan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> generatePlan(
+            @RequestPart(value = "resume", required = false) MultipartFile resume,
+            @RequestPart(value = "jdText", required = false) String jdText,
+            @RequestPart(value = "roleLevel", required = false) String roleLevel,
+            @RequestPart(value = "interviewType", required = false) String interviewType,
+            @RequestPart(value = "companyStyle", required = false) String companyStyle,
+            @RequestPart(value = "durationMinutes", required = false) String durationMinutes,
+            @RequestPart(value = "preferredLanguage", required = false) String preferredLanguage,
+            @RequestParam(value = "startDirectlyToDsa", required = false) Boolean startDirectlyToDsa,
+            @AuthenticationPrincipal User user) {
+
+        try {
+            String resumeText = "";
+            if (resume != null && !resume.isEmpty()) {
+                resumeText = resumeTextExtractor.extract(resume);
+            }
+
+            String effectiveLevel = (roleLevel != null && !roleLevel.isBlank()) ? roleLevel : "SDE_1";
+            String effectiveJd    = (jdText != null) ? jdText : "";
+            String effectiveLang  = (preferredLanguage != null && !preferredLanguage.isBlank()) ? preferredLanguage : "java";
+            String effectiveStyle = (companyStyle != null && !companyStyle.isBlank()) ? companyStyle : "GENERIC";
+
+            // Infer track if missing
+            String effectiveType  = (interviewType != null && !interviewType.isBlank()) ? interviewType : "BACKEND";
+            if (interviewType == null || interviewType.isBlank()) {
+                String combined = (resumeText + " " + effectiveJd).toLowerCase();
+                if (combined.contains("react") || combined.contains("frontend") || combined.contains("css")) {
+                    effectiveType = "FRONTEND";
+                } else if (combined.contains("data science") || combined.contains("machine learning") || combined.contains("python")) {
+                    effectiveType = "DATA_SCIENCE";
+                } else if (combined.contains("devops") || combined.contains("kubernetes") || combined.contains("docker")) {
+                    effectiveType = "DEVOPS";
+                }
+            }
+
+            // Estimate duration if missing or invalid
+            int dur = 45;
+            if (durationMinutes != null && !durationMinutes.isBlank()) {
+                try { dur = Integer.parseInt(durationMinutes); } catch (Exception ignored) {}
+            } else {
+                if ("INTERN".equalsIgnoreCase(effectiveLevel) || "FRESHER".equalsIgnoreCase(effectiveLevel)) {
+                    dur = 40;
+                } else if ("SDE_2".equalsIgnoreCase(effectiveLevel) || "SDE_3".equalsIgnoreCase(effectiveLevel)) {
+                    dur = 60;
+                }
+            }
+
+            InterviewPlanConfig config = new InterviewPlanConfig();
+            config.setResumeText(resumeText);
+            config.setJdText(effectiveJd);
+            config.setRoleLevel(effectiveLevel);
+            config.setInterviewType(effectiveType);
+            config.setCompanyStyle(effectiveStyle);
+            config.setDurationMinutes(dur);
+            config.setPreferredLanguage(effectiveLang);
+            config.setStartDirectlyToDsa(Boolean.TRUE.equals(startDirectlyToDsa));
+
+            InterviewPlan plan = planGeneratorService.generatePlan(config);
+            if (user != null) plan.setUserId(user.getId() != null ? user.getId().toString() : "");
+
+            return ResponseEntity.ok(Map.of(
+                    "planId", plan.getPlanId(),
+                    "plan", plan
+            ));
+
+        } catch (Exception e) {
+            log.error("Plan generation failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── POST /start — Start session from plan ─────────────────
+    @PostMapping("/start")
+    public ResponseEntity<?> startInterview(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal User user) {
+
+        try {
+            String planId = (String) body.get("planId");
+            // Retrieve the plan that was generated (it's embedded in the request for simplicity)
+            Object planObj = body.get("plan");
+            InterviewPlan plan;
+            if (planObj != null) {
+                // Plan was sent with the start request
+                plan = objectMapper.convertValue(planObj, InterviewPlan.class);
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("error", "Plan not provided"));
+            }
+
+            String userId = user != null ? (user.getId() != null ? user.getId().toString() : "anon") : "anon";
+            TechInterviewSession session = stateService.createSession(userId, plan);
+
+            // Generate opening message
+            AIInterviewerResponse opening = aiInterviewerService.generateOpeningMessage(session);
+
+            // Record opening as turn 0
+            TechInterviewSession.InterviewTurn turn = new TechInterviewSession.InterviewTurn();
+            turn.setTurnId(0);
+            turn.setRoundId(session.getCurrentRoundId() != null ? session.getCurrentRoundId() : "round_1");
+            turn.setTimestamp(System.currentTimeMillis() / 1000);
+            turn.setQuestion(opening.getResponseText());
+            turn.setAiResponse(opening.getResponseText());
+            turn.setAction(opening.getAction());
+            stateService.addTurn(session.getSessionId(), turn);
+
+            Map<String, Object> respMap = new HashMap<>();
+            respMap.put("sessionId", session.getSessionId());
+            respMap.put("firstMessage", opening.getResponseText());
+            respMap.put("action", opening.getAction() != null ? opening.getAction() : "NEXT_QUESTION");
+            if (opening.getEditorConfig() != null) {
+                respMap.put("editorConfig", opening.getEditorConfig());
+                if ("CODE".equals(opening.getEditorConfig().getType()) && opening.getEditorConfig().getProblemId() != null) {
+                    stateService.setActiveDsaProblem(session.getSessionId(), opening.getEditorConfig().getProblemId());
+                }
+            }
+            return ResponseEntity.ok(respMap);
+
+        } catch (Exception e) {
+            log.error("Interview start failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── POST /{sessionId}/answer — Submit answer ──────────────
+    @PostMapping("/{sessionId}/answer")
+    public ResponseEntity<?> submitAnswer(
+            @PathVariable String sessionId,
+            @RequestBody AnswerRequest request,
+            @AuthenticationPrincipal User user) {
+
+        try {
+            TechInterviewSession session = stateService.getSession(sessionId);
+            if (session == null) return ResponseEntity.notFound().build();
+
+            // Handle code submission if present
+            CodeExecutionResult codeResult = null;
+            if (request.getCodeSubmission() != null) {
+                AnswerRequest.CodeSubmission cs = request.getCodeSubmission();
+                if (cs.isSubmit()) {
+                    try {
+                        codeResult = codeExecutionService.execute(
+                                cs.getCode(), cs.getLanguage(), cs.getProblemId(), true);
+                    } catch (Exception e) {
+                        log.warn("Code execution during submission failed: {}", e.getMessage());
+                        codeResult = new CodeExecutionResult();
+                        codeResult.setCompilationError("Code execution failed: " + e.getMessage());
+                    }
+                    try {
+                        updateDsaAttempt(sessionId, session, cs, codeResult, request.getComplexityAnswer());
+                    } catch (Exception e) {
+                        log.error("Failed to update DSA attempt for session {}", sessionId, e);
+                    }
+                }
+            }
+
+            // Handle SQL submission
+            SQLExecutionResult sqlResult = null;
+            if (request.getSqlSubmission() != null) {
+                AnswerRequest.SQLSubmission ss = request.getSqlSubmission();
+                try {
+                    sqlResult = sqlExecutionService.executeQuery(ss.getQuery(), ss.getProblemId(), sessionId);
+                } catch (Exception e) {
+                    log.warn("SQL execution during submission failed: {}", e.getMessage());
+                }
+                // Previously nothing ever wrote into session.sqlAttempts (there was
+                // no equivalent of updateDsaAttempt for SQL at all) — the entire SQL
+                // round was invisible to scoring and the final report regardless of
+                // how well the candidate actually did.
+                try {
+                    updateSqlAttempt(sessionId, ss, sqlResult);
+                } catch (Exception e) {
+                    log.error("Failed to update SQL attempt for session {}", sessionId, e);
+                }
+            }
+
+            // Handle whiteboard
+            if (request.getWhiteboardSnapshot() != null) {
+                stateService.saveWhiteboard(sessionId, request.getWhiteboardSnapshot());
+            }
+
+            // Get AI response
+            AIInterviewerResponse aiResp = aiInterviewerService.processAnswer(
+                    session, request.getAnswerText(), codeResult, sqlResult);
+
+            // Track which DSA problem is currently open (needed so a later
+            // GIVE_HINT turn — which happens over chat, not a submission —
+            // knows which attempt's hint counter to bump) and record hints as
+            // they're actually given, instead of leaving hintsUsed frozen at 0.
+            if (aiResp.getEditorConfig() != null && "CODE".equals(aiResp.getEditorConfig().getType())
+                    && aiResp.getEditorConfig().getProblemId() != null) {
+                stateService.setActiveDsaProblem(sessionId, aiResp.getEditorConfig().getProblemId());
+            }
+            if ("GIVE_HINT".equals(aiResp.getAction())) {
+                stateService.recordHint(sessionId);
+            }
+
+            // Record turn
+            TechInterviewSession.InterviewTurn turn = new TechInterviewSession.InterviewTurn();
+            turn.setTurnId(request.getTurnId());
+            turn.setTimestamp(System.currentTimeMillis() / 1000);
+            turn.setCandidateAnswer(request.getAnswerText());
+            turn.setAiResponse(aiResp.getResponseText());
+            turn.setAction(aiResp.getAction());
+            if (aiResp.getCurrentAnswerEvaluation() != null) {
+                var eval = aiResp.getCurrentAnswerEvaluation();
+                turn.setScore(eval.getScore());
+                turn.setQuality(eval.getQuality());
+                turn.setTopicAssessed(eval.getTopicAssessed());
+                turn.setCorrectPoints(eval.getCorrectPoints());
+                turn.setMissedPoints(eval.getMissedPoints());
+                turn.setMisconceptions(eval.getMisconceptions());
+                turn.setInternalNote(eval.getInternalNote());
+            }
+            stateService.addTurn(sessionId, turn);
+
+            // Check round transition
+            boolean roundChanged = false;
+            InterviewRound newRound = null;
+            if ("NEXT_ROUND".equals(aiResp.getAction()) ||
+                    (aiResp.getRoundProgress() != null && !aiResp.getRoundProgress().isShouldContinueRound())) {
+                stateService.advanceToNextRound(sessionId);
+                session = stateService.getSession(sessionId);
+                roundChanged = true;
+                if (!session.isEnded()) {
+                    int ri = session.getCurrentRoundIndex();
+                    List<InterviewRound> rounds = session.getPlan().getInterviewPlan().getRounds();
+                    if (ri < rounds.size()) newRound = rounds.get(ri);
+                }
+            }
+
+            // Compute time remaining
+            long now = System.currentTimeMillis() / 1000;
+            long elapsed = now - session.getStartedAt();
+            int totalMin = session.getPlan().getConfig().getDurationMinutes();
+            int remaining = (int) Math.max(0, totalMin - elapsed / 60);
+
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("aiResponse", aiResp.getResponseText());
+            resp.put("action", aiResp.getAction());
+            resp.put("nextQuestion", aiResp.getNextQuestion());
+            resp.put("editorConfig", aiResp.getEditorConfig());
+            resp.put("roundChanged", roundChanged);
+            resp.put("newRound", newRound);
+            resp.put("timeRemainingMinutes", remaining);
+            resp.put("interviewEnded", session.isEnded());
+            if (codeResult != null) resp.put("codeResult", codeResult);
+            if (sqlResult != null) resp.put("sqlResult", sqlResult);
+
+            return ResponseEntity.ok(resp);
+
+        } catch (Exception e) {
+            log.error("Answer submission failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── POST /{sessionId}/execute-code ────────────────────────
+    @PostMapping("/{sessionId}/execute-code")
+    public ResponseEntity<?> executeCode(
+            @PathVariable String sessionId,
+            @RequestBody CodeExecuteRequest request) {
+        try {
+            // Console/"run with custom input" requests don't grade against the
+            // problem's fixed test cases — they just run the candidate's code
+            // against whatever input they typed and return raw output.
+            CodeExecutionResult result = (request.getCustomInput() != null && !request.getCustomInput().isBlank())
+                    ? codeExecutionService.executeCustom(
+                            request.getCode(), request.getLanguage(), request.getProblemId(), request.getCustomInput())
+                    : codeExecutionService.execute(
+                            request.getCode(), request.getLanguage(), request.getProblemId(), false);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Code execution failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── POST /{sessionId}/execute-sql ─────────────────────────
+    @PostMapping("/{sessionId}/execute-sql")
+    public ResponseEntity<?> executeSQL(
+            @PathVariable String sessionId,
+            @RequestBody SQLExecuteRequest request) {
+        try {
+            SQLExecutionResult result = sqlExecutionService.executeQuery(
+                    request.getQuery(), request.getProblemId(), sessionId);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("SQL execution failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── POST /{sessionId}/save-whiteboard ─────────────────────
+    @PostMapping("/{sessionId}/save-whiteboard")
+    public ResponseEntity<?> saveWhiteboard(
+            @PathVariable String sessionId,
+            @RequestBody Map<String, String> body) {
+        stateService.saveWhiteboard(sessionId, body.get("snapshot"));
+        return ResponseEntity.ok(Map.of("saved", true));
+    }
+
+    // ── POST /{sessionId}/end ─────────────────────────────────
+    @PostMapping("/{sessionId}/end")
+    public ResponseEntity<?> endInterview(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal User user) {
+        try {
+            TechInterviewSession session = stateService.getSession(sessionId);
+            if (session == null) return ResponseEntity.notFound().build();
+            stateService.endSession(sessionId);
+            TechInterviewReport report = evaluationService.evaluate(session);
+            // Persist report
+            saveReport(session.getSessionId(), report);
+            return ResponseEntity.ok(Map.of(
+                    "reportId", report.getReportId(),
+                    "sessionId", sessionId
+            ));
+        } catch (Exception e) {
+            log.error("Interview end failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── GET /report/{sessionId} ───────────────────────────────
+    @GetMapping("/report/{sessionId}")
+    public ResponseEntity<?> getReport(@PathVariable String sessionId) {
+        try {
+            java.io.File reportFile = new java.io.File(
+                    "data/sessions/technical/" + sessionId + "/report.json");
+            if (!reportFile.exists()) {
+                // Generate on demand
+                TechInterviewSession session = stateService.getSession(sessionId);
+                if (session == null) return ResponseEntity.notFound().build();
+                TechInterviewReport report = evaluationService.evaluate(session);
+                saveReport(sessionId, report);
+                return ResponseEntity.ok(report);
+            }
+            TechInterviewReport report = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readValue(reportFile, TechInterviewReport.class);
+            return ResponseEntity.ok(report);
+        } catch (Exception e) {
+            log.error("Report fetch failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── GET /history/{userId} ─────────────────────────────────
+    @GetMapping("/history/{userId}")
+    public ResponseEntity<?> getHistory(@PathVariable String userId) {
+        try {
+            java.io.File baseDir = new java.io.File("data/sessions/technical");
+            List<Map<String, Object>> history = new ArrayList<>();
+            if (baseDir.exists()) {
+                java.io.File[] dirs = baseDir.listFiles(java.io.File::isDirectory);
+                if (dirs != null) {
+                    for (java.io.File dir : dirs) {
+                        java.io.File state = new java.io.File(dir, "state.json");
+                        if (state.exists()) {
+                            try {
+                                TechInterviewSession s = new com.fasterxml.jackson.databind.ObjectMapper()
+                                        .readValue(state, TechInterviewSession.class);
+                                if (userId.equals(s.getUserId())) {
+                                    Map<String, Object> entry = new LinkedHashMap<>();
+                                    entry.put("sessionId", s.getSessionId());
+                                    entry.put("date", s.getStartedAt() * 1000);
+                                    entry.put("role", s.getPlan().getConfig().getRoleLevel());
+                                    entry.put("interviewType", s.getPlan().getConfig().getInterviewType());
+                                    entry.put("companyStyle", s.getPlan().getConfig().getCompanyStyle());
+                                    entry.put("ended", s.isEnded());
+                                    history.add(entry);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            }
+            history.sort((a, b) -> Long.compare(
+                    (Long) b.getOrDefault("date", 0L),
+                    (Long) a.getOrDefault("date", 0L)));
+            return ResponseEntity.ok(history);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ── GET /problems/dsa/{problemId} ─────────────────────────
+    @GetMapping("/problems/dsa/{problemId}")
+    public ResponseEntity<?> getDsaProblem(@PathVariable String problemId) {
+        DSAProblem problem = dsaProblemService.getProblem(problemId);
+        if (problem == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(problem);
+    }
+
+    // ── GET /{sessionId}/debug ──────────────────────────────────
+    @GetMapping("/{sessionId}/debug")
+    public ResponseEntity<?> getSessionDebugInfo(@PathVariable String sessionId) {
+        TechInterviewSession session = stateService.getSession(sessionId);
+        if (session == null) return ResponseEntity.notFound().build();
+
+        Map<String, Object> debug = new LinkedHashMap<>();
+        debug.put("sessionId", session.getSessionId());
+        debug.put("isEnded", session.isEnded());
+        debug.put("currentRoundIndex", session.getCurrentRoundIndex());
+        if (session.getPlan() != null && session.getPlan().getInterviewPlan() != null && session.getPlan().getInterviewPlan().getRounds() != null) {
+            debug.put("totalRounds", session.getPlan().getInterviewPlan().getRounds().size());
+            debug.put("rounds", session.getPlan().getInterviewPlan().getRounds().stream().map(r -> Map.of(
+                    "roundId", r.getRoundId() != null ? r.getRoundId() : "",
+                    "roundName", r.getRoundName() != null ? r.getRoundName() : "",
+                    "roundType", r.getRoundType() != null ? r.getRoundType() : "",
+                    "allocatedMinutes", r.getAllocatedMinutes(),
+                    "topics", r.getTopics() != null ? r.getTopics() : List.of()
+            )).collect(Collectors.toList()));
+        }
+        debug.put("turnsCount", session.getTurns() != null ? session.getTurns().size() : 0);
+        return ResponseEntity.ok(debug);
+    }
+
+    // ── GET /problems/sql/{problemId} ─────────────────────────
+    @GetMapping("/problems/sql/{problemId}")
+    public ResponseEntity<?> getSqlProblem(@PathVariable String problemId) {
+        var problem = sqlExecutionService.getProblem(problemId);
+        if (problem == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(problem);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────
+    private void updateDsaAttempt(String sessionId, TechInterviewSession session,
+                                   AnswerRequest.CodeSubmission cs, CodeExecutionResult codeResult,
+                                   AnswerRequest.ComplexityAnswer complexity) {
+        if (cs == null || codeResult == null) return;
+        Map<String, TechInterviewSession.DSAAttempt> dsaAttempts = session.getDsaAttempts();
+        if (dsaAttempts == null) {
+            dsaAttempts = new HashMap<>();
+            session.setDsaAttempts(dsaAttempts);
+        }
+        String pid = cs.getProblemId() != null ? cs.getProblemId() : "general_code";
+        TechInterviewSession.DSAAttempt attempt = dsaAttempts.getOrDefault(pid, new TechInterviewSession.DSAAttempt());
+        attempt.setProblemId(pid);
+        attempt.setFinalCode(cs.getCode());
+        attempt.setLanguage(cs.getLanguage());
+        attempt.setTestCasesPassed(codeResult.getTestCasesPassed());
+        attempt.setTotalTestCases(codeResult.getTotalTestCases());
+        attempt.setAllPassed(codeResult.isAllPassed());
+
+        // Determine approach quality
+        if (codeResult.isAllPassed()) {
+            attempt.setApproachQuality("OPTIMAL");
+        } else if (codeResult.getTestCasesPassed() > 0) {
+            attempt.setApproachQuality("PARTIAL");
+        } else {
+            attempt.setApproachQuality("WRONG");
+        }
+
+        if (complexity != null) {
+            attempt.setTimeComplexityAnswer(complexity.getTime());
+            attempt.setSpaceComplexityAnswer(complexity.getSpace());
+        }
+
+        // Complexity correctness was declared on the model (complexityCorrect)
+        // but nothing ever set it, and the score below awarded full points for
+        // ANY non-blank answer — a candidate could type "O(n^100)" for Two Sum
+        // and still get full complexity credit. Compare against the problem's
+        // documented optimal complexity instead.
+        DSAProblem problemDef = dsaProblemService.getProblemFull(pid);
+        if (complexity != null && problemDef != null && problemDef.getOptimalSolution() != null) {
+            boolean timeOk = complexityMatches(complexity.getTime(), problemDef.getOptimalSolution().getTimeComplexity());
+            boolean spaceOk = complexityMatches(complexity.getSpace(), problemDef.getOptimalSolution().getSpaceComplexity());
+            attempt.setComplexityCorrect(timeOk && spaceOk);
+        }
+
+        // Score calculation
+        int score = computeDsaScore(attempt);
+        attempt.setScore(score);
+
+        stateService.updateDsaAttempt(sessionId, attempt);
+    }
+
+    private int computeDsaScore(TechInterviewSession.DSAAttempt attempt) {
+        int score = 0;
+        if ("OPTIMAL".equals(attempt.getApproachQuality())) score += 20;
+        else if ("PARTIAL".equals(attempt.getApproachQuality())) score += 10;
+
+        if (attempt.getTotalTestCases() > 0) {
+            double passRate = (double) attempt.getTestCasesPassed() / attempt.getTotalTestCases();
+            score += (int)(passRate * 55);
+        }
+
+        boolean hasTimeAnswer  = attempt.getTimeComplexityAnswer()  != null && !attempt.getTimeComplexityAnswer().isBlank();
+        boolean hasSpaceAnswer = attempt.getSpaceComplexityAnswer() != null && !attempt.getSpaceComplexityAnswer().isBlank();
+        if (attempt.isComplexityCorrect()) {
+            // Correct complexity: full 25 points (matches the previous 15+10 max)
+            score += 25;
+        } else if (hasTimeAnswer || hasSpaceAnswer) {
+            // Attempted but wrong/unverified (e.g. no reference complexity on
+            // file for this problem) — partial credit for engaging with the
+            // question at all, well short of full marks for being right.
+            score += 8;
+        }
+
+        score -= attempt.getHintsUsed() * 10;
+        return Math.max(0, Math.min(100, score));
+    }
+
+    /**
+     * Normalizes and compares Big-O style complexity strings (e.g. "O(n log n)"
+     * vs "o(nlogn)"). Deliberately conservative: only awards credit on a fairly
+     * literal match, since a fuzzier equivalence check (e.g. treating O(n) and
+     * O(n+m) as "the same") risks giving credit for answers that aren't
+     * actually equivalent.
+     */
+    private boolean complexityMatches(String candidate, String reference) {
+        if (candidate == null || reference == null) return false;
+        String a = normalizeComplexity(candidate);
+        String b = normalizeComplexity(reference);
+        return !a.isEmpty() && a.equals(b);
+    }
+
+    private String normalizeComplexity(String s) {
+        if (s == null) return "";
+        return s.toLowerCase()
+                .replaceAll("\\s+", "")
+                .replace("big-o", "o")
+                .replace("bigo", "o")
+                .replace("θ", "o")
+                .replace("*", "")
+                .replaceAll("^o\\(|\\)$", "");
+    }
+
+    // SQL equivalent of updateDsaAttempt — see comment at its call site for
+    // why this exists (sqlAttempts was previously never written to at all).
+    private void updateSqlAttempt(String sessionId, AnswerRequest.SQLSubmission ss, SQLExecutionResult sqlResult) {
+        if (ss == null || sqlResult == null) return;
+        TechInterviewSession.SQLAttempt attempt = new TechInterviewSession.SQLAttempt();
+        attempt.setProblemId(ss.getProblemId() != null ? ss.getProblemId() : "general_sql");
+        attempt.setFinalQuery(ss.getQuery());
+        attempt.setCorrect(sqlResult.isCorrect());
+        attempt.setScore(computeSqlScore(sqlResult));
+        stateService.updateSqlAttempt(sessionId, attempt);
+    }
+
+    private int computeSqlScore(SQLExecutionResult result) {
+        if (result == null || !result.isSuccess()) return 0;   // didn't even run (syntax error, blocked statement, etc.)
+        if (result.isCorrect()) return 100;                     // matches expected result
+        return 25;                                              // valid, executable query — just the wrong result
+    }
+
+    private void saveReport(String sessionId, TechInterviewReport report) {
+        try {
+            java.io.File dir = new java.io.File("data/sessions/technical/" + sessionId);
+            dir.mkdirs();
+            new com.fasterxml.jackson.databind.ObjectMapper().writeValue(
+                    new java.io.File(dir, "report.json"), report);
+        } catch (Exception e) {
+            log.error("Failed to save report for session {}", sessionId, e);
+        }
+    }
+}

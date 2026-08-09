@@ -1,0 +1,52 @@
+{
+  "id": "lc-020",
+  "leetcodeId": 20,
+  "leetcodeUrl": "https://leetcode.com/problems/valid-parentheses/",
+  "title": "Valid Parentheses",
+  "difficulty": "EASY",
+  "topics": ["stack", "string"],
+  "companies": ["Amazon", "Google", "Facebook", "Bloomberg"],
+  "frequency": "VERY_HIGH",
+  "neetcodeListNumber": 4,
+  "description": "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid. An input string is valid if: Open brackets must be closed by the same type of brackets, Open brackets must be closed in the correct order, Every close bracket has a corresponding open bracket of the same type.",
+  "examples": [
+    {"input": "s = \"()\"", "output": "true", "explanation": "Simple pair"},
+    {"input": "s = \"()[]{}\"", "output": "true", "explanation": "Multiple pairs"},
+    {"input": "s = \"(]\"", "output": "false", "explanation": "Mismatched brackets"},
+    {"input": "s = \"([])\"", "output": "true", "explanation": "Nested correctly"}
+  ],
+  "constraints": ["1 <= s.length <= 10^4", "s consists of parentheses only '()[]{}'"],
+  "hints": ["Think about a data structure that handles Last-In-First-Out order.", "A stack is perfect. Push opening brackets, pop and check when you see a closing bracket."],
+  "starterCode": {
+    "java": "class Solution {\n    public boolean isValid(String s) {\n        // Your solution here\n    }\n}",
+    "python": "class Solution:\n    def isValid(self, s: str) -> bool:\n        # Your solution here\n        pass",
+    "cpp": "class Solution {\npublic:\n    bool isValid(string s) {\n        // Your solution here\n    }\n};",
+    "javascript": "var isValid = function(s) {\n    // Your solution here\n};",
+    "go": "func isValid(s string) bool {\n    // Your solution here\n}"
+  },
+  "testCases": [
+    {"input": "()", "expectedOutput": "true", "isHidden": false, "description": "Simple pair"},
+    {"input": "()[]{}", "expectedOutput": "true", "isHidden": false, "description": "Multiple pairs"},
+    {"input": "(]", "expectedOutput": "false", "isHidden": false, "description": "Mismatched"},
+    {"input": "([)]", "expectedOutput": "false", "isHidden": true, "description": "Interleaved"},
+    {"input": "{[]}", "expectedOutput": "true", "isHidden": true, "description": "Nested"},
+    {"input": "", "expectedOutput": "true", "isHidden": true, "description": "Empty string"}
+  ],
+  "optimalSolution": {
+    "approach": "Use a stack. Push opening brackets. When closing bracket encountered, check if top of stack matches. If stack is empty at end, string is valid.",
+    "timeComplexity": "O(n)",
+    "spaceComplexity": "O(n)",
+    "code": {
+      "java": "class Solution {\n    public boolean isValid(String s) {\n        Deque<Character> stack = new ArrayDeque<>();\n        for (char c : s.toCharArray()) {\n            if (c == '(' || c == '[' || c == '{') {\n                stack.push(c);\n            } else {\n                if (stack.isEmpty()) return false;\n                char top = stack.pop();\n                if (c == ')' && top != '(') return false;\n                if (c == ']' && top != '[') return false;\n                if (c == '}' && top != '{') return false;\n            }\n        }\n        return stack.isEmpty();\n    }\n}",
+      "python": "class Solution:\n    def isValid(self, s: str) -> bool:\n        stack = []\n        mapping = {')': '(', ']': '[', '}': '{'}\n        for char in s:\n            if char in mapping:\n                top = stack.pop() if stack else '#'\n                if mapping[char] != top:\n                    return False\n            else:\n                stack.append(char)\n        return not stack"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(n^2)", "spaceComplexity": "O(n)", "acceptable": false},
+  "followUpQuestions": [
+    "What is the time complexity of your solution?",
+    "What happens if the string has only one character?",
+    "Can you solve this without a stack?"
+  ],
+  "interviewerNotes": "Classic stack problem. Candidate should immediately identify stack as the right data structure. Look for correct handling of empty stack check and mismatch detection.",
+  "roleRelevance": {"backend": "HIGH", "frontend": "HIGH", "fullstack": "HIGH", "dataScience": "MEDIUM", "devops": "LOW"}
+}

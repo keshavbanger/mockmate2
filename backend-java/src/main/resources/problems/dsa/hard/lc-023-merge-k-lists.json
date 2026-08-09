@@ -1,0 +1,49 @@
+{
+  "id": "lc-23",
+  "leetcodeId": 23,
+  "leetcodeUrl": "https://leetcode.com/problems/merge-k-sorted-lists/",
+  "title": "Merge K Sorted Lists",
+  "difficulty": "HARD",
+  "topics": ["linked-list", "heap", "priority-queue", "divide-and-conquer"],
+  "companies": ["Amazon", "Google", "Facebook", "Microsoft"],
+  "frequency": "VERY_HIGH",
+  "neetcodeListNumber": 27,
+  "description": "You are given an array of k linked-lists lists, each linked-list is sorted in ascending order. Merge all the linked-lists into one sorted linked-list and return it.",
+  "examples": [
+    {"input": "lists = [[1,4,5],[1,3,4],[2,6]]", "output": "[1,1,2,3,4,4,5,6]", "explanation": "Merging all gives sorted list."},
+    {"input": "lists = []", "output": "[]", "explanation": "Empty input."},
+    {"input": "lists = [[]]", "output": "[]", "explanation": "Empty list."}
+  ],
+  "constraints": ["k == lists.length", "0 <= k <= 10^4", "0 <= lists[i].length <= 500", "-10^4 <= lists[i][j] <= 10^4"],
+  "hints": ["You know how to merge 2 sorted lists. Can you extend that?", "Use a Min-Heap (Priority Queue) to always pick the smallest current node across all lists."],
+  "starterCode": {
+    "java": "/**\n * Definition for singly-linked list.\n * public class ListNode {\n *     int val;\n *     ListNode next;\n *     ListNode() {}\n *     ListNode(int val) { this.val = val; }\n *     ListNode(int val, ListNode next) { this.val = val; this.next = next; }\n * }\n */\nclass Solution {\n    public ListNode mergeKLists(ListNode[] lists) {\n        // Your solution here\n    }\n}",
+    "python": "class Solution:\n    def mergeKLists(self, lists: List[Optional[ListNode]]) -> Optional[ListNode]:\n        pass",
+    "cpp": "class Solution {\npublic:\n    ListNode* mergeKLists(vector<ListNode*>& lists) {\n        // Your solution here\n    }\n};",
+    "javascript": "var mergeKLists = function(lists) {\n    // Your solution here\n};",
+    "go": "func mergeKLists(lists []*ListNode) *ListNode {\n    // Your solution here\n}"
+  },
+  "testCases": [
+    {"input": "[[1,4,5],[1,3,4],[2,6]]", "expectedOutput": "[1,1,2,3,4,4,5,6]", "isHidden": false, "description": "Normal case"},
+    {"input": "[]", "expectedOutput": "[]", "isHidden": false, "description": "Empty input"},
+    {"input": "[[]]", "expectedOutput": "[]", "isHidden": true, "description": "Empty list"},
+    {"input": "[[1],[0]]", "expectedOutput": "[0,1]", "isHidden": true, "description": "Two single nodes"}
+  ],
+  "optimalSolution": {
+    "approach": "Priority Queue (Min-Heap). Add first node of each list to heap. Poll minimum, add to result, add next node of that list to heap. O(N log k) where N = total nodes, k = lists.",
+    "timeComplexity": "O(N log k)",
+    "spaceComplexity": "O(k)",
+    "code": {
+      "java": "class Solution {\n    public ListNode mergeKLists(ListNode[] lists) {\n        PriorityQueue<ListNode> pq = new PriorityQueue<>((a, b) -> a.val - b.val);\n        for (ListNode node : lists) if (node != null) pq.offer(node);\n        ListNode dummy = new ListNode(0), cur = dummy;\n        while (!pq.isEmpty()) {\n            ListNode node = pq.poll();\n            cur.next = node;\n            cur = cur.next;\n            if (node.next != null) pq.offer(node.next);\n        }\n        return dummy.next;\n    }\n}",
+      "python": "import heapq\nclass Solution:\n    def mergeKLists(self, lists):\n        heap = []\n        for i, node in enumerate(lists):\n            if node: heapq.heappush(heap, (node.val, i, node))\n        dummy = cur = ListNode(0)\n        while heap:\n            val, i, node = heapq.heappop(heap)\n            cur.next = node\n            cur = cur.next\n            if node.next: heapq.heappush(heap, (node.next.val, i, node.next))\n        return dummy.next"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(N log N)", "spaceComplexity": "O(N)", "acceptable": true},
+  "followUpQuestions": [
+    "What is the time complexity of the heap approach vs brute force?",
+    "What if memory is very limited?",
+    "Can you do it with divide and conquer?"
+  ],
+  "interviewerNotes": "Classic HARD problem. Tests linked list manipulation + heap usage. Ideal for SDE-2+ candidates. Look for clean dummy node pattern and correct heap initialization. The divide-and-conquer approach is a great follow-up.",
+  "roleRelevance": {"backend": "VERY_HIGH", "frontend": "LOW", "fullstack": "HIGH", "dataScience": "MEDIUM", "devops": "LOW"}
+}

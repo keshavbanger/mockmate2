@@ -2,14 +2,29 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { getATSReport, downloadImprovedResume } from '../utils/api.js';
-import ATSScoreGauge              from '../components/ats/ATSScoreGauge.jsx';
+
+// Existing components
+import HonestScoreGauge           from '../components/report/HonestScoreGauge.jsx';
 import KeywordPanel               from '../components/ats/KeywordPanel.jsx';
 import SectionHealth              from '../components/ats/SectionHealth.jsx';
 import FormattingRisks            from '../components/ats/FormattingRisks.jsx';
 import BulletRewrites             from '../components/ats/BulletRewrites.jsx';
 import TailoredSummary            from '../components/ats/TailoredSummary.jsx';
 import RoleLevelGap               from '../components/ats/RoleLevelGap.jsx';
-import QuantificationSuggestions  from '../components/ats/QuantificationSuggestions.jsx';
+import ResumeGeneratorWizard      from '../components/ats/ResumeGeneratorWizard.jsx';
+
+// NEW enhanced components
+import EnhancedExecutiveSummaryCard from '../components/ats/EnhancedExecutiveSummaryCard.jsx';
+import ATSParserPreview             from '../components/ats/ATSParserPreview.jsx';
+import KeywordIntelligence          from '../components/ats/KeywordIntelligence.jsx';
+import ConsistencyChecker           from '../components/ats/ConsistencyChecker.jsx';
+import ImprovementSimulator         from '../components/ats/ImprovementSimulator.jsx';
+import WritingAnalysisPanel         from '../components/ats/WritingAnalysisPanel.jsx';
+import CompanyReadiness             from '../components/ats/CompanyReadiness.jsx';
+import HonestScoreBreakdown         from '../components/ats/HonestScoreBreakdown.jsx';
+import CGPAAssessment               from '../components/ats/CGPAAssessment.jsx';
+// JD-calibrated assessment (dimension scores, blockers, coverage, action plan)
+import HonestAssessmentPanel        from '../components/ats/HonestAssessmentPanel.jsx';
 
 const fade = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
@@ -19,27 +34,29 @@ const fade = (delay = 0) => ({
 
 const SUB_SCORES = [
   { label: 'Keyword Overlap', key: 'keywordOverlapScore', color: 'bg-[var(--brand-primary)]' },
-  { label: 'Semantic Match',  key: 'semanticScore',       color: 'bg-violet-400' },
-  { label: 'Role Alignment',  key: 'roleAlignmentScore',  color: 'bg-indigo-400' },
   { label: 'Section Health',  key: 'sectionScore',        color: 'bg-emerald-400' },
   { label: 'Formatting',      key: 'formattingScore',     color: 'bg-amber-400' },
   { label: 'Quantification',  key: 'quantificationScore', color: 'bg-slate-400' },
+  { label: 'Action Verbs',    key: 'actionVerbScore',     color: 'bg-pink-400' },
+  { label: 'Consistency',     key: 'consistencyScore',    color: 'bg-cyan-400' },
 ];
 
 const VERDICT_CONFIG = {
-  'Strong fit':   { icon: '🟢', pill: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-  'Good fit':     { icon: '🔵', pill: 'text-[var(--brand-primary)] bg-[var(--brand-light)] border-purple-200' },
-  'Moderate fit': { icon: '🟡', pill: 'text-amber-700 bg-amber-50 border-amber-200' },
-  'Weak fit':     { icon: '🔴', pill: 'text-red-600 bg-red-50 border-red-200' },
+  'Strong Fit':     { icon: '🟢', pill: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+  'Good Fit':       { icon: '🔵', pill: 'text-[var(--brand-primary)] bg-[var(--brand-light)] border-purple-200' },
+  'Borderline Fit': { icon: '🟡', pill: 'text-amber-700 bg-amber-50 border-amber-200' },
+  'Weak Fit':       { icon: '🟠', pill: 'text-orange-600 bg-orange-50 border-orange-200' },
+  'Not a Fit':      { icon: '🔴', pill: 'text-red-600 bg-red-50 border-red-200' },
 };
 
 export default function ATSReportPage() {
   const { reportId } = useParams();
   const navigate     = useNavigate();
-  const [report,    setReport]    = useState(null);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState('');
-  const [dlLoading, setDlLoading] = useState(false);
+  const [report,      setReport]      = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
+  const [dlLoading,   setDlLoading]   = useState(false);
+  const [showGenModal, setShowGenModal] = useState(false);
 
   useEffect(() => {
     if (!reportId) return;
@@ -81,7 +98,7 @@ export default function ATSReportPage() {
 
   if (!report) return null;
 
-  const cfg = VERDICT_CONFIG[report.verdict] || VERDICT_CONFIG['Moderate fit'];
+  const cfg = VERDICT_CONFIG[report.verdict] || VERDICT_CONFIG['Borderline Fit'];
 
   return (
     <div className="min-h-screen bg-[#fafafa] font-[Outfit,Inter,sans-serif] overflow-x-hidden pb-28">
@@ -93,9 +110,8 @@ export default function ATSReportPage() {
       </div>
 
       {/* Sticky Navbar */}
-      <div className="sticky top-0 z-50 flex justify-center pt-5 px-4 pointer-events-none">
+      <div className="sticky top-0 z-50 flex justify-center pt-5 px-4 pointer-events-none print:hidden">
         <nav className="w-full max-w-6xl pointer-events-auto floating-nav relative flex items-center justify-between shadow-[0_8px_30px_rgba(0,0,0,0.06)] bg-white/95 backdrop-blur-xl py-3 px-5 rounded-2xl">
-          {/* Left: Logo & Back Button */}
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/')} className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white text-sm font-bold">
@@ -110,28 +126,42 @@ export default function ATSReportPage() {
             </button>
           </div>
 
-          {/* Center: Page Title */}
           <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex">
-            <span className="text-[11px] font-black uppercase tracking-[0.25em] text-slate-400">
-              ATS Analysis Report
-            </span>
+            <span className="text-[11px] font-black uppercase tracking-[0.25em] text-slate-400">ATS Analysis Report</span>
           </div>
 
-          {/* Right: Actions */}
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('/ats')}
               className="text-xs py-2.5 px-4 rounded-full border-[1.5px] border-[var(--brand-primary)] text-[var(--brand-primary)] hover:bg-[var(--brand-light)] transition-colors font-bold whitespace-nowrap">
               🔄 Check Another
             </button>
-            <button onClick={handleDownload} disabled={dlLoading}
-              className="text-xs py-2.5 px-5 rounded-full bg-[#111827] hover:bg-black text-white font-bold transition-colors shadow-sm disabled:opacity-60 whitespace-nowrap">
-              {dlLoading ? '⏳ Generating…' : '⬇️ Download DOCX'}
+            <button onClick={() => setShowGenModal(true)}
+              className="text-xs py-2.5 px-5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold transition-all shadow-md shadow-purple-200 hover:opacity-90 whitespace-nowrap">
+              ✨ Generate Resume
             </button>
+            <div className="relative group">
+              <button disabled={dlLoading}
+                className="text-xs py-2.5 px-5 rounded-full bg-[#111827] hover:bg-black text-white font-bold transition-colors shadow-sm disabled:opacity-60 whitespace-nowrap flex items-center gap-2">
+                {dlLoading ? '⏳ Generating…' : '⬇️ Download'}
+                <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex flex-col overflow-hidden z-50 transform origin-top-right group-hover:scale-100 scale-95">
+                <button onClick={handleDownload} disabled={dlLoading}
+                  className="px-4 py-3 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors">
+                  ⬇️ Download Resume (DOCX)
+                </button>
+                <div className="h-px bg-slate-50 w-full" />
+                <button onClick={() => window.print()}
+                  className="px-4 py-3 text-left text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors">
+                  📄 Export Report (PDF)
+                </button>
+              </div>
+            </div>
           </div>
         </nav>
       </div>
 
-      {/* Hero Banner */}
+      {/* Hero */}
       <div className="max-w-6xl mx-auto px-6 pt-12 pb-8">
         <motion.div {...fade(0)}>
           <p className="text-[10px] font-black text-[var(--brand-primary)] uppercase tracking-[0.25em] mb-3">✨ ATS Resume Checker</p>
@@ -156,72 +186,130 @@ export default function ATSReportPage() {
         </motion.div>
       </div>
 
-      {/* Content Grid */}
+      {/* Content */}
       <div className="max-w-6xl mx-auto px-6 space-y-6">
 
-        {/* Row 1 — Score + Verdict */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <motion.div {...fade(0.05)} className="md:col-span-1">
-            <ScoreCard score={report.finalScore} />
+        {/* 1. Enhanced Executive Summary */}
+        {report.aiAnalysisAvailable && report.enhancedSummary && (
+          <motion.div {...fade(0.03)}>
+            <EnhancedExecutiveSummaryCard enhancedSummary={report.enhancedSummary} />
           </motion.div>
-          <motion.div {...fade(0.1)} className="md:col-span-2">
+        )}
+
+        {/* 2. Score + Verdict */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <motion.div {...fade(0.07)} className="md:col-span-1">
+            <HonestScoreGauge score={report.finalScore} />
+          </motion.div>
+          <motion.div {...fade(0.10)} className="md:col-span-2">
             <VerdictPanel
-              verdict={report.verdict}
-              verdictReason={report.verdictReason}
-              strengthLines={report.strengthLines}
-              cfg={cfg}
-              onDownload={handleDownload}
-              dlLoading={dlLoading}
+              verdict={report.verdict} verdictReason={report.verdictReason}
+              strengthLines={report.strengthLines} cfg={cfg}
+              onDownload={handleDownload} dlLoading={dlLoading}
               onPractice={() => navigate('/setup')}
+              onGenerate={() => setShowGenModal(true)}
             />
           </motion.div>
         </div>
 
-        {/* Row 2 — Sub-scores */}
+        {/* 3. Honest 100-Point Score Breakdown */}
+        <motion.div {...fade(0.12)}>
+          <HonestScoreBreakdown report={report} />
+        </motion.div>
+
+        {/* 4. CGPA Reality Check */}
+        <motion.div {...fade(0.14)}>
+          <CGPAAssessment report={report} />
+        </motion.div>
+
+        {/* 5. Sub-score breakdown */}
         <motion.div {...fade(0.15)}>
           <SubScoreRow report={report} />
         </motion.div>
 
-        {/* Row 3 — Keywords */}
-        <motion.div {...fade(0.2)}>
-          <KeywordPanel matched={report.matchedKeywords} missing={report.missingKeywords} />
-        </motion.div>
-
-        {/* Row 4 — Tailored Summary */}
-        {report.aiAnalysisAvailable && (
-          <motion.div {...fade(0.22)}>
-            <TailoredSummary summary={report.tailoredSummary} />
+        {/* 4. Improvement Simulator */}
+        {report.improvementScenarios?.length > 0 && (
+          <motion.div {...fade(0.16)}>
+            <ImprovementSimulator scenarios={report.improvementScenarios} />
           </motion.div>
         )}
 
-        {/* Row 5 — Section Health + Formatting */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <motion.div {...fade(0.25)}>
-            <SectionHealth sectionFeedback={report.sectionFeedback} skillDepthMap={report.skillDepthMap} />
-          </motion.div>
-          <motion.div {...fade(0.28)}>
-            <FormattingRisks risks={report.formattingRisks} />
-          </motion.div>
-        </div>
+        {/* 5. JD-Calibrated Assessment — dimension scores, blockers, strengths,
+            weaknesses, coverage, action plan, parse warnings, recruiter read */}
+        {report.aiAnalysisAvailable && report.honestAssessment && (
+          <HonestAssessmentPanel assessment={report.honestAssessment} />
+        )}
 
-        {/* Row 6 — Role Level Gap */}
+        {/* 8. ATS Parser Preview */}
+        {report.parserPreview && (
+          <motion.div {...fade(0.28)}>
+            <ATSParserPreview parserPreview={report.parserPreview} />
+          </motion.div>
+        )}
+
+        {/* 9. Keyword Intelligence (category-level) */}
+        {report.categoryKeywords?.length > 0 && (
+          <motion.div {...fade(0.31)}>
+            <KeywordIntelligence categoryKeywords={report.categoryKeywords} />
+          </motion.div>
+        )}
+
+        {/* 10. Keyword Panel (existing) */}
+        <motion.div {...fade(0.34)}>
+          <KeywordPanel matched={report.matchedKeywords} missing={report.missingKeywords} />
+        </motion.div>
+
+        {/* 11. Writing Analysis */}
+        {report.writingAnalysis && (
+          <motion.div {...fade(0.37)}>
+            <WritingAnalysisPanel writingAnalysis={report.writingAnalysis} />
+          </motion.div>
+        )}
+
+        {/* 12. Consistency Checker */}
+        {report.consistencyCheck && (
+          <motion.div {...fade(0.40)}>
+            <ConsistencyChecker consistencyCheck={report.consistencyCheck} />
+          </motion.div>
+        )}
+
+        {/* 13. Section Health */}
+        <motion.div {...fade(0.43)}>
+          <SectionHealth sectionFeedback={report.sectionFeedback} skillDepthMap={report.skillDepthMap} />
+        </motion.div>
+
+        {/* 15. Company Readiness */}
+        {report.companyReadiness?.length > 0 && (
+          <motion.div {...fade(0.49)}>
+            <CompanyReadiness companies={report.companyReadiness} />
+          </motion.div>
+        )}
+
+        {/* 16. Bullet Rewrites */}
+        {report.aiAnalysisAvailable && (
+          <motion.div {...fade(0.52)}>
+            <BulletRewrites rewrites={report.bulletRewrites} />
+          </motion.div>
+        )}
+
+        {/* 18. Role Level Gap */}
         {report.aiAnalysisAvailable && report.roleLevelGap && (
-          <motion.div {...fade(0.30)}>
+          <motion.div {...fade(0.58)}>
             <RoleLevelGap roleLevelGap={report.roleLevelGap} />
           </motion.div>
         )}
 
-        {/* Row 7 — Bullet Rewrites */}
-        <motion.div {...fade(0.32)}>
-          <BulletRewrites rewrites={report.bulletRewrites} />
-        </motion.div>
-
-        {/* Row 8 — Quantification Suggestions */}
+        {/* 21. Tailored Summary */}
         {report.aiAnalysisAvailable && (
-          <motion.div {...fade(0.34)}>
-            <QuantificationSuggestions suggestions={report.quantificationSuggestions} />
+          <motion.div {...fade(0.67)}>
+            <TailoredSummary summary={report.tailoredSummary} />
           </motion.div>
         )}
+
+        {/* 22. Formatting Risks */}
+        <motion.div {...fade(0.70)}>
+          <FormattingRisks risks={report.formattingRisks} />
+        </motion.div>
       </div>
 
       {/* Footer */}
@@ -230,46 +318,21 @@ export default function ATSReportPage() {
           MockMate AI · ATS Resume Checker · Powered by Groq llama-3.3-70b
         </p>
       </div>
+
+      {showGenModal && (
+        <ResumeGeneratorWizard
+          reportId={reportId}
+          jd={report?.jobDescription || ''}
+          onClose={() => setShowGenModal(false)}
+        />
+      )}
     </div>
   );
 }
 
 /* ── Inline sub-components ─────────────────────────────────────────────────── */
 
-function ScoreCard({ score = 0 }) {
-  const clamp  = Math.max(0, Math.min(100, score));
-  const radius = 54, circ = 2 * Math.PI * radius;
-  const dash   = (clamp / 100) * circ;
-  const { color, label, pill } =
-    clamp >= 85 ? { color: '#10B981', label: 'Strong Match',   pill: 'text-emerald-700 bg-emerald-50 border-emerald-200' } :
-    clamp >= 70 ? { color: '#6B46C1', label: 'Good Match',     pill: 'text-[var(--brand-primary)] bg-[var(--brand-light)] border-purple-200' } :
-    clamp >= 50 ? { color: '#F59E0B', label: 'Moderate Match', pill: 'text-amber-700 bg-amber-50 border-amber-200' } :
-                  { color: '#EF4444', label: 'Weak Match',     pill: 'text-red-600 bg-red-50 border-red-200' };
-
-  return (
-    <div className="premium-card h-full flex flex-col items-center justify-center gap-5 py-10">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ATS Score</p>
-      <div className="relative">
-        <svg width="148" height="148" viewBox="0 0 148 148">
-          <circle cx="74" cy="74" r={radius} fill="none" stroke="#F3E8FF" strokeWidth="14" />
-          <circle cx="74" cy="74" r={radius} fill="none" stroke={color} strokeWidth="14"
-            strokeLinecap="round"
-            strokeDasharray={`${dash} ${circ - dash}`}
-            strokeDashoffset={circ / 4}
-            style={{ transition: 'stroke-dasharray 1s ease' }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-black text-[#111]">{clamp}</span>
-          <span className="text-xs font-bold text-slate-400">/100</span>
-        </div>
-      </div>
-      <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${pill}`}>{label}</span>
-    </div>
-  );
-}
-
-function VerdictPanel({ verdict, verdictReason, strengthLines, cfg, onDownload, dlLoading, onPractice }) {
+function VerdictPanel({ verdict, verdictReason, strengthLines, cfg, onDownload, dlLoading, onPractice, onGenerate }) {
   return (
     <div className="premium-card h-full flex flex-col gap-5">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Overall Verdict</p>
@@ -293,16 +356,25 @@ function VerdictPanel({ verdict, verdictReason, strengthLines, cfg, onDownload, 
           </ul>
         </div>
       )}
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-3 mt-auto pt-3 border-t border-black/[0.04]">
-        <button onClick={onDownload} disabled={dlLoading}
-          className="flex-1 min-w-[140px] py-2.5 rounded-full bg-[var(--brand-primary)] text-white text-xs font-bold
-                     uppercase tracking-widest hover:opacity-90 transition-all shadow-sm shadow-purple-900/20 disabled:opacity-60">
-          {dlLoading ? '⏳ Generating…' : '⬇️ Download Improved Resume'}
+      <div className="flex flex-wrap gap-3 mt-auto pt-3 border-t border-black/[0.04] print:hidden">
+        <button onClick={() => onGenerate()}
+          className="flex-1 min-w-[140px] py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-all shadow-md shadow-purple-200">
+          ✨ Generate My Resume
         </button>
+        <div className="flex-1 min-w-[140px] relative group">
+          <button disabled={dlLoading}
+            className="w-full py-2.5 rounded-full bg-[var(--brand-primary)] text-white text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-all shadow-sm shadow-purple-900/20 disabled:opacity-60 flex items-center justify-center gap-2">
+            {dlLoading ? '⏳ Generating…' : '⬇️ Download'}
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex flex-col overflow-hidden z-50 transform origin-bottom group-hover:scale-100 scale-95">
+            <button onClick={onDownload} disabled={dlLoading} className="px-4 py-3 text-center text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors uppercase tracking-wider">⬇️ Download DOCX</button>
+            <div className="h-px bg-slate-50 w-full" />
+            <button onClick={() => window.print()} className="px-4 py-3 text-center text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors uppercase tracking-wider">📄 Export PDF</button>
+          </div>
+        </div>
         <button onClick={onPractice}
-          className="flex-1 min-w-[140px] py-2.5 rounded-full bg-[#111827] text-white text-xs font-bold
-                     uppercase tracking-widest hover:bg-black transition-all shadow-sm">
+          className="flex-1 min-w-[140px] py-2.5 rounded-full bg-[#111827] text-white text-xs font-bold uppercase tracking-widest hover:bg-black transition-all shadow-sm">
           🎤 Practice Interview
         </button>
       </div>
@@ -314,20 +386,17 @@ function SubScoreRow({ report }) {
   return (
     <div className="premium-card">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Score Breakdown</p>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         {SUB_SCORES.map(({ label, key, color }) => {
           const val = report[key] ?? 0;
           return (
-            <div key={key} className="flex flex-col items-center gap-2 p-4 bg-[#fafafa] border border-black/[0.04] rounded-2xl text-center">
-              <span className="text-3xl font-black text-[#111]">{val}</span>
+            <div key={key} className="flex flex-col items-center gap-2 p-3 bg-[#fafafa] border border-black/[0.04] rounded-2xl text-center">
+              <span className="text-2xl font-black text-[#111]">{val}</span>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <motion.div
-                  className={`h-full rounded-full ${color}`}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${val}%` }}
-                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 }}
-                />
+                <motion.div className={`h-full rounded-full ${color}`}
+                  initial={{ width: 0 }} animate={{ width: `${val}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 }} />
               </div>
             </div>
           );

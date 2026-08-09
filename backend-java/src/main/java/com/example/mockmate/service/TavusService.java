@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -102,10 +104,9 @@ public class TavusService {
         payload.put("persona_name", "InterviewBot-" + interviewType + "-" + difficulty);
         payload.put("system_prompt", systemPrompt);
         payload.put("default_replica_id", tavusReplicaId);
-        payload.put("pipeline_mode", "full");
         payload.put("context", "This is a " + difficulty + "-level " + interviewType + " interview. The candidate is " + name + ".");
-        // tavus-gpt-4.1 was deprecated; tavus-gpt-oss is the current recommended default
-        payload.put("layers", Map.of("llm", Map.of("model", "tavus-gpt-oss")));
+        // NOTE: Do NOT include 'layers.llm.model' or 'pipeline_mode' unless on an Enterprise plan
+        //       They cause 422/400 errors that silently fall through to mock mode.
 
         if (isTestMode()) {
             log.warn("TEST MODE: returning mock persona_id");
@@ -119,30 +120,44 @@ public class TavusService {
                     .header("Content-Type", "application/json")
                     .bodyValue(payload)
                     .retrieve()
+                    .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                        clientResponse -> clientResponse.bodyToMono(String.class)
+                            .flatMap(errorBody -> {
+                                log.error("[TavusService] Persona HTTP {} — body: {}", clientResponse.statusCode(), errorBody);
+                                return Mono.error(new RuntimeException("Tavus persona API error: " + errorBody));
+                            })
+                    )
                     .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(30))
                     .block();
             log.info("[TavusService] Persona API raw response: {}", response);
             JsonNode root = objectMapper.readTree(response);
             if (root.has("persona_id")) return root.get("persona_id").asText();
-            if (root.has("id")) return root.get("id").asText();
-            log.error("[TavusService] Persona response had no ID field. Full response: {}", response);
+            if (root.has("id"))         return root.get("id").asText();
+            log.error("[TavusService] Persona response had no ID. Full response: {}", response);
             throw new RuntimeException("Tavus returned no persona_id. Response: " + response);
         } catch (WebClientResponseException e) {
-            log.error("[TavusService] Persona creation HTTP {} error. Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("[TavusService] Persona HTTP {} — body: {}", e.getStatusCode(), e.getResponseBodyAsString());
             return "test-persona-123";
         } catch (Exception e) {
-            log.error("[TavusService] Persona creation unexpected error:", e);
+            log.error("[TavusService] Persona creation error: {}", e.getMessage());
             return "test-persona-123";
         }
     }
 
     public Map<String, String> createConversation(String personaId, String candidateName, String sessionId) {
-        String callbackUrl = backendUrl + "/api/tavus-webhook";
-
         Map<String, Object> payload = new HashMap<>();
         payload.put("persona_id", personaId);
         payload.put("conversation_name", "Interview: " + candidateName);
-        payload.put("callback_url", callbackUrl);
+        
+        String callbackUrl = backendUrl + "/api/tavus-webhook";
+        if (callbackUrl != null && !callbackUrl.contains("localhost") && !callbackUrl.contains("127.0.0.1") && callbackUrl.startsWith("https://")) {
+            payload.put("callback_url", callbackUrl);
+            log.info("[TavusService] Configured webhook callback_url: {}", callbackUrl);
+        } else {
+            log.warn("[TavusService] Skipping callback_url because backend URL is local or non-HTTPS: {}", callbackUrl);
+        }
+
         payload.put("properties", Map.of(
                 "max_call_duration", 1800,
                 "participant_left_timeout", 60,
@@ -166,24 +181,32 @@ public class TavusService {
                     .header("Content-Type", "application/json")
                     .bodyValue(payload)
                     .retrieve()
+                    .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                        clientResponse -> clientResponse.bodyToMono(String.class)
+                            .flatMap(errorBody -> {
+                                log.error("[TavusService] Conversation HTTP {} — body: {}", clientResponse.statusCode(), errorBody);
+                                return Mono.error(new RuntimeException("Tavus conversation API error: " + errorBody));
+                            })
+                    )
                     .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(30))
                     .block();
             log.info("[TavusService] Conversation API raw response: {}", response);
             JsonNode root = objectMapper.readTree(response);
-            String conversationId = root.has("conversation_id") ? root.get("conversation_id").asText() : root.get("id").asText();
+            String conversationId  = root.has("conversation_id") ? root.get("conversation_id").asText() : root.get("id").asText();
             String conversationUrl = root.get("conversation_url").asText();
-            log.info("[TavusService] Live conversation created → ID: {}, URL: {}", conversationId, conversationUrl);
+            log.info("[TavusService] Live conversation → ID: {}, URL: {}", conversationId, conversationUrl);
             return Map.of("conversation_id", conversationId, "conversation_url", conversationUrl);
         } catch (WebClientResponseException e) {
-            log.error("[TavusService] Conversation creation HTTP {} error. Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+            log.error("[TavusService] Conversation HTTP {} — body: {}", e.getStatusCode(), e.getResponseBodyAsString());
             return Map.of(
-                    "conversation_id", "test-conv-" + candidateName.toLowerCase().replace(" ", "-") + "-123",
+                    "conversation_id", "test-conv-fallback",
                     "conversation_url", "https://tavus.daily.co/test-room"
             );
         } catch (Exception e) {
-            log.error("[TavusService] Conversation creation unexpected error:", e);
+            log.error("[TavusService] Conversation creation error: {}", e.getMessage());
             return Map.of(
-                    "conversation_id", "test-conv-" + candidateName.toLowerCase().replace(" ", "-") + "-123",
+                    "conversation_id", "test-conv-fallback",
                     "conversation_url", "https://tavus.daily.co/test-room"
             );
         }
@@ -192,14 +215,15 @@ public class TavusService {
     public void endConversation(String conversationId) {
         if (isTestMode()) return;
         try {
-            webClient.delete()
-                    .uri("/conversations/" + conversationId)
+            webClient.post()
+                    .uri("/conversations/" + conversationId + "/end")
                     .header("x-api-key", tavusApiKey)
                     .retrieve()
                     .bodyToMono(Void.class)
                     .block();
+            log.info("Successfully ended Tavus conversation: {}", conversationId);
         } catch (Exception e) {
-            log.error("Failed to end Tavus conversation", e);
+            log.error("Failed to end Tavus conversation: {}", conversationId, e);
         }
     }
 
@@ -211,7 +235,7 @@ public class TavusService {
 
         try {
             String response = webClient.get()
-                    .uri("/conversations/" + conversationId)
+                    .uri("/conversations/" + conversationId + "?verbose=true")
                     .header("x-api-key", tavusApiKey)
                     .retrieve()
                     .bodyToMono(String.class)
@@ -221,23 +245,55 @@ public class TavusService {
             log.info("Fetched Tavus conversation data for {}", conversationId);
 
             List<Map<String, Object>> turns = new ArrayList<>();
+            JsonNode transcriptNode = null;
+
             if (root.has("transcript")) {
-                JsonNode transcriptNode = root.get("transcript");
-                if (transcriptNode.isArray()) {
-                    for (JsonNode turnNode : transcriptNode) {
-                        Map<String, Object> turn = new HashMap<>();
-                        // Tavus V2 transcript format usually has 'text', 'role', and 'start_time'
-                        turn.put("text", turnNode.path("text").asText());
-                        String role = turnNode.path("role").asText("candidate");
-                        turn.put("role", "assistant".equalsIgnoreCase(role) || "ai".equalsIgnoreCase(role) ? "interviewer" : "candidate");
-                        
-                        // Convert relative start_time to absolute timestamp_ms if possible
-                        double startTime = turnNode.path("start_time").asDouble(0.0);
-                        turn.put("timestamp_ms", System.currentTimeMillis()); // Fallback for now
-                        turn.put("relative_seconds", startTime);
-                        
-                        turns.add(turn);
+                transcriptNode = root.get("transcript");
+            } else if (root.has("events") && root.get("events").isArray()) {
+                for (JsonNode eventNode : root.get("events")) {
+                    if ("application.transcription_ready".equals(eventNode.path("event_type").asText())) {
+                        JsonNode props = eventNode.get("properties");
+                        if (props != null && props.has("transcript")) {
+                            transcriptNode = props.get("transcript");
+                            break;
+                        }
                     }
+                }
+            }
+
+            if (transcriptNode != null && transcriptNode.isArray()) {
+                for (JsonNode turnNode : transcriptNode) {
+                    Map<String, Object> turn = new HashMap<>();
+                    String text = turnNode.has("content") ? turnNode.path("content").asText() : turnNode.path("text").asText();
+
+                    // ── SYSTEM PROMPT LEAK GUARD ────────────────────────────────────────────
+                    // Tavus sometimes returns the persona system prompt as the first "assistant"
+                    // turn. Detect and drop it: system prompts are extremely long and contain
+                    // signature strings that never appear in real interview speech.
+                    boolean isSystemPromptLeak = text.contains("You are InterviewBot")
+                            || text.contains("Behavior Rules:")
+                            || text.contains("SYSTEM_PROMPT")
+                            || (text.length() > 2000 && text.contains("interview"));
+                    if (isSystemPromptLeak) {
+                        log.warn("[TavusService] Dropping system-prompt leak turn ({} chars) for conversation {}",
+                                text.length(), conversationId);
+                        continue;
+                    }
+                    // ────────────────────────────────────────────────────────────────────────
+
+                    turn.put("text", text);
+
+                    String role = turnNode.path("role").asText("candidate");
+                    turn.put("role", "assistant".equalsIgnoreCase(role) || "ai".equalsIgnoreCase(role) ? "interviewer" : "candidate");
+                    
+                    double startTime = turnNode.has("start_time") 
+                            ? turnNode.path("start_time").asDouble(0.0) 
+                            : turnNode.path("seconds_from_start").asDouble(0.0);
+                    
+                    turn.put("timestamp_ms", System.currentTimeMillis()); // Fallback for now
+                    turn.put("relative_seconds", startTime);
+                    
+                    turns.add(turn);
                 }
             }
             return turns;

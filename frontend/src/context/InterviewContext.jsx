@@ -7,14 +7,16 @@ const initialState = {
   sessionId: getInitialSessionId(),
   resumeData: null,
   questions: [],
-  interviewConfig: { type: 'Technical', difficulty: 'Mid', language: 'English' },
+  interviewConfig: { type: 'Technical', difficulty: 'Mid', language: 'English', noAvatar: false },
   conversationUrl: null,
   conversationId: null,
+  triggerSubmit: false,
   sessionMetrics: {
     transcript: '',          // full rolling transcript text
     interimTranscript: '',   // real-time active candidate speech
     revealedQuestionIndex: -1, // hidden until spoken by AI
     isAIAsking: false,       // true when AI is speaking/asking
+    isGeneratingQuestion: false, // true when backend is generating next question
     fillerCounts: {},        // { word: count }
     totalFillers: 0,
     wpm: 0,
@@ -53,6 +55,8 @@ const A = {
   SET_INTERIM_TRANSCRIPT: 'SET_INTERIM_TRANSCRIPT',
   SET_REVEALED_QUESTION_INDEX: 'SET_REVEALED_QUESTION_INDEX',
   SET_AI_ASKING:        'SET_AI_ASKING',
+  SET_GENERATING_QUESTION: 'SET_GENERATING_QUESTION',
+  SET_TRIGGER_SUBMIT:   'SET_TRIGGER_SUBMIT',
   RESET:                'RESET',
 };
 
@@ -118,6 +122,18 @@ function reducer(state, action) {
           isAIAsking: action.payload,
         },
       };
+
+    case A.SET_GENERATING_QUESTION:
+      return {
+        ...state,
+        sessionMetrics: {
+          ...state.sessionMetrics,
+          isGeneratingQuestion: action.payload,
+        },
+      };
+
+    case A.SET_TRIGGER_SUBMIT:
+      return { ...state, triggerSubmit: action.payload };
 
     case A.UPDATE_FILLER_COUNTS:
       return {
@@ -221,6 +237,8 @@ export function InterviewProvider({ children }) {
   const setInterimTranscript = useCallback((text) => dispatch({ type: A.SET_INTERIM_TRANSCRIPT, payload: text }), []);
   const setRevealedQuestionIndex = useCallback((idx) => dispatch({ type: A.SET_REVEALED_QUESTION_INDEX, payload: idx }), []);
   const setAIAsking       = useCallback((asking) => dispatch({ type: A.SET_AI_ASKING,        payload: asking }), []);
+  const setGeneratingQuestion = useCallback((gen) => dispatch({ type: A.SET_GENERATING_QUESTION, payload: gen }), []);
+  const setTriggerSubmit  = useCallback((trigger) => dispatch({ type: A.SET_TRIGGER_SUBMIT,  payload: trigger }), []);
   const updateFillerCounts= useCallback((counts, total) =>
     dispatch({ type: A.UPDATE_FILLER_COUNTS, payload: { counts, total } }), []);
   const updateWPM         = useCallback((wpm)  => dispatch({ type: A.UPDATE_WPM,           payload: wpm }),   []);
@@ -249,6 +267,8 @@ export function InterviewProvider({ children }) {
       setInterimTranscript,
       setRevealedQuestionIndex,
       setAIAsking,
+      setGeneratingQuestion,
+      setTriggerSubmit,
       updateFillerCounts,
       updateWPM,
       pushEmotionSnapshot,

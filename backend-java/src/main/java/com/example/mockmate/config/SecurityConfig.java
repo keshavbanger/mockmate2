@@ -1,5 +1,6 @@
 package com.example.mockmate.config;
 
+import com.example.mockmate.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -9,6 +10,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
@@ -16,9 +18,11 @@ import org.springframework.web.cors.CorsConfigurationSource;
 public class SecurityConfig {
 
     private final CorsConfigurationSource corsConfigurationSource;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(CorsConfigurationSource corsConfigurationSource) {
+    public SecurityConfig(CorsConfigurationSource corsConfigurationSource, JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.corsConfigurationSource = corsConfigurationSource;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
@@ -34,18 +38,14 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/session/**").permitAll()
-                        .requestMatchers("/api/parse-resume").permitAll()
-                        .requestMatchers("/api/generate-questions").permitAll()
-                        .requestMatchers("/api/start-interview").permitAll()
-                        .requestMatchers("/api/save-turn").permitAll()
-                        .requestMatchers("/api/end-interview").permitAll()
-                        .requestMatchers("/api/save-emotion-snapshots").permitAll()
+                        .requestMatchers("/api/tavus-webhook").permitAll()
                         .requestMatchers("/api/generate-report").permitAll()
-                        .requestMatchers("/api/mock-chat").permitAll()
-                        .requestMatchers("/api/ats/**").permitAll()   // ATS Resume Checker
+                        .requestMatchers("/api/recordings/**").permitAll()
+                        .requestMatchers("/api/tech-interview/plan").permitAll()
+                        .requestMatchers("/health").permitAll()
                         .anyRequest().authenticated()
-                );
+                )
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

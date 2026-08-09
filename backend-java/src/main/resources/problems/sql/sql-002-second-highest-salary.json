@@ -1,0 +1,23 @@
+{
+  "id": "sql-002",
+  "title": "Second Highest Salary",
+  "difficulty": "EASY",
+  "category": "AGGREGATION",
+  "companies": ["Amazon", "Google", "Microsoft"],
+  "problemStatement": "Write a SQL query to find the second highest salary from the Employee table. If there is no second highest salary, return null.",
+  "schemaDDL": [
+    "CREATE TABLE Employee (id INT PRIMARY KEY, salary INT);",
+    "INSERT INTO Employee (id, salary) VALUES (1, 100), (2, 200), (3, 300);"
+  ],
+  "sampleData": [
+    { "id": 1, "salary": 100 },
+    { "id": 2, "salary": 200 },
+    { "id": 3, "salary": 300 }
+  ],
+  "expectedOutput": [
+    { "SecondHighestSalary": 200 }
+  ],
+  "hints": [
+    "Consider using DISTINCT and ORDER BY BY salary DESC with OFFSET/LIMIT, or a subquery using MAX()."
+  ]
+}

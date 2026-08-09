@@ -1,91 +1,77 @@
-# 🎙️ InterviewBot — AI Mock Interview Platform
+# 🎙️ MockMate AI — Advanced Technical & DSA AI Interview Platform
 
-An end-to-end AI mock interview platform with resume parsing, live facial emotion analysis, filler-word detection, and a Gemini-generated performance report.
-
----
-
-## ✨ Features
-
-- **Resume Upload** — PDF parsed by PyMuPDF + structured by Gemini 1.5 Flash  
-- **Tavus CVI** — AI interviewer avatar conducts a live WebRTC video interview  
-- **MediaPipe FaceLandmarker** — Real-time emotion + gaze analysis in-browser (no video sent to server)  
-- **Filler word detection** — Client-side live ticker + server-side authoritative counts  
-- **Professional PDF report** — Gemini-generated narrative + Chart.js visualizations  
+MockMate AI is an enterprise-grade, interactive AI technical interview platform designed to simulate realistic coding assessments, system design interviews, and technical behavioral evaluations. Powered by a **Spring Boot 3** Java backend, **Groq Llama 3.3 70B / Gemini** LLM orchestration, and a **React 18 + Monaco Editor** frontend, MockMate delivers real-time DSA code execution via an in-memory Reflection sandbox, SQL evaluation, and multi-round adaptive interviews.
 
 ---
 
-## 🔧 Prerequisites
+## ✨ Key Features
 
-| Tool | Version |
-|------|---------|
-| Python | 3.11 or 3.12 |
-| Node.js | 18+ (LTS recommended) |
-| npm | 9+ |
-| Docker + Docker Compose | Optional, for containerized run |
-
----
-
-## 🔑 API Keys Required
-
-### 1. Google Gemini API Key
-1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Click **Create API Key**
-3. Copy the key → `GEMINI_API_KEY`
-
-### 2. Tavus API Key + Replica ID
-1. Sign up at [tavus.io](https://www.tavus.io)
-2. Go to **Settings → API Keys** → create a key → `TAVUS_API_KEY`
-3. Go to **Replicas** in the Tavus dashboard
-4. Select or create a replica → copy its ID (looks like `rf4e9d9790f0`) → `TAVUS_REPLICA_ID`
-
-### 3. Sarvam AI API Key (optional TTS)
-1. Sign up at [sarvam.ai](https://www.sarvam.ai)
-2. Generate an API key → `SARVAM_API_KEY`
+- **⚡ Fast-Track DSA Compiler Mode** — Option to skip introductory dialogue and jump immediately into live, hands-on DSA coding questions (e.g. *Two Sum*, *Reverse Linked List*, etc.) with pre-configured problem descriptions and starter boilerplate.
+- **💻 Java Reflection & Sandbox Compiler** — Safe, in-memory compilation and dynamic reflection execution of candidate code submissions against multi-case unit testing harnesses.
+- **🎯 Dynamic Interview Plan Generator** — Tailors multi-round plans (Intro, DSA, System Design, General Technical, SQL) based on role level, company style, target tech stack, and duration.
+- **🤖 Adaptive AI Interviewer Engine** — Groq-powered multi-turn dialogue with turn validation, anti-scolding guardrails, essay-length response truncation, and single-sentence DSA hints.
+- **📊 Real-time Execution Feedback & Scoring** — Instant evaluation of test case pass rates, time/space complexity analysis, and adaptive difficulty escalation.
+- **📝 Comprehensive Report Generation** — Automatic generation of detailed performance breakdowns, code quality reviews, running average trend analysis, and printable PDF/Markdown scorecards.
 
 ---
 
-## 🚀 Setup & Run
+## 🛠️ Technology Stack
 
-### Step 1 — Clone & configure environment
+### Backend (`backend-java`)
+- **Framework**: Java 17, Spring Boot 3.4.1, Spring Security (JWT Authentication), Spring Data JPA
+- **Database**: H2 (In-memory development) / PostgreSQL ready
+- **LLM Integration**: Groq API (Llama 3.3 70B Versatile, JSON Mode), Jackson ObjectMapper
+- **Execution Engine**: Java Reflection API + In-Memory Dynamic Compiler (`javax.tools.JavaCompiler`)
+- **Build System**: Apache Maven 3.9+ (`mvnw.cmd`)
+
+### Frontend (`frontend`)
+- **Framework**: React 18, Vite
+- **Code Editor**: `@monaco-editor/react` (Monaco Editor with syntax highlighting & dark mode)
+- **Layout & Styling**: `react-split` (resizable split-pane interface), Lucide React Icons, Vanilla CSS Design System
+- **State Management & Routing**: React Context API, `react-router-dom` v6
+
+---
+
+## 🚀 Quick Start Guide
+
+### Prerequisites
+- **Java**: OpenJDK 17 or higher
+- **Node.js**: 18+ (LTS) & `npm` 9+
+- **API Keys**: Groq API Key (get key at [Groq Console](https://console.groq.com/))
+
+---
+
+### Step 1 — Configure Environment Variables
+
+#### Backend Configuration
+Create or edit `backend-java/src/main/resources/application.properties` (or set environment variables):
+```properties
+server.port=8080
+groq.api.key=YOUR_GROQ_API_KEY
+groq.model=llama-3.3-70b-versatile
+```
+
+---
+
+### Step 2 — Start the Backend (Spring Boot)
 
 ```bash
-git clone <your-repo-url>
-cd ai-mock-interview
+cd backend-java
 
-# Copy env template and fill in your keys
-cp backend/.env.example backend/.env
+# On Windows (PowerShell/CMD):
+.\mvnw.cmd spring-boot:run
+
+# On Linux/macOS:
+./mvnw spring-boot:run
 ```
 
-Edit `backend/.env`:
-```env
-GEMINI_API_KEY=AIza...
-TAVUS_API_KEY=tav_...
-TAVUS_REPLICA_ID=rf4e9d9790f0
-SARVAM_API_KEY=sk_...          # optional
-BACKEND_URL=http://localhost:8000
-```
+The Spring Boot backend will start on **`http://localhost:8080`**.
 
-### Step 2 — Backend
+---
 
-```bash
-cd backend
+### Step 3 — Start the Frontend (React + Vite)
 
-# Create a virtual environment (recommended)
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # macOS/Linux
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start the FastAPI server (with hot-reload)
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-API docs available at: **http://localhost:8000/docs**
-
-### Step 3 — Frontend
-
+In a separate terminal tab/window:
 ```bash
 cd frontend
 
@@ -96,126 +82,83 @@ npm install
 npm run dev
 ```
 
-Frontend runs at: **http://localhost:5173** (or 5174 if 5173 is in use)
+The React frontend will start on **`http://localhost:5173`** (with automatic API proxying to `http://localhost:8080`).
 
 ---
 
-## 🐳 Docker Compose (Optional)
+## 🎮 How to Use
 
-```bash
-# From project root
-cp backend/.env.example backend/.env
-# Fill in .env
+1. **Setup Page (`/tech-setup`)**:
+   - Choose Role Level (e.g., *Senior Software Engineer*), Company Style (*FAANG / Big Tech*), and Focus Areas (*DSA, System Design, Concurrency*).
+   - **⚡ Fast-Track Mode**: Check **"Direct to DSA Coding Assessment"** if you want to skip introductory greetings and jump straight into solving coding problems.
+   - Click **Generate Custom Plan & Launch**.
 
-docker compose up --build
-```
+2. **Interview Room (`/tech-interview/:sessionId`)**:
+   - Interact with the AI Interviewer via chat or speech.
+   - For DSA rounds, the split-pane editor will auto-launch with problem specifications, boilerplate code, and custom test-runner controls (**Run** and **Submit**).
+   - Real-time compiler output displays test results, runtime exceptions, or detailed test case pass counts.
 
-- Backend: http://localhost:8000  
-- Frontend: http://localhost:5173
+3. **Report Page (`/tech-report/:sessionId`)**:
+   - View your overall score, detailed round breakdown, complexity feedback, and download your final PDF/Markdown performance report.
 
 ---
 
-## 🗺️ Architecture
+## 🗺️ Project Architecture
 
 ```
 USER BROWSER (http://localhost:5173)
-┌────────────────────────────────────────────────────────────┐
-│  SetupPage                                                  │
-│   ├─ PDF Upload → POST /api/parse-resume (PyMuPDF+Gemini)  │
-│   └─ Config → POST /api/generate-questions (Gemini)        │
-│              → POST /api/start-interview (Tavus)            │
-│                                                            │
-│  InterviewRoom                                              │
-│   ├─ TavusAvatar <iframe>   (WebRTC — Tavus cloud)         │
-│   │   └─ postMessage transcript events → useInterview ctx  │
-│   └─ CandidatePanel                                        │
-│       ├─ getUserMedia (webcam, audio=false)                 │
-│       ├─ MediaPipe FaceLandmarker (WASM, CPU/GPU)          │
-│       │   └─ emotion snapshots every 5s → context          │
-│       └─ Filler word regex (client-side, real-time)        │
-│                                                            │
-│  End Interview flow:                                        │
-│   POST /api/end-interview → 2s delay → POST /api/generate-report
-│                                                            │
-│  ReportPage                                                 │
-│   ├─ Score cards (4× /10)                                  │
-│   ├─ Chart.js: Bar (fillers) + Line (Q scores) + Pie (emo) │
-│   ├─ Collapsible per-question breakdown (7×)               │
-│   └─ window.print() → PDF                                  │
-└────────────────────────────────────────────────────────────┘
-           │  /api/* proxied to localhost:8000
-           ▼
-FASTAPI BACKEND (http://localhost:8000)
-┌───────────────────────────────────────────┐
-│  /api/parse-resume     PyMuPDF + Gemini   │
-│  /api/generate-questions   Gemini 1.5 Flash│
-│  /api/start-interview      Tavus CVI API  │
-│  /api/save-turn            session_store  │
-│  /api/end-interview        Tavus CVI API  │
-│  /api/save-emotion-snapshots session_store│
-│  /api/generate-report      Gemini + filler│
-│  /api/tavus-webhook        event handler  │
-│  /api/session/{id}         session_store  │
-│  In-memory sessions · 2hr TTL · MVP only  │
-└───────────────────────────────────────────┘
-           │
-           ▼
-EXTERNAL SERVICES
-  ┌──────────────────────┐  ┌──────────────────────┐
-  │  Tavus CVI (WebRTC)  │  │ Google Gemini 1.5 Flash│
-  │  AI avatar, STT,     │  │ Resume parse, questions│
-  │  transcript events   │  │ report generation      │
-  └──────────────────────┘  └──────────────────────┘
+ ┌───────────────────────────────────────────────────────────────┐
+ │  TechInterviewSetupPage.jsx                                   │
+ │   ├─ Config selection (Role, Style, Duration, Fast-Track)    │
+ │   └─ POST /api/tech-interview/plan (Generate Plan)           │
+ │                                                               │
+ │  TechInterviewPage.jsx (Split Pane Interface)                  │
+ │   ├─ AI Chat Window (Multi-turn guidance, short hints)       │
+ │   └─ Code Editor (Monaco Editor + Java / SQL execution controls)│
+ └──────────────────────────────┬────────────────────────────────┘
+                                │ API proxy (/api/* → localhost:8080)
+                                ▼
+ SPRING BOOT BACKEND (http://localhost:8080)
+ ┌───────────────────────────────────────────────────────────────┐
+ │  TechnicalInterviewController                                 │
+ │   ├─ POST /plan               → AIInterviewerService (Plan)   │
+ │   ├─ POST /start              → TechInterviewStateService     │
+ │   ├─ POST /{sessionId}/answer → Code execution & AI Turn      │
+ │   └─ POST /{sessionId}/execute-code → Reflection Test Runner │
+ │                                                               │
+ │  Services:                                                    │
+ │   ├─ CodeExecutionService     (In-Memory Java Compiler + Refl)│
+ │   ├─ AIInterviewerService     (Groq Llama 3.3 70B JSON mode) │
+ │   └─ SQLExecutionService      (In-memory SQL Sandbox)         │
+ └───────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📁 Project Structure
+## 📁 Repository Structure
 
 ```
-ai-mock-interview/
-├── backend/
-│   ├── main.py               # FastAPI app, CORS, routes
-│   ├── session_store.py      # In-memory sessions + TTL cleanup
-│   ├── resume_parser.py      # PyMuPDF + Gemini extraction
-│   ├── question_generator.py # Gemini question generation
-│   ├── tavus_service.py      # Tavus API (persona + conversation)
-│   ├── filler_detector.py    # Filler word count + answer quality
-│   ├── report_generator.py   # Full report assembly via Gemini
-│   ├── dependencies.py       # Gemini singleton dependency
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── Dockerfile
-│   └── routes/
-│       ├── resume.py · questions.py · interview.py
-│       ├── session.py · report.py · webhook.py
+keiyeta 2/
+├── backend-java/                  # Spring Boot 3 Backend
+│   ├── src/main/java/com/example/mockmate/
+│   │   ├── controller/            # REST API Endpoints (TechnicalInterviewController, Auth, etc.)
+│   │   ├── model/techinterview/   # Plan, Session, Turn, and DSA Attempt Data Models
+│   │   ├── service/               # AIInterviewerService, CodeExecutionService, StateService
+│   │   └── config/                # Security & CORS Configurations
+│   ├── pom.xml                    # Maven Dependencies & Build Setup
+│   └── mvnw.cmd / mvnw            # Maven Wrapper Executables
 │
-└── frontend/
+└── frontend/                      # React 18 + Vite Frontend
     ├── src/
-    │   ├── context/InterviewContext.jsx   # Global state (useReducer)
-    │   ├── pages/SetupPage.jsx            # Upload + configure + start
-    │   ├── pages/InterviewRoom.jsx        # Live interview UI
-    │   ├── pages/ReportPage.jsx           # Charts + feedback
-    │   ├── components/TavusAvatar.jsx     # Tavus iframe embed
-    │   ├── components/CandidatePanel.jsx  # Webcam + MediaPipe
-    │   ├── components/Toast.jsx           # Toast notifications
-    │   └── utils/api.js · fillerWords.js
-    ├── vite.config.js         # /api proxy → localhost:8000
-    ├── tailwind.config.js
-    └── package.json
+    │   ├── pages/                 # TechInterviewSetupPage, TechInterviewPage, TechReportPage
+    │   ├── components/            # Split Editor, Code execution panel, Chat UI
+    │   └── utils/                 # API client utilities
+    ├── package.json
+    └── vite.config.js
 ```
 
 ---
 
-## 🛑 Known Limitations (MVP)
+## 🛡️ License
 
-- Sessions are **in-memory** — all data is lost on backend restart
-- No authentication or user accounts
-- MediaPipe requires a modern browser with WebAssembly support
-- Tavus CVI `postMessage` transcript events depend on your Tavus plan tier
-
----
-
-## 📄 License
-
-MIT
+Distributed under the MIT License. See `LICENSE` for more information.

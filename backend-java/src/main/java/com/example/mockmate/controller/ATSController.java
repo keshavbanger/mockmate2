@@ -19,7 +19,6 @@ import java.util.Optional;
 @Slf4j
 @RestController
 @RequestMapping("/api/ats")
-@CrossOrigin(origins = "http://localhost:5173")
 @RequiredArgsConstructor
 public class ATSController {
 
@@ -73,19 +72,43 @@ public class ATSController {
         if (report.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
+        if (!isOwnedByCaller(report.get(), authHeader)) {
+            return ResponseEntity.status(403).body(Map.of("error", "You do not have access to this report"));
+        }
         return ResponseEntity.ok(report.get());
     }
 
     // ── GET /api/ats/report/{reportId}/download ───────────────────────────────────
     @GetMapping("/report/{reportId}/download")
-    public ResponseEntity<byte[]> downloadImproved(@PathVariable String reportId) {
-        log.info("[ATS] /download reportId={}", reportId);
+    public ResponseEntity<byte[]> downloadImproved(
+            @PathVariable String reportId,
+            @RequestParam(required = false, defaultValue = "") String jd,
+            @RequestParam(required = false, defaultValue = "classic") String template,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        log.info("[ATS] /download reportId={} template={}", reportId, template);
+
+        Optional<ATSReport> existing = atsAnalyzerService.getReport(reportId);
+        if (existing.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isOwnedByCaller(existing.get(), authHeader)) {
+            return ResponseEntity.status(403).build();
+        }
+
         try {
-            byte[] docxBytes = atsDownloadService.generate(reportId);
+            com.example.mockmate.model.ATSDownloadResult result =
+                atsDownloadService.generate(reportId, jd, template);
+            String name = result.getReconstructed() != null && result.getReconstructed().getName() != null
+                ? result.getReconstructed().getName().trim().replaceAll("[^a-zA-Z0-9_\\-]","_").toLowerCase()
+                : "improved";
             return ResponseEntity.ok()
-                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"improved_resume.docx\"")
-                    .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-                    .body(docxBytes);
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=\"" + name + "_resume.docx\"")
+                    .header("X-ATS-Score", String.valueOf(result.getValidation().getAtsScore()))
+                    .header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "X-ATS-Score")
+                    .contentType(org.springframework.http.MediaType.parseMediaType(
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                    .body(result.getDocxBytes());
         } catch (Exception e) {
             log.error("[ATS] Download failed for reportId={}", reportId, e);
             return ResponseEntity.internalServerError().build();
@@ -93,12 +116,20 @@ public class ATSController {
     }
 
     // ── GET /api/ats/history/{userId} ─────────────────────────────────────────────
+    // Note: {userId} in the path is NOT trusted — history is always scoped to the
+    // caller's own identity as resolved from their JWT, to prevent one user from
+    // reading another user's report history by guessing/enumerating userIds.
     @GetMapping("/history/{userId}")
     public ResponseEntity<?> getHistory(
             @PathVariable String userId,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        List<ATSReport> history = atsAnalyzerService.getHistory(userId);
+        String callerId = resolveUserId(authHeader);
+        if ("anonymous".equals(callerId)) {
+            return ResponseEntity.status(401).body(Map.of("error", "Login required to view report history"));
+        }
+
+        List<ATSReport> history = atsAnalyzerService.getHistory(callerId);
         return ResponseEntity.ok(Map.of("reports", history, "count", history.size()));
     }
 
@@ -142,5 +173,16 @@ public class ATSController {
             }
         }
         return "anonymous";
+    }
+
+    // ── Helper: only "anonymous" (guest-created) reports are accessible without a
+    // matching owner; any report tied to a real account requires the caller's JWT
+    // to resolve to that same userId. ─────────────────────────────────────────────
+    private boolean isOwnedByCaller(ATSReport report, String authHeader) {
+        String owner = report.getUserId();
+        if (owner == null || "anonymous".equals(owner)) {
+            return true;
+        }
+        return owner.equals(resolveUserId(authHeader));
     }
 }
