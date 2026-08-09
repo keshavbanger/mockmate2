@@ -101,17 +101,19 @@ public class AuthService {
         return verify(request);
     }
 
+    @Transactional
     public TokenResponse signup(UserSignupRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+        if (userRepository.existsByEmail(normalizedEmail)) {
             throw new IllegalArgumentException("Email already registered");
         }
 
         User user = User.builder()
-                .email(request.getEmail())
+                .email(normalizedEmail)
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
-                .fullName((request.getFirstName() != null ? request.getFirstName() : "") + " " + 
-                          (request.getLastName() != null ? request.getLastName() : ""))
+                .fullName(((request.getFirstName() != null ? request.getFirstName() : "") + " " + 
+                           (request.getLastName() != null ? request.getLastName() : "")).trim())
                 .username(request.getUsername())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .createdAt(LocalDateTime.now())
@@ -133,8 +135,10 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional
     public TokenResponse login(UserLoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
 
         // Accounts created via Supabase/OAuth (verify()/register()) never set a

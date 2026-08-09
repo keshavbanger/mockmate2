@@ -11,7 +11,11 @@ spring:
     username: ${SUPABASE_DB_USERNAME:postgres}
     password: ${SUPABASE_DB_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      auto-commit: true
+      connection-test-query: SELECT 1
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: ${DDL_AUTO:none}
     show-sql: true

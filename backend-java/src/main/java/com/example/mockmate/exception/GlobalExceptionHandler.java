@@ -27,6 +27,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex) {
+        Map<String, String> response = new HashMap<>();
+        if (ex.getMessage() != null && ex.getMessage().contains("users_email_key")) {
+            response.put("detail", "This email address is already registered. Please sign in instead.");
+        } else {
+            response.put("detail", "Database constraint error. Please verify your input details.");
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGeneralExceptions(Exception ex) {
         Map<String, String> response = new HashMap<>();
