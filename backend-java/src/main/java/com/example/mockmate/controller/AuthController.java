@@ -7,6 +7,7 @@ import com.example.mockmate.dto.response.TokenResponse;
 import com.example.mockmate.dto.response.UserResponse;
 import com.example.mockmate.model.User;
 import com.example.mockmate.service.AuthService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
