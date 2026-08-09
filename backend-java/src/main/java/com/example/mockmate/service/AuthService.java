@@ -154,6 +154,13 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional
+    public void deleteAccount(User user) {
+        if (user != null && user.getId() != null) {
+            userRepository.deleteById(user.getId());
+        }
+    }
+
     public UserResponse mapToResponse(User user) {
         return UserResponse.builder()
                 .id(user.getId())

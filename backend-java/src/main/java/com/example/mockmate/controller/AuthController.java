@@ -56,4 +56,13 @@ public class AuthController {
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody UserLoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
+
+    @DeleteMapping("/account")
+    public ResponseEntity<Void> deleteAccount(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        authService.deleteAccount(user);
+        return ResponseEntity.noContent().build();
+    }
 }
