@@ -23,15 +23,24 @@ public class AuthController {
     private final com.example.mockmate.service.ResendEmailService resendEmailService;
 
     @GetMapping("/test-email")
-    public ResponseEntity<java.util.Map<String, String>> testEmail(@RequestParam(required = false) String email) {
+    public ResponseEntity<java.util.Map<String, Object>> testEmail(@RequestParam(required = false) String email) {
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", "Query parameter 'email' is required. Usage: /api/auth/test-email?email=your@email.com"));
         }
-        String result = resendEmailService.testWelcomeEmail(email);
-        return ResponseEntity.ok(java.util.Map.of(
-            "targetEmail", email,
-            "result", result != null ? result : "ERROR: Received null response from Resend service"
-        ));
+        try {
+            String result = resendEmailService.testWelcomeEmail(email);
+            return ResponseEntity.ok(java.util.Map.of(
+                "targetEmail", email,
+                "result", result != null ? result : "ERROR: Received null response from Resend service"
+            ));
+        } catch (Throwable t) {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            t.printStackTrace(new java.io.PrintWriter(sw));
+            return ResponseEntity.status(500).body(java.util.Map.of(
+                "error", "Exception in testEmail: " + t.getClass().getName() + " - " + t.getMessage(),
+                "stackTrace", sw.toString()
+            ));
+        }
     }
 
     @PostMapping("/verify")
