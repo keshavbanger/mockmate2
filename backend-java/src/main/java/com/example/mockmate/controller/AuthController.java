@@ -23,21 +23,19 @@ public class AuthController {
     private final com.example.mockmate.service.ResendEmailService resendEmailService;
 
     @GetMapping("/trial-email")
-    public ResponseEntity<java.util.Map<String, Object>> trialEmail(@RequestParam(defaultValue = "bangerkeshav247@gmail.com") String email) {
+    public ResponseEntity<java.util.Map<String, Object>> trialEmail(@RequestParam(required = false) String email) {
+        String target = (email != null && !email.isBlank()) ? email.trim() : "bangerkeshav247@gmail.com";
+        java.util.Map<String, Object> responseMap = new java.util.HashMap<>();
+        responseMap.put("recipient", target);
         try {
-            String result = resendEmailService.testWelcomeEmail(email);
-            return ResponseEntity.ok(java.util.Map.of(
-                "recipient", email,
-                "status", result != null && result.startsWith("SUCCESS") ? "SUCCESS" : "FAIL",
-                "resendDetails", result != null ? result : "No response"
-            ));
+            String result = resendEmailService.testWelcomeEmail(target);
+            responseMap.put("status", (result != null && result.startsWith("SUCCESS")) ? "SUCCESS" : "FAIL");
+            responseMap.put("resendDetails", String.valueOf(result));
         } catch (Throwable e) {
-            return ResponseEntity.ok(java.util.Map.of(
-                "recipient", email,
-                "status", "ERROR",
-                "error", e.getClass().getName() + ": " + (e.getMessage() != null ? e.getMessage() : "null")
-            ));
+            responseMap.put("status", "ERROR");
+            responseMap.put("error", e.getClass().getName() + ": " + e.getMessage());
         }
+        return ResponseEntity.ok(responseMap);
     }
 
     @PostMapping("/verify")
