@@ -28,14 +28,14 @@ public class AuthController {
             String result = resendEmailService.testWelcomeEmail(email);
             return ResponseEntity.ok(java.util.Map.of(
                 "recipient", email,
-                "status", "SUCCESS",
+                "status", result != null && result.startsWith("SUCCESS") ? "SUCCESS" : "FAIL",
                 "resendDetails", result != null ? result : "No response"
             ));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(java.util.Map.of(
+        } catch (Throwable e) {
+            return ResponseEntity.ok(java.util.Map.of(
                 "recipient", email,
                 "status", "ERROR",
-                "error", e.getMessage()
+                "error", e.getClass().getName() + ": " + (e.getMessage() != null ? e.getMessage() : "null")
             ));
         }
     }
