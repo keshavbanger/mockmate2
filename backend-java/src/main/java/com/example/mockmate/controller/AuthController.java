@@ -20,6 +20,25 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.example.mockmate.service.ResendEmailService resendEmailService;
+
+    @GetMapping("/trial-email")
+    public ResponseEntity<java.util.Map<String, Object>> trialEmail(@RequestParam(defaultValue = "bangerkeshav247@gmail.com") String email) {
+        try {
+            String result = resendEmailService.testWelcomeEmail(email);
+            return ResponseEntity.ok(java.util.Map.of(
+                "recipient", email,
+                "status", "SUCCESS",
+                "resendDetails", result != null ? result : "No response"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(java.util.Map.of(
+                "recipient", email,
+                "status", "ERROR",
+                "error", e.getMessage()
+            ));
+        }
+    }
 
     @PostMapping("/verify")
     public ResponseEntity<TokenResponse> verify(@Valid @RequestBody TokenVerificationRequest request) {
