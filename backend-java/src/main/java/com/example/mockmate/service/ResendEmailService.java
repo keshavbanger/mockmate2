@@ -3,9 +3,11 @@ package com.example.mockmate.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -22,10 +24,22 @@ public class ResendEmailService {
             @Value("${resend.from-email:MockMate <onboarding@resend.dev>}") String fromEmail) {
         this.apiKey = apiKey;
         this.fromEmail = fromEmail;
+
+        // No default timeout on the underlying client otherwise — a hung
+        // Resend call would hang forever. It currently fires from
+        // CompletableFuture.runAsync() on ForkJoinPool.commonPool(), which is
+        // shared across the whole JVM, so a stuck call here doesn't just
+        // delay one email, it leaks a thread out of a pool other unrelated
+        // parallel work in the app relies on.
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
+        requestFactory.setReadTimeout((int) Duration.ofSeconds(10).toMillis());
+
         this.restClient = RestClient.builder()
                 .baseUrl("https://api.resend.com")
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .requestFactory(requestFactory)
                 .build();
     }
 

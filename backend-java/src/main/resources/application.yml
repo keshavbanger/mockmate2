@@ -27,6 +27,24 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  # Gmail SMTP — used instead of Resend since Resend requires a verified
+  # custom domain to send to anyone other than the account owner, and this
+  # project doesn't have one. A personal Gmail account can send to any
+  # recipient today via an App Password, no domain needed.
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${GMAIL_SMTP_USERNAME:}
+    password: ${GMAIL_SMTP_APP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 # JWT Config — JWT_SECRET must be set in the environment (.env locally); no
 # fallback default so the app fails fast instead of signing with a secret

@@ -310,12 +310,12 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
           transition={{ type: 'spring', stiffness: 320, damping: 28 }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-8 py-5 border-b border-black/[0.06] bg-gradient-to-r from-purple-50 to-white flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white text-base">✨</div>
-              <div>
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-8 py-5 border-b border-black/[0.06] bg-gradient-to-r from-purple-50 to-white flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white text-base flex-shrink-0">✨</div>
+              <div className="min-w-0">
                 <h2 className="font-black text-[#111] text-lg leading-tight">Generate My Resume</h2>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5 truncate">
                   {step === 'loading' ? 'Checking your resume…'
                     : step === 'blocked' ? 'Needs attention before generating'
                     : step === 'wizard' ? `Step ${qIndex + 1} of ${questions.length}: ${current?.title || ''}`
@@ -326,7 +326,7 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all text-lg font-bold">×</button>
+            <button onClick={onClose} className="h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all text-lg font-bold flex-shrink-0">×</button>
           </div>
 
           {/* Body */}
@@ -342,7 +342,7 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
             )}
 
             {step === 'blocked' && (
-              <div className="flex flex-col items-center justify-center py-16 gap-4 px-8 text-center">
+              <div className="flex flex-col items-center justify-center py-16 gap-4 px-4 sm:px-8 text-center">
                 <div className="text-5xl">🛑</div>
                 <p className="font-black text-[#111] text-lg">Can't generate yet</p>
                 <div className="space-y-2 max-w-lg">
@@ -354,7 +354,7 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
             )}
 
             {step === 'error' && (
-              <div className="flex flex-col items-center justify-center py-20 gap-4 px-8 text-center">
+              <div className="flex flex-col items-center justify-center py-20 gap-4 px-4 sm:px-8 text-center">
                 <div className="text-5xl">⚠️</div>
                 <p className="font-black text-[#111] text-lg">Something went wrong</p>
                 <p className="text-sm text-slate-500">{error}</p>
@@ -362,7 +362,7 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
             )}
 
             {step === 'validation_error' && (
-              <div className="flex flex-col items-center justify-center py-16 gap-4 px-8 text-center">
+              <div className="flex flex-col items-center justify-center py-16 gap-4 px-4 sm:px-8 text-center">
                 <div className="text-5xl">⚠️</div>
                 <p className="font-black text-[#111] text-lg">The generated resume didn't pass validation</p>
                 <div className="text-left max-w-lg w-full bg-red-50 border border-red-100 rounded-2xl p-4 space-y-1">
@@ -377,7 +377,7 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
             )}
 
             {step === 'wizard' && current && (
-              <div className="px-8 py-8 space-y-5">
+              <div className="px-4 sm:px-8 py-8 space-y-5">
                 {current.key === 'name' && (
                   <Field label="What's your full name?" hint="We couldn't confidently detect this from your resume.">
                     <TextInput value={wizard.name} onChange={v => setWizard(w => ({ ...w, name: v }))} placeholder="e.g. Keshav Banger" />
@@ -491,7 +491,7 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
                   </div>
                 )}
 
-                <div className="px-8 py-4 border-b border-black/[0.05] flex items-center gap-3 flex-shrink-0 bg-slate-50/70 mt-2">
+                <div className="px-4 sm:px-8 py-4 border-b border-black/[0.05] flex items-center gap-3 flex-shrink-0 bg-slate-50/70 mt-2">
                   <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Template</span>
                   {['classic', 'modern', 'minimal', 'professional', 'compact', 'harvard'].map(t => (
                     <button key={t} onClick={() => setTemplate(t)}
@@ -525,10 +525,10 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-8 py-5 border-t border-black/[0.06] bg-white flex-shrink-0">
-            <button onClick={onClose} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">Cancel</button>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-8 py-5 border-t border-black/[0.06] bg-white flex-shrink-0">
+            <button onClick={onClose} className="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors order-2 sm:order-1">Cancel</button>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 order-1 sm:order-2">
               {step === 'wizard' && qIndex > 0 && (
                 <button onClick={goBack} className="px-5 py-2.5 rounded-full border border-slate-200 text-sm font-bold text-slate-500 hover:border-slate-300 transition-all">← Back</button>
               )}
@@ -544,7 +544,7 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
                     <button onClick={handleDownloadPdf} className="px-5 py-2.5 rounded-full bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all flex items-center gap-2 shadow-sm">
                       📄 Download PDF
                     </button>
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 rounded-lg bg-slate-900 text-white text-[11px] leading-snug opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none text-center">
+                    <div className="hidden sm:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 rounded-lg bg-slate-900 text-white text-[11px] leading-snug opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none text-center">
                       In the print dialog, turn off <strong>"Headers and footers"</strong> under "More settings".
                     </div>
                   </div>

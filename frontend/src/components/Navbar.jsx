@@ -1,14 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+
+const NAV_LINKS = [
+  { label: 'Home',         href: '#'           },
+  { label: 'Features',     href: '#features'   },
+  { label: 'How It Works', href: '#how-it-works' },
+  { label: 'Pricing',      href: '#pricing'    },
+  { label: 'About',        href: '#about'      },
+];
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const dropdownRef = useRef(null);
+  const navWrapperRef = useRef(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -16,11 +26,14 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Close dropdown on outside click
+  // Close dropdown / mobile menu on outside click
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownOpen(false);
+      }
+      if (navWrapperRef.current && !navWrapperRef.current.contains(e.target)) {
+        setMobileMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -44,12 +57,13 @@ export default function Navbar() {
 
   return (
     <motion.div
+      ref={navWrapperRef}
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-6 px-4 pointer-events-none"
     >
-      <nav className={`w-full max-w-5xl pointer-events-auto floating-nav justify-between transition-all duration-300 ${
+      <nav className={`relative w-full max-w-5xl pointer-events-auto floating-nav justify-between transition-all duration-300 ${
         scrolled ? 'shadow-[0_8px_30px_rgba(0,0,0,0.08)] bg-white/95 backdrop-blur-xl' : 'shadow-[0_4px_20px_rgba(0,0,0,0.04)] bg-white/80'
       }`}>
         {/* Logo */}
@@ -62,13 +76,7 @@ export default function Navbar() {
 
         {/* Nav links */}
         <div className="hidden md:flex items-center gap-8 text-[13.5px] font-semibold text-slate-500">
-          {[
-            { label: 'Home',         href: '#'           },
-            { label: 'Features',     href: '#features'   },
-            { label: 'How It Works', href: '#how-it-works' },
-            { label: 'Pricing',      href: '#pricing'    },
-            { label: 'About',        href: '#about'      },
-          ].map(({ label, href }) => (
+          {NAV_LINKS.map(({ label, href }) => (
             <a key={label} href={href}
               className={`relative transition-colors hover:text-[#111] cursor-pointer ${label === 'Home' ? 'text-[var(--brand-primary)]' : ''}`}>
               {label}
@@ -81,6 +89,23 @@ export default function Navbar() {
 
         {/* Right CTAs */}
         <div className="flex items-center gap-3">
+          {/* Hamburger — the nav links above are md:hidden with no other
+              way to reach them on mobile without this */}
+          <button
+            onClick={() => setMobileMenuOpen(prev => !prev)}
+            aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
+            className="md:hidden flex items-center justify-center h-9 w-9 rounded-full hover:bg-slate-100 transition-colors -ml-1"
+          >
+            <svg className="w-5 h-5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {mobileMenuOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+
           {isAuthenticated && (
             <motion.button
               onClick={() => navigate('/ats')}
@@ -175,7 +200,7 @@ export default function Navbar() {
                 onClick={() => navigate('/login')}
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
-                className="px-5 py-2 rounded-full text-[13px] font-bold text-slate-600 hover:text-black hover:bg-slate-100 transition-colors"
+                className="hidden sm:block px-5 py-2 rounded-full text-[13px] font-bold text-slate-600 hover:text-black hover:bg-slate-100 transition-colors"
               >
                 Log In
               </motion.button>
@@ -192,6 +217,49 @@ export default function Navbar() {
           )}
         </div>
       </nav>
+
+      {/* Mobile menu panel */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="md:hidden pointer-events-auto absolute left-4 right-4 top-[calc(100%+4px)] bg-white rounded-2xl border border-slate-100 shadow-xl shadow-black/10 overflow-hidden"
+          >
+            <div className="py-2">
+              {NAV_LINKS.map(({ label, href }) => (
+                <a key={label} href={href} onClick={() => setMobileMenuOpen(false)}
+                  className={`block px-5 py-3 text-[14px] font-semibold transition-colors hover:bg-slate-50 ${
+                    label === 'Home' ? 'text-[var(--brand-primary)]' : 'text-slate-600'
+                  }`}>
+                  {label}
+                </a>
+              ))}
+            </div>
+            {isAuthenticated ? (
+              <div className="border-t border-slate-50 py-2">
+                <button
+                  onClick={() => { navigate('/ats'); setMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-5 py-3 text-[14px] font-semibold text-[var(--brand-primary)] hover:bg-slate-50 transition-colors text-left"
+                >
+                  ✦ Analyze Resume
+                </button>
+              </div>
+            ) : (
+              <div className="sm:hidden border-t border-slate-50 py-2">
+                <button
+                  onClick={() => { navigate('/login'); setMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-5 py-3 text-[14px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors text-left"
+                >
+                  Log In
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

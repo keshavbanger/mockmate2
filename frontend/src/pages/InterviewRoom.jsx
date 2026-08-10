@@ -269,14 +269,14 @@ export default function InterviewRoom() {
       </header>
 
       {/* ── Main content area ──────────────────────────────────────────────── */}
-      <main className="flex-1 flex overflow-hidden min-h-0">
-        {/* LEFT — Tavus avatar (60%) */}
-        <div className="w-[60%] flex-shrink-0 p-5 border-r border-black/[0.03] overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+        {/* TOP (mobile) / LEFT (desktop, 60%) — Tavus avatar */}
+        <div className="w-full h-[42vh] md:h-auto md:w-[60%] flex-shrink-0 p-3 sm:p-5 border-b md:border-b-0 md:border-r border-black/[0.03] overflow-hidden">
           <TavusAvatar conversationUrl={ctx.conversationUrl} />
         </div>
 
-        {/* RIGHT — Candidate panel (40%) */}
-        <div className="flex-1 p-5 overflow-y-auto">
+        {/* BOTTOM (mobile) / RIGHT (desktop, 40%) — Candidate panel */}
+        <div className="flex-1 p-3 sm:p-5 overflow-y-auto">
           <CandidatePanel />
         </div>
       </main>
