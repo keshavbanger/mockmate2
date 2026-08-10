@@ -11,13 +11,12 @@ export default function SignupPage() {
   const [sentTo, setSentTo] = useState('');
   const [resendSuccess, setResendSuccess] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     email: '',
-    username: '',
+    country: '',
     password: '',
-    confirmPassword: '',
   });
 
   const handleChange = (e) => {
@@ -33,33 +32,28 @@ export default function SignupPage() {
     setError('');
 
     // Validation
-    if (!formData.firstName.trim()) {
-      setError('First name is required');
-      return;
-    }
-    if (!formData.lastName.trim()) {
-      setError('Last name is required');
+    if (!formData.fullName.trim()) {
+      setError('Full name is required');
       return;
     }
     if (!formData.email.includes('@')) {
       setError('Please enter a valid email address');
       return;
     }
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      return;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
       return;
     }
 
     try {
       setLoading(true);
-      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+      const fullNameTrimmed = formData.fullName.trim();
+      const nameParts = fullNameTrimmed.split(' ');
+      const firstName = nameParts[0] || 'User';
+      const lastName = nameParts.slice(1).join(' ') || '';
 
       try {
-        const result = await signupWithEmail(formData.email, formData.password, fullName);
+        const result = await signupWithEmail(formData.email, formData.password, fullNameTrimmed);
         if (result && result.isAutoConfirmed) {
           navigate('/');
         } else {
@@ -80,8 +74,8 @@ export default function SignupPage() {
           return;
         }
         console.warn('Supabase signup failed, trying legacy backend signup:', err);
-        const username = formData.username?.trim() || formData.email.split('@')[0];
-        await signup(formData.email, formData.firstName, formData.lastName, username, formData.password);
+        const username = formData.email.split('@')[0];
+        await signup(formData.email, firstName, lastName, username, formData.password);
         navigate('/');
       }
     } catch (err) {
@@ -198,7 +192,7 @@ export default function SignupPage() {
         <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-indigo-200/20 rounded-full blur-[120px]" />
       </div>
 
-      {/* ── LEFT HALF: Brand & Value Pitch (Inslit Style) ── */}
+      {/* ── LEFT HALF: Brand & Value Pitch ── */}
       <div className="lg:w-1/2 p-8 sm:p-12 lg:p-20 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/60 bg-white/60 backdrop-blur-sm relative z-10">
         {/* Brand Logo */}
         <div>
@@ -244,13 +238,26 @@ export default function SignupPage() {
       <div className="lg:w-1/2 p-6 sm:p-12 lg:p-20 flex items-center justify-center bg-[#f8f9fa]/80 relative z-10">
         <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-[28px] p-8 sm:p-10 shadow-xl shadow-purple-900/[0.04]">
           
+          {/* Back link matching screenshot */}
+          <div className="mb-6">
+            <Link
+              to="/"
+              className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800 transition gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to home
+            </Link>
+          </div>
+
           {/* Form Header */}
           <div className="mb-8">
-            <h2 className="text-3xl font-extrabold text-[#111] tracking-tight mb-2">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#111] tracking-tight mb-2">
               Create account
             </h2>
-            <p className="text-slate-500 text-sm">
-              Start practicing interviews for free with MockMate AI.
+            <p className="text-slate-400 text-sm font-medium">
+              Start practicing with MockMate AI
             </p>
           </div>
 
@@ -262,11 +269,124 @@ export default function SignupPage() {
             </div>
           )}
 
-          {/* Google OAuth Button */}
+          {/* Credentials Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Full Name */}
+            <div>
+              <label className="block text-sm font-bold text-[#111] mb-2">
+                Full Name
+              </label>
+              <input
+                type="text"
+                name="fullName"
+                placeholder="Your full name"
+                value={formData.fullName}
+                onChange={handleChange}
+                className="w-full px-4 py-3.5 bg-white border border-slate-200/90 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition duration-200 text-sm font-medium shadow-sm"
+                disabled={loading}
+                required
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-bold text-[#111] mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                placeholder="name@email.com"
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-4 py-3.5 bg-white border border-slate-200/90 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition duration-200 text-sm font-medium shadow-sm"
+                disabled={loading}
+                required
+              />
+            </div>
+
+            {/* Country */}
+            <div>
+              <label className="block text-sm font-bold text-[#111] mb-2">
+                Country
+              </label>
+              <input
+                type="text"
+                name="country"
+                placeholder="Your country"
+                value={formData.country}
+                onChange={handleChange}
+                className="w-full px-4 py-3.5 bg-white border border-slate-200/90 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition duration-200 text-sm font-medium shadow-sm"
+                disabled={loading}
+              />
+            </div>
+
+            {/* Password with Eye toggle */}
+            <div>
+              <label className="block text-sm font-bold text-[#111] mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  placeholder="Create a strong password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3.5 pr-12 bg-white border border-slate-200/90 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition duration-200 text-sm font-medium shadow-sm"
+                  disabled={loading}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a8.962 8.962 0 013.682-.763c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m-4.692-4.692a3 3 0 00-4.243-4.243" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Dark Submit Button matching screenshot */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-4 bg-[#18181b] hover:bg-[#27272a] disabled:opacity-50 text-white font-semibold py-4 rounded-full transition-all duration-300 shadow-md active:scale-[0.98] text-base cursor-pointer"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Creating Account...</span>
+                </div>
+              ) : (
+                'Create Account'
+              )}
+            </button>
+          </form>
+
+          {/* Divider & Google Sign-In */}
+          <div className="relative flex items-center justify-center my-6">
+            <div className="border-t border-slate-200 w-full" />
+            <span className="absolute bg-white px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              OR
+            </span>
+          </div>
+
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-3.5 px-4 rounded-full border border-slate-200 transition-all duration-300 shadow-sm hover:shadow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-3.5 px-4 rounded-full border border-slate-200/90 transition-all duration-300 shadow-sm hover:shadow active:scale-[0.98] disabled:opacity-50 text-sm"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
               <path
@@ -286,115 +406,8 @@ export default function SignupPage() {
                 fill="#EA4335"
               />
             </svg>
-            Sign Up with Google
+            Continue with Google
           </button>
-
-          {/* Divider */}
-          <div className="relative flex items-center justify-center mb-6">
-            <div className="border-t border-slate-200 w-full" />
-            <span className="absolute bg-white px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              or use credentials
-            </span>
-          </div>
-
-          {/* Credentials Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  name="firstName"
-                  placeholder="John"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent transition duration-200 text-sm font-medium"
-                  disabled={loading}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  name="lastName"
-                  placeholder="Doe"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent transition duration-200 text-sm font-medium"
-                  disabled={loading}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Email Address
-              </label>
-              <input
-                type="email"
-                name="email"
-                placeholder="john.doe@company.com"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent transition duration-200 text-sm font-medium"
-                disabled={loading}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent transition duration-200 text-sm font-medium"
-                disabled={loading}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                placeholder="••••••••"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6B46C1] focus:border-transparent transition duration-200 text-sm font-medium"
-                disabled={loading}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 bg-[#6B46C1] hover:bg-[#5839a3] disabled:opacity-50 text-white font-bold py-3.5 rounded-full transition-all duration-300 shadow-lg shadow-purple-900/20 active:scale-[0.98] text-sm"
-            >
-              {loading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Creating your account...</span>
-                </div>
-              ) : (
-                'Create Account'
-              )}
-            </button>
-          </form>
 
           {/* Footer */}
           <p className="text-center text-slate-500 text-sm mt-8">
@@ -403,7 +416,7 @@ export default function SignupPage() {
               to="/login"
               className="text-[#6B46C1] hover:text-[#5839a3] font-bold hover:underline transition"
             >
-              Login
+              Sign In
             </Link>
           </p>
         </div>
