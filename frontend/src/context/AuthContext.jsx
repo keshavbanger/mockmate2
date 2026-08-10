@@ -197,13 +197,18 @@ export const AuthProvider = ({ children }) => {
 
       if (signUpError) throw signUpError;
       
+      // If user already exists in Supabase, identities array is empty
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        throw new Error('An account with this email already exists. Please log in instead.');
+      }
+
       // If auto-confirm is enabled, we get a session immediately
       if (data.session) {
         const userData = await verifySupabaseToken(data.session.access_token);
-        return userData;
+        return { isAutoConfirmed: true, user: userData };
       }
       
-      return data.user;
+      return { isAutoConfirmed: false, user: data.user };
     } catch (err) {
       setError(err.message || 'Signup failed');
       throw err;

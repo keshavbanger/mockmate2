@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, supabase } from '../context/AuthContext';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -9,6 +9,8 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [sentTo, setSentTo] = useState('');
+  const [resendSuccess, setResendSuccess] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -58,8 +60,7 @@ export default function SignupPage() {
 
       try {
         const result = await signupWithEmail(formData.email, formData.password, fullName);
-        // If we got a session back (auto-confirm enabled), go straight to dashboard
-        if (result && result.id && !result.email_confirmed_at === undefined) {
+        if (result && result.isAutoConfirmed) {
           navigate('/');
         } else {
           // Email confirmation required
@@ -67,9 +68,13 @@ export default function SignupPage() {
           setEmailSent(true);
         }
       } catch (err) {
-        // If Supabase error is about existing user, try legacy backend
+        // If error is about existing user, show error directly
         const msg = err.message || '';
-        if (msg.includes('already registered') || msg.includes('already been registered')) {
+        if (
+          msg.includes('already registered') ||
+          msg.includes('already been registered') ||
+          msg.includes('already exists')
+        ) {
           setError('An account with this email already exists. Please log in instead.');
           setLoading(false);
           return;
@@ -94,6 +99,22 @@ export default function SignupPage() {
     } catch (err) {
       setError(err.message || 'Google login failed.');
       setLoading(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    try {
+      setResendLoading(true);
+      const { error: resendErr } = await supabase.auth.resend({
+        type: 'signup',
+        email: sentTo,
+      });
+      if (resendErr) throw resendErr;
+      setResendSuccess(true);
+    } catch (err) {
+      console.error('Failed to resend confirmation email:', err);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -145,13 +166,24 @@ export default function SignupPage() {
             </p>
             <Link
               to="/login"
-              className="inline-block w-full bg-[#6B46C1] hover:bg-[#5839a3] text-white font-bold py-3.5 rounded-full transition duration-300 shadow-lg shadow-purple-900/20 text-sm"
+              className="inline-block w-full bg-[#6B46C1] hover:bg-[#5839a3] text-white font-bold py-3.5 rounded-full transition duration-300 shadow-lg shadow-purple-900/20 text-sm mb-4"
             >
               Go to Login
             </Link>
-            <p className="text-slate-400 text-xs mt-6">
-              Didn't receive it? Check your spam folder or verify your address.
-            </p>
+
+            {resendSuccess ? (
+              <p className="text-emerald-600 text-xs font-bold bg-emerald-50 py-2 px-4 rounded-xl border border-emerald-100">
+                ✅ Confirmation email resent! Check your inbox.
+              </p>
+            ) : (
+              <button
+                onClick={handleResendEmail}
+                disabled={resendLoading}
+                className="text-xs text-[#6B46C1] font-bold hover:underline transition disabled:opacity-50"
+              >
+                {resendLoading ? 'Resending email...' : 'Didn\'t receive it? Click to resend confirmation email'}
+              </button>
+            )}
           </div>
         </div>
       </div>
