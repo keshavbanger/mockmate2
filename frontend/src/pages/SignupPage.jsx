@@ -193,16 +193,16 @@ export default function SignupPage() {
       </div>
 
       {/* ── LEFT HALF: Brand & Value Pitch ── */}
-      <div className="lg:w-1/2 p-8 sm:p-12 lg:p-20 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/60 bg-white/60 backdrop-blur-sm relative z-10">
+      <div className="lg:w-1/2 p-8 sm:p-12 lg:p-16 flex flex-col justify-start border-b lg:border-b-0 lg:border-r border-slate-200/60 bg-white/60 backdrop-blur-sm relative z-10">
         {/* Brand Logo */}
-        <div>
+        <div className="mb-8 lg:mb-10">
           <Link to="/" className="inline-flex items-center gap-2 text-2xl font-black tracking-tight text-[#111] hover:opacity-80 transition">
             <span className="text-2xl">🎙️</span> MockMate
           </Link>
         </div>
 
         {/* Hero Pitch */}
-        <div className="my-12 lg:my-auto max-w-xl">
+        <div className="max-w-xl mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-100 text-[#6B46C1] text-xs font-bold mb-6">
             🚀 Create Free Account
           </div>
@@ -229,7 +229,7 @@ export default function SignupPage() {
         </div>
 
         {/* Left Footer */}
-        <div className="text-xs font-medium text-slate-400">
+        <div className="mt-auto pt-6 text-xs font-medium text-slate-400">
           © 2026 MockMate. AI Interview Preparation Platform.
         </div>
       </div>
