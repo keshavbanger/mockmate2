@@ -62,6 +62,12 @@ resend:
   api-key: ${RESEND_API_KEY:}
   from-email: ${RESEND_FROM_EMAIL:MockMate <onboarding@resend.dev>}
 
+# SendGrid — active email sender. HTTP API (port 443), unlike Gmail SMTP
+# (port 587), which Render's free tier blocks outbound entirely.
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:}
+  from-email: ${SENDGRID_FROM_EMAIL:}
+
 tavus:
   api-key: ${TAVUS_API_KEY:}
   replica-id: ${TAVUS_REPLICA_ID:r291e545fd67}

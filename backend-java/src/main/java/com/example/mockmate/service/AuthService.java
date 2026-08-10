@@ -27,7 +27,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final SupabaseJwtVerifier supabaseJwtVerifier;
-    private final SmtpEmailService smtpEmailService;
+    private final SendGridEmailService sendGridEmailService;
 
     @Transactional
     public TokenResponse verify(TokenVerificationRequest request) {
@@ -84,7 +84,7 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         if (isNewUser) {
             java.util.concurrent.CompletableFuture.runAsync(() ->
-                smtpEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName())
+                sendGridEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName())
             );
         }
 
@@ -124,7 +124,7 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
         java.util.concurrent.CompletableFuture.runAsync(() ->
-            smtpEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName())
+            sendGridEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName())
         );
 
         String token = jwtUtil.generateToken(savedUser.getEmail());
