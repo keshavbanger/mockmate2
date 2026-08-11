@@ -442,6 +442,17 @@ export default function TechInterviewPage() {
       {/* Top Header Bar */}
       <div style={styles.topBar}>
         <div style={styles.topLeft}>
+          <button
+            style={styles.homeBtn}
+            onClick={() => {
+              if (window.confirm('Leave this interview? Your progress will be lost — the interview will not be saved as completed.')) {
+                navigate('/dashboard');
+              }
+            }}
+            title="Leave interview and go to dashboard"
+          >
+            🏠
+          </button>
           <InterviewerOrb state={orbState} interviewerName="MockMate AI Engine" />
         </div>
 
@@ -592,7 +603,18 @@ const styles = {
     gap: '20px',
     flexShrink: 0,
   },
-  topLeft: { display: 'flex', alignItems: 'center' },
+  topLeft: { display: 'flex', alignItems: 'center', gap: '14px' },
+  homeBtn: {
+    background: '#f8fafc',
+    border: '1px solid rgba(0, 0, 0, 0.08)',
+    borderRadius: '10px',
+    width: '36px',
+    height: '36px',
+    fontSize: '1rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    flexShrink: 0,
+  },
   timerArea: {
     display: 'flex',
     flexDirection: 'column',

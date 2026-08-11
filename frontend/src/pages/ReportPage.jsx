@@ -120,12 +120,23 @@ export default function ReportPage() {
       {/* ── STICKY GLASSMORPHIC ACTION HEADER ───────────────────────────────── */}
       <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-8 py-4 flex items-center justify-between no-print shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="text-slate-900 font-black text-sm uppercase tracking-tight">MockMate AI</span>
+          <button
+            onClick={() => navigate('/')}
+            className="text-slate-900 font-black text-sm uppercase tracking-tight hover:text-purple-600 transition-colors"
+          >
+            MockMate AI
+          </button>
           <span className="badge badge-primary">Report panel</span>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={handleRetake} 
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="text-xs py-2 px-4 rounded-full border border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700 flex items-center gap-2"
+          >
+            🏠 Dashboard
+          </button>
+          <button
+            onClick={handleRetake}
             className="text-xs py-2 px-4 rounded-full border border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700 flex items-center gap-2"
           >
             🔄 New Interview
