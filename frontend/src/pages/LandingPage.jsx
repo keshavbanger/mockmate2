@@ -207,6 +207,7 @@ function StickyShowcase() {
 
 
 import Navbar from '../components/Navbar';
+import Logo from '../components/Logo';
 
 // ─── Feature Card ─────────────────────────────────────────────────────────────
 function FeatureCard({ title, desc, icon, colorClass = 'bg-purple-100 text-purple-600', delay = 0 }) {
@@ -799,13 +800,8 @@ export default function LandingPage() {
             {/* Left: brand info */}
             <div className="flex flex-col gap-6">
               {/* Logo */}
-              <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white">
-                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-                  </svg>
-                </div>
-                <span className="font-bold tracking-tight text-xl text-black">MockMate</span>
+              <div className="flex items-center">
+                <Logo size="md" />
               </div>
 
               {/* Address */}

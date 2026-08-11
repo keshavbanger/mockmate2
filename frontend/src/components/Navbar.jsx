@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import Logo from './Logo';
 
 const NAV_LINKS = [
   { label: 'Home',         href: '#'           },
@@ -67,11 +68,8 @@ export default function Navbar() {
         scrolled ? 'shadow-[0_8px_30px_rgba(0,0,0,0.08)] bg-white/95 backdrop-blur-xl' : 'shadow-[0_4px_20px_rgba(0,0,0,0.04)] bg-white/80'
       }`}>
         {/* Logo */}
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-          <div className="h-8 w-8 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white text-sm font-bold">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-          </div>
-          <span className="font-bold tracking-tight text-xl text-black">MockMate</span>
+        <div className="flex items-center cursor-pointer" onClick={() => navigate('/')}>
+          <Logo size="md" />
         </div>
 
         {/* Nav links */}

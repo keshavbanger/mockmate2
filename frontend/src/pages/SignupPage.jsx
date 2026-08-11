@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, supabase } from '../context/AuthContext';
+import Logo from '../components/Logo';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -131,8 +132,8 @@ export default function SignupPage() {
         {/* Left Side */}
         <div className="lg:w-1/2 p-8 sm:p-12 lg:p-20 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/60 bg-white/60 backdrop-blur-sm">
           <div>
-            <Link to="/" className="inline-flex items-center gap-2 text-2xl font-black tracking-tight text-[#111]">
-              <span className="text-2xl">🎙️</span> MockMate
+            <Link to="/" className="inline-flex items-center hover:opacity-80 transition">
+              <Logo size="lg" />
             </Link>
           </div>
           <div className="my-12 lg:my-auto max-w-xl">
@@ -203,8 +204,8 @@ export default function SignupPage() {
       <div className="lg:w-1/2 p-8 sm:p-12 lg:p-16 flex flex-col justify-start border-b lg:border-b-0 lg:border-r border-slate-200/60 bg-white/60 backdrop-blur-sm relative z-10">
         {/* Brand Logo */}
         <div className="mb-8 lg:mb-10">
-          <Link to="/" className="inline-flex items-center gap-2 text-2xl font-black tracking-tight text-[#111] hover:opacity-80 transition">
-            <span className="text-2xl">🎙️</span> MockMate
+          <Link to="/" className="inline-flex items-center hover:opacity-80 transition">
+            <Logo size="lg" />
           </Link>
         </div>
 
