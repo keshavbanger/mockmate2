@@ -9,7 +9,13 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Run stage
-FROM eclipse-temurin:17-jre-alpine
+# Needs the full JDK, not just the JRE: InAppExecutionProvider (the code-
+# execution fallback used when no external sandbox provider is configured)
+# calls ToolProvider.getSystemJavaCompiler(), which is only present in a
+# JDK — on a JRE it returns null and the single-file-source-launch fallback
+# also fails (same "jdk.compiler not in boot layer" error either way, since
+# `java Foo.java` needs the compiler module internally too).
+FROM eclipse-temurin:17-jdk-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 

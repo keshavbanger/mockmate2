@@ -197,6 +197,20 @@ public class InAppExecutionProvider implements CodeExecutionProvider {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(workDir.toFile());
 
+            // This subprocess runs candidate-submitted code with no container
+            // isolation (see class-level risk noted elsewhere) — at minimum,
+            // don't hand it the backend's own environment. Without this it
+            // inherited everything: JWT secret, DB credentials, Groq/
+            // OpenRouter keys, all readable via a one-line System.getenv()
+            // print in the submitted code. Only PATH is kept (needed to
+            // resolve python3/node/g++/go by name); HOME/TMPDIR are scoped
+            // to the per-job temp dir instead of a shared real home.
+            pb.environment().clear();
+            String path = System.getenv("PATH");
+            if (path != null) pb.environment().put("PATH", path);
+            pb.environment().put("HOME", workDir.toString());
+            pb.environment().put("TMPDIR", workDir.toString());
+
             Process process = pb.start();
 
             if (stdin != null && !stdin.isEmpty()) {
