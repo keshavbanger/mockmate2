@@ -753,7 +753,7 @@ export default function LandingPage() {
               </motion.div>
             ))}
             <motion.button
-              onClick={() => navigate('/tech-interview')}
+              onClick={() => navigate('/tech-interview/setup')}
               whileHover={{ scale: 1.04, boxShadow: '0 12px 32px rgba(16,185,129,0.25)' }}
               whileTap={{ scale: 0.97 }}
               className="mt-4 bg-emerald-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/15 w-fit"
@@ -926,9 +926,13 @@ export default function LandingPage() {
                   heading: 'Product',
                   links: [
                     { label: 'AI Interviewer', href: '/setup' },
-                    { label: 'DSA Coding Interview', href: '/tech-interview' },
+                    { label: 'DSA Coding Interview', href: '/tech-interview/setup' },
                     { label: 'ATS Resume Scanner', href: '/ats' },
-                    { label: 'Resume Studio', href: '/ats/studio' },
+                    // Resume Studio only exists at /ats/studio/:reportId — it's
+                    // entered from an existing ATS report, never as a bare
+                    // route, so this points at the scanner (/ats) where that
+                    // flow actually starts instead of a route that doesn't exist.
+                    { label: 'Resume Studio', href: '/ats' },
                     { label: 'ATS Comparison', href: '/ats/compare' },
                     { label: 'Interview History', href: '/history' },
                   ],
