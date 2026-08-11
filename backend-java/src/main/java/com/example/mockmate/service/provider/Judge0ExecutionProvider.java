@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import jakarta.annotation.PostConstruct;
 import java.util.*;
@@ -35,7 +36,6 @@ public class Judge0ExecutionProvider implements CodeExecutionProvider {
     @Value("${judge0.api-host:judge0-ce.p.rapidapi.com}")
     private String apiHost;
 
-    // Fallback static map: canonical lang name -> Judge0 language ID
     private static final Map<String, Integer> DEFAULT_LANGUAGE_MAP = Map.of(
             "java",       62,
             "python",     71,
@@ -95,16 +95,43 @@ public class Judge0ExecutionProvider implements CodeExecutionProvider {
     public CodeExecutionResult execute(String code, String language, DSAProblem problem, List<DSAProblem.TestCase> testCases) {
         String cleanLang = language != null ? language.toLowerCase() : "java";
         int languageId = resolveLanguageId(cleanLang);
-
         String jobId = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+
+        // Build payloads for batch submission to execute ALL test cases in 1 HTTP call
+        List<Map<String, Object>> batchPayloads = new ArrayList<>();
+        for (DSAProblem.TestCase tc : testCases) {
+            String harnessCode = harnessGeneratorService.generateHarness(code, cleanLang, problem, tc.getInput(), jobId);
+            Map<String, Object> item = new HashMap<>();
+            item.put("language_id", languageId);
+            item.put("source_code", harnessCode);
+            item.put("stdin", tc.getInput() != null ? tc.getInput() : "");
+            if (tc.getExpectedOutput() != null && !tc.getExpectedOutput().isBlank()) {
+                item.put("expected_output", tc.getExpectedOutput().trim());
+            }
+            batchPayloads.add(item);
+        }
+
+        List<SingleJudge0Response> responses = executeBatchJudge0(batchPayloads);
+        if (responses == null || responses.size() != testCases.size()) {
+            // Fallback to sequential with delay if batch endpoint is unsupported by provider tier
+            responses = new ArrayList<>();
+            for (int i = 0; i < testCases.size(); i++) {
+                DSAProblem.TestCase tc = testCases.get(i);
+                String harnessCode = harnessGeneratorService.generateHarness(code, cleanLang, problem, tc.getInput(), jobId);
+                responses.add(executeSingleJudge0(harnessCode, languageId, tc.getInput(), tc.getExpectedOutput()));
+                if (i < testCases.size() - 1) {
+                    try { Thread.sleep(400); } catch (InterruptedException ignored) {}
+                }
+            }
+        }
+
         List<CodeExecutionResult.TestResult> results = new ArrayList<>();
         int passed = 0;
         String sharedCompilationError = null;
 
-        // Execute batch if more than 1 test case, or single submission
-        for (DSAProblem.TestCase tc : testCases) {
-            String harnessCode = harnessGeneratorService.generateHarness(code, cleanLang, problem, tc.getInput(), jobId);
-            SingleJudge0Response resp = executeSingleJudge0(harnessCode, languageId, tc.getInput(), tc.getExpectedOutput());
+        for (int i = 0; i < testCases.size(); i++) {
+            DSAProblem.TestCase tc = testCases.get(i);
+            SingleJudge0Response resp = responses.get(i);
 
             CodeExecutionResult.TestResult tr = new CodeExecutionResult.TestResult();
             tr.setInput(tc.isHidden() ? "[hidden]" : tc.getInput());
@@ -127,7 +154,7 @@ public class Judge0ExecutionProvider implements CodeExecutionProvider {
                 passed++;
             } else if (resp.getStatusId() == 4) { // Wrong Answer
                 tr.setPassed(false);
-                tr.setActualOutput(tc.isHidden() ? "[hidden]" : resp.getStdout());
+                tr.setActualOutput(tc.isHidden() ? "[hidden]" : (resp.getStdout() != null && !resp.getStdout().isEmpty() ? resp.getStdout() : "Wrong Answer"));
             } else if (resp.getStatusId() == 5) { // TLE
                 tr.setPassed(false);
                 tr.setActualOutput(tc.isHidden() ? "[hidden]" : "Time Limit Exceeded");
@@ -138,9 +165,9 @@ public class Judge0ExecutionProvider implements CodeExecutionProvider {
                 sharedCompilationError = resp.getStderr();
                 results.add(tr);
                 break;
-            } else { // Runtime Error or other
+            } else { // Runtime Error or API error
                 tr.setPassed(false);
-                tr.setActualOutput(tc.isHidden() ? "Runtime Error" : "Runtime Error: " + resp.getStderr());
+                tr.setActualOutput(tc.isHidden() ? "Runtime Error" : (resp.getStderr() != null && !resp.getStderr().isEmpty() ? resp.getStderr() : "Runtime Error"));
             }
 
             results.add(tr);
@@ -200,6 +227,39 @@ public class Judge0ExecutionProvider implements CodeExecutionProvider {
         return dynamicLanguageMap.getOrDefault(lang, DEFAULT_LANGUAGE_MAP.getOrDefault(lang, 62));
     }
 
+    private List<SingleJudge0Response> executeBatchJudge0(List<Map<String, Object>> submissionsPayload) {
+        try {
+            String url = baseUrl.replaceAll("/$", "") + "/submissions/batch?base64_encoded=false&wait=true";
+            Map<String, Object> body = Map.of("submissions", submissionsPayload);
+
+            WebClient.RequestBodySpec req = webClientBuilder.build().post().uri(url);
+            req.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+            if (apiKey != null && !apiKey.isBlank()) {
+                req.header("X-RapidAPI-Key", apiKey)
+                   .header("X-RapidAPI-Host", apiHost)
+                   .header("X-Auth-Token", apiKey);
+            }
+
+            String responseStr = req.bodyValue(body)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(java.time.Duration.ofSeconds(15))
+                    .block();
+
+            JsonNode root = objectMapper.readTree(responseStr);
+            List<SingleJudge0Response> list = new ArrayList<>();
+            if (root.isArray()) {
+                for (JsonNode item : root) {
+                    list.add(parseJudge0Node(item));
+                }
+            }
+            return list;
+        } catch (Exception e) {
+            log.warn("Batch Judge0 execution call failed or unsupported: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private SingleJudge0Response executeSingleJudge0(String sourceCode, int languageId, String stdin, String expectedOutput) {
         try {
             String url = baseUrl.replaceAll("/$", "") + "/submissions?base64_encoded=false&wait=true";
@@ -227,28 +287,42 @@ public class Judge0ExecutionProvider implements CodeExecutionProvider {
                     .block();
 
             JsonNode root = objectMapper.readTree(responseStr);
+            return parseJudge0Node(root);
 
-            SingleJudge0Response res = new SingleJudge0Response();
-            JsonNode statusNode = root.path("status");
-            res.setStatusId(statusNode.path("id").asInt(3));
-            res.setStatusDescription(statusNode.path("description").asText("Accepted"));
-            res.setStdout(root.path("stdout").asText("").trim());
-            res.setStderr(root.path("stderr").asText("").trim());
-            res.setCompileOutput(root.path("compile_output").asText("").trim());
-
-            if (res.getStatusId() == 6 || !res.getCompileOutput().isEmpty()) {
-                res.setCompileError(!res.getCompileOutput().isEmpty() ? res.getCompileOutput() : res.getStderr());
+        } catch (WebClientResponseException e) {
+            log.error("Judge0 HTTP error {}: {}", e.getStatusCode(), e.getMessage());
+            SingleJudge0Response err = new SingleJudge0Response();
+            err.setStatusId(13);
+            if (e.getStatusCode().value() == 403) {
+                err.setStderr("RapidAPI 403 Forbidden: Please make sure you clicked 'Subscribe to Test' on the Judge0 CE API page on RapidAPI, or check your API key.");
+            } else if (e.getStatusCode().value() == 429) {
+                err.setStderr("RapidAPI 429 Rate Limit Exceeded: Daily/per-second limit reached on free API plan. Please wait a moment and try again.");
+            } else {
+                err.setStderr("Execution error: " + e.getMessage());
             }
-
-            return res;
-
+            return err;
         } catch (Exception e) {
             log.error("Judge0 execution call failed: {}", e.getMessage(), e);
             SingleJudge0Response err = new SingleJudge0Response();
-            err.setStatusId(13); // Internal Error
+            err.setStatusId(13);
             err.setStderr("Execution error: " + e.getMessage());
             return err;
         }
+    }
+
+    private SingleJudge0Response parseJudge0Node(JsonNode root) {
+        SingleJudge0Response res = new SingleJudge0Response();
+        JsonNode statusNode = root.path("status");
+        res.setStatusId(statusNode.path("id").asInt(3));
+        res.setStatusDescription(statusNode.path("description").asText("Accepted"));
+        res.setStdout(root.path("stdout").asText("").trim());
+        res.setStderr(root.path("stderr").asText("").trim());
+        res.setCompileOutput(root.path("compile_output").asText("").trim());
+
+        if (res.getStatusId() == 6 || !res.getCompileOutput().isEmpty()) {
+            res.setCompileError(!res.getCompileOutput().isEmpty() ? res.getCompileOutput() : res.getStderr());
+        }
+        return res;
     }
 
     @lombok.Data
