@@ -5,11 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 
 const NAV_LINKS = [
-  { label: 'Home',         href: '#'           },
-  { label: 'Features',     href: '#features'   },
-  { label: 'How It Works', href: '#how-it-works' },
-  { label: 'Pricing',      href: '#pricing'    },
-  { label: 'About',        href: '#about'      },
+  { label: 'Home',         href: '#'                    },
+  { label: 'Features',     href: '#features'            },
+  { label: 'How It Works', href: '#how-it-works'        },
+  { label: 'Pricing',      href: '#pricing'             },
+  { label: 'DSA / Tech',   href: '#technical-interview' },
 ];
 
 export default function Navbar() {
@@ -69,7 +69,7 @@ export default function Navbar() {
       }`}>
         {/* Logo */}
         <div className="flex items-center cursor-pointer" onClick={() => navigate('/')}>
-          <Logo size="md" />
+          <Logo size="sm" className="h-5 sm:h-6" />
         </div>
 
         {/* Nav links */}
