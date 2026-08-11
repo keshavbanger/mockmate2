@@ -38,6 +38,26 @@ public class HarnessGeneratorService {
     // ── JAVA HARNESS ──────────────────────────────────────────
     private String wrapJava(String code, DSAProblem problem, String input, String jobId) {
         String cleanCode = code != null ? code.trim() : "";
+
+        // Candidates often paste code with their own explicit imports — a
+        // habit from solving on LeetCode, where each submission is a
+        // standalone file. This template already appends cleanCode verbatim
+        // AFTER `public class Main_<jobId>` further down, so any import line
+        // left inside it becomes an import statement placed after a type
+        // declaration — a guaranteed compile error ("class, interface, enum,
+        // or record expected") regardless of what's actually being imported.
+        // Hoist any of the candidate's own import lines up to the top instead.
+        StringBuilder extraImports = new StringBuilder();
+        StringBuilder bodyLines = new StringBuilder();
+        for (String line : cleanCode.split("\n", -1)) {
+            if (line.trim().startsWith("import ")) {
+                extraImports.append(line.trim()).append("\n");
+            } else {
+                bodyLines.append(line).append("\n");
+            }
+        }
+        cleanCode = bodyLines.toString().trim();
+
         if (!cleanCode.contains("class ")) {
             cleanCode = "class Solution {\n" + cleanCode + "\n}";
         }
@@ -48,7 +68,7 @@ public class HarnessGeneratorService {
 import java.util.*;
 import java.util.stream.*;
 import java.lang.reflect.*;
-
+%s
 class ListNode {
     int val;
     ListNode next;
@@ -91,7 +111,7 @@ class TreeNode {
         String clean = s.replaceAll("[\\\\[\\\\]\\\\s]", "");
         if (clean.isEmpty()) return null;
         String[] parts = clean.split(",");
-        if (parts.length == 0 || parts[0].equals("null") || parts[ Part0Empty(parts) ]) return null;
+        if (parts.length == 0 || parts[0].equals("null") || Part0Empty(parts)) return null;
         TreeNode root = new TreeNode(Integer.parseInt(parts[0]));
         Queue<TreeNode> q = new LinkedList<>();
         q.add(root);
@@ -233,7 +253,7 @@ public class Main_%s {
 }
 
 %s
-""".formatted(jobId, escapedInput, cleanCode);
+""".formatted(extraImports.toString(), jobId, escapedInput, cleanCode);
     }
 
     // ── PYTHON HARNESS ────────────────────────────────────────
