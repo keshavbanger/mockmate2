@@ -1,12 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, supabase } from '../context/AuthContext';
 
 export default function SignupPage() {
   const navigate = useNavigate();
-  const { signupWithEmail, loginWithGoogle, signup } = useAuth();
+  const { signupWithEmail, loginWithGoogle, signup, error: authError } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Same gap as LoginPage: a failed post-OAuth verification lands the user
+  // back here (via ProtectedRoute) with the reason already captured in
+  // AuthContext but never shown otherwise.
+  useEffect(() => {
+    if (authError) setError(authError);
+  }, [authError]);
   const [emailSent, setEmailSent] = useState(false);
   const [sentTo, setSentTo] = useState('');
   const [resendSuccess, setResendSuccess] = useState(false);

@@ -1,12 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth, supabase } from '../context/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { loginWithEmail, loginWithGoogle, login } = useAuth();
+  const { loginWithEmail, loginWithGoogle, login, error: authError } = useAuth();
   const [loading, setLoading] = useState(false);
+  // Render's free-tier backend spins down when idle and can take 50s+ to
+  // wake back up on the first request — without this, that wait just looks
+  // like the button is stuck, with no indication anything is happening.
+  const [slowLoading, setSlowLoading] = useState(false);
+  const slowLoadingTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (loading) {
+      slowLoadingTimerRef.current = setTimeout(() => setSlowLoading(true), 4000);
+    } else {
+      clearTimeout(slowLoadingTimerRef.current);
+      setSlowLoading(false);
+    }
+    return () => clearTimeout(slowLoadingTimerRef.current);
+  }, [loading]);
   const [error, setError] = useState('');
+
+  // Surfaces a failed post-OAuth verification. ProtectedRoute bounces an
+  // unauthenticated user back here after a failed Google sign-in with the
+  // failure reason already sitting in AuthContext's error state — without
+  // this, that reason was captured but never shown, so the user just landed
+  // back on the login form with no explanation at all.
+  useEffect(() => {
+    if (authError) setError(authError);
+  }, [authError]);
+
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState('');
   const [resendSuccess, setResendSuccess] = useState(false);
@@ -245,12 +270,17 @@ export default function LoginPage() {
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Signing you in...</span>
+                  <span>{slowLoading ? 'Waking up the server…' : 'Signing you in...'}</span>
                 </div>
               ) : (
                 'Sign In'
               )}
             </button>
+            {slowLoading && (
+              <p className="text-center text-slate-400 text-xs mt-2">
+                First request after a while can take up to a minute — hang tight.
+              </p>
+            )}
           </form>
 
           {/* Footer */}

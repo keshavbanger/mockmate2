@@ -22,7 +22,12 @@ export const AuthProvider = ({ children }) => {
   // Create axios instance with auth header
   const api = axios.create({
     baseURL: API_BASE,
-    timeout: 30000, // 30 seconds timeout to accommodate Render cold starts
+    // Render's free tier spins the backend down when idle; Render's own
+    // dashboard states a cold-start wake-up "can delay requests by 50
+    // seconds or more" — 30s could time out before the backend ever
+    // responds, surfacing as a generic "Network Error" that looks like a
+    // real outage. 65s gives margin over that stated worst case.
+    timeout: 65000,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -243,7 +248,13 @@ export const AuthProvider = ({ children }) => {
       const { error: googleError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          // Lands on /dashboard (a ProtectedRoute) rather than the bare
+          // origin (the marketing landing page): ProtectedRoute shows a
+          // loading spinner until the post-redirect session check
+          // resolves, so a successful login visibly drops the user into
+          // the app instead of leaving them on marketing copy wondering
+          // whether anything happened.
+          redirectTo: `${window.location.origin}/dashboard`,
         }
       });
 

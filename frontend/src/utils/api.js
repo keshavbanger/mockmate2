@@ -9,7 +9,10 @@ const getBaseUrl = () => {
 
 const api = axios.create({
   baseURL: getBaseUrl(),
-  timeout: 30000,
+  // See AuthContext.jsx's api instance for why this isn't 30s: Render's
+  // free-tier cold start can take 50s+, and a shorter timeout here would
+  // surface that wait as a false "Network Error" instead of just being slow.
+  timeout: 65000,
   headers: { 'Content-Type': 'application/json' },
 });
 
