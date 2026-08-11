@@ -70,11 +70,11 @@ public class CodeExecutionService {
     }
 
     private CodeExecutionProvider getProvider() {
-        String key = configuredProvider != null ? configuredProvider.toLowerCase() : "piston";
+        String key = configuredProvider != null ? configuredProvider.toLowerCase() : "judge0";
         CodeExecutionProvider provider = providerMap.get(key);
         if (provider == null) {
-            log.warn("Configured code execution provider '{}' not found, falling back to 'piston'", key);
-            provider = providerMap.get("piston");
+            log.warn("Configured code execution provider '{}' not found, falling back to 'judge0'", key);
+            provider = providerMap.get("judge0");
         }
         if (provider == null && !providerMap.isEmpty()) {
             provider = providerMap.values().iterator().next();

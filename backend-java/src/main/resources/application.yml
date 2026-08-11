@@ -87,7 +87,7 @@ openrouter:
   model: ${OPENROUTER_MODEL:openai/gpt-oss-20b:free}
 code:
   execution:
-    provider: ${CODE_EXECUTION_PROVIDER:piston}
+    provider: ${CODE_EXECUTION_PROVIDER:judge0}
 
 judge0:
   base-url: ${JUDGE0_BASE_URL:https://judge0-ce.p.rapidapi.com}
