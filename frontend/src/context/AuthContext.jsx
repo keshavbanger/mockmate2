@@ -22,12 +22,17 @@ export const AuthProvider = ({ children }) => {
   // Create axios instance with auth header
   const api = axios.create({
     baseURL: API_BASE,
-    // Render's free tier spins the backend down when idle; Render's own
-    // dashboard states a cold-start wake-up "can delay requests by 50
-    // seconds or more" — 30s could time out before the backend ever
-    // responds, surfacing as a generic "Network Error" that looks like a
-    // real outage. 65s gives margin over that stated worst case.
-    timeout: 65000,
+    // Render's free tier spins the backend down when idle. Render's own
+    // dashboard says a cold start "can delay requests by 50 seconds or
+    // more," but that's an understatement for this specific app — live
+    // Render logs show this Spring Boot backend (JVM warm-up + Hibernate/JPA
+    // init + connection pooling + loading problem banks at startup) actually
+    // takes ~135s to boot from cold ("Started MockmateApplication in 137.0
+    // seconds" / "133.801 seconds" on two separate observed cold starts).
+    // 65s was still less than half of what's needed. 160s gives margin over
+    // the observed worst case — see also the keep-alive workflow that
+    // avoids most cold starts happening at all.
+    timeout: 160000,
     headers: {
       'Content-Type': 'application/json',
     },

@@ -278,7 +278,7 @@ export default function LoginPage() {
             </button>
             {slowLoading && (
               <p className="text-center text-slate-400 text-xs mt-2">
-                First request after a while can take up to a minute — hang tight.
+                First request after a while can take up to 2 minutes — hang tight.
               </p>
             )}
           </form>
