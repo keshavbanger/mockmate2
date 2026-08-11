@@ -109,6 +109,13 @@ public class InterviewEvaluationService {
 
         if (session.getTurns() != null) {
             for (var turn : session.getTurns()) {
+                // A SYSTEM_ERROR turn (both Groq and the OpenRouter fallback
+                // failed) carries a placeholder score=0 with no real topic —
+                // it lands in "General"/"CS Theory" and drags that category's
+                // average down for an infra outage, not the candidate's
+                // actual performance. See the matching fix in
+                // TechInterviewStateService.updatePerformance.
+                if ("SYSTEM_ERROR".equals(turn.getAction())) continue;
                 String topic = turn.getTopicAssessed() != null ? turn.getTopicAssessed() : "General";
                 String cat = topicToCategory(topic, session.getPlan());
                 categoryTurnScores.computeIfAbsent(cat, k -> new ArrayList<>()).add(turn.getScore());

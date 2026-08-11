@@ -4,7 +4,7 @@ import com.example.mockmate.model.ATSReport;
 import com.example.mockmate.service.ATSAnalyzerService;
 import com.example.mockmate.service.ATSCompareService;
 import com.example.mockmate.service.ATSDownloadService;
-import com.example.mockmate.security.JwtUtil;
+import com.example.mockmate.security.AtsReportAccessGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -25,7 +25,7 @@ public class ATSController {
     private final ATSAnalyzerService atsAnalyzerService;
     private final ATSDownloadService atsDownloadService;
     private final ATSCompareService  atsCompareService;
-    private final JwtUtil            jwtUtil;
+    private final AtsReportAccessGuard accessGuard;
 
     // ── POST /api/ats/analyze ──────────────────────────────────────────────────────
     @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -34,7 +34,7 @@ public class ATSController {
             @RequestParam("jdText") String jdText,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        String userId = resolveUserId(authHeader);
+        String userId = accessGuard.resolveUserId(authHeader);
         log.info("[ATS] /analyze userId={} file={} jdLen={}", userId, file.getOriginalFilename(), jdText.length());
 
         if (file.isEmpty()) {
@@ -72,7 +72,7 @@ public class ATSController {
         if (report.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        if (!isOwnedByCaller(report.get(), authHeader)) {
+        if (!accessGuard.isOwnedByCaller(report.get(), authHeader)) {
             return ResponseEntity.status(403).body(Map.of("error", "You do not have access to this report"));
         }
         return ResponseEntity.ok(report.get());
@@ -91,7 +91,7 @@ public class ATSController {
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        if (!isOwnedByCaller(existing.get(), authHeader)) {
+        if (!accessGuard.isOwnedByCaller(existing.get(), authHeader)) {
             return ResponseEntity.status(403).build();
         }
 
@@ -124,7 +124,7 @@ public class ATSController {
             @PathVariable String userId,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        String callerId = resolveUserId(authHeader);
+        String callerId = accessGuard.resolveUserId(authHeader);
         if ("anonymous".equals(callerId)) {
             return ResponseEntity.status(401).body(Map.of("error", "Login required to view report history"));
         }
@@ -141,7 +141,7 @@ public class ATSController {
             @RequestParam("jdText") String jdText,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        String userId = resolveUserId(authHeader);
+        String userId = accessGuard.resolveUserId(authHeader);
         log.info("[ATS] /compare userId={} fileA={} fileB={}", userId,
                 fileA.getOriginalFilename(), fileB.getOriginalFilename());
 
@@ -161,28 +161,5 @@ public class ATSController {
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", "Compare failed: " + e.getMessage()));
         }
-    }
-
-    // ── Helper: extract userId from JWT or fall back to "anonymous" ───────────────
-    private String resolveUserId(String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            try {
-                return jwtUtil.extractEmail(authHeader.substring(7));
-            } catch (Exception e) {
-                log.debug("[ATS] Could not resolve userId from token: {}", e.getMessage());
-            }
-        }
-        return "anonymous";
-    }
-
-    // ── Helper: only "anonymous" (guest-created) reports are accessible without a
-    // matching owner; any report tied to a real account requires the caller's JWT
-    // to resolve to that same userId. ─────────────────────────────────────────────
-    private boolean isOwnedByCaller(ATSReport report, String authHeader) {
-        String owner = report.getUserId();
-        if (owner == null || "anonymous".equals(owner)) {
-            return true;
-        }
-        return owner.equals(resolveUserId(authHeader));
     }
 }

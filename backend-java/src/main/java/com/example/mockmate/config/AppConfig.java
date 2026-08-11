@@ -24,7 +24,13 @@ public class AppConfig {
         HttpClient httpClient = HttpClient.create()
                 .resolver(DefaultAddressResolverGroup.INSTANCE);
         return WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient));
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                // Spring's 256KB default was hit by Piston responses for any
+                // program with a lot of stdout (CodeExecutionService, which
+                // builds its client from this shared builder) — that failed
+                // with an opaque buffer-overflow error instead of Piston's
+                // actual output or a clear "output truncated" message.
+                .codecs(c -> c.defaultCodecs().maxInMemorySize(4 * 1024 * 1024));
     }
 }
 

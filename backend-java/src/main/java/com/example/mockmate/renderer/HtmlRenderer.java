@@ -52,8 +52,8 @@ public class HtmlRenderer implements IResumeRenderer {
         if (notBlank(resume.getEmail()))    contacts.add(esc(resume.getEmail()));
         if (notBlank(resume.getPhone()))    contacts.add(esc(resume.getPhone()));
         if (notBlank(resume.getLocation())) contacts.add(esc(resume.getLocation()));
-        if (notBlank(resume.getLinkedin())) contacts.add("<a href='" + esc(resume.getLinkedin()) + "' target='_blank'>" + esc(displayUrl(resume.getLinkedin())) + "</a>");
-        if (notBlank(resume.getGithub()))   contacts.add("<a href='" + esc(resume.getGithub()) + "' target='_blank'>" + esc(displayUrl(resume.getGithub())) + "</a>");
+        if (notBlank(resume.getLinkedin())) contacts.add("<a href='" + esc(safeHref(resume.getLinkedin())) + "' target='_blank'>" + esc(displayUrl(resume.getLinkedin())) + "</a>");
+        if (notBlank(resume.getGithub()))   contacts.add("<a href='" + esc(safeHref(resume.getGithub())) + "' target='_blank'>" + esc(displayUrl(resume.getGithub())) + "</a>");
         body.append("<p class='resume-contact'>").append(String.join(" | ", contacts)).append("</p>");
         body.append("</header>");
 
@@ -119,9 +119,9 @@ public class HtmlRenderer implements IResumeRenderer {
                 if (notBlank(proj.getTechStack()))
                     body.append("<span class='entry-sub'>").append(esc(proj.getTechStack())).append("</span>");
                 if (notBlank(proj.getGithubLink()))
-                    body.append(" &nbsp;<a class='entry-link' href='").append(esc(proj.getGithubLink())).append("' target='_blank'>View ↗</a>");
+                    body.append(" &nbsp;<a class='entry-link' href='").append(esc(safeHref(proj.getGithubLink()))).append("' target='_blank'>View ↗</a>");
                 if (notBlank(proj.getLiveUrl()))
-                    body.append(" &nbsp;<a class='entry-link' href='").append(esc(proj.getLiveUrl())).append("' target='_blank'>Live ↗</a>");
+                    body.append(" &nbsp;<a class='entry-link' href='").append(esc(safeHref(proj.getLiveUrl()))).append("' target='_blank'>Live ↗</a>");
                 if (proj.getBullets() != null && !proj.getBullets().isEmpty()) {
                     body.append("<ul class='bullets'>");
                     for (String b : proj.getBullets())
@@ -347,9 +347,16 @@ public class HtmlRenderer implements IResumeRenderer {
         return "<div class='section-header'>" + esc(text) + "</div>";
     }
 
+    // Attributes below (href='...') are built with single quotes, but this
+    // used to only escape " — a field like linkedin: "x' onmouseover='..."
+    // could break out of a single-quoted attribute and inject a live event
+    // handler into HTML that's rendered in a preview iframe and offered as
+    // a downloadable .html file. Escaping ' as well closes that regardless
+    // of which quote style any given attribute happens to use.
     private String esc(String s) {
         if (s == null) return "";
-        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;");
+        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+                .replace("\"","&quot;").replace("'","&#39;");
     }
 
     private boolean notBlank(String s) { return s != null && !s.isBlank(); }
@@ -359,5 +366,18 @@ public class HtmlRenderer implements IResumeRenderer {
     private String displayUrl(String url) {
         if (url == null) return "";
         return url.replaceFirst("(?i)^https?://", "").replaceFirst("(?i)^www\\.", "");
+    }
+
+    // These fields come straight from AI-reconstructed or user-edited resume
+    // data and end up as a real href — escaping quotes (see esc()) stops
+    // attribute breakout, but a value like "javascript:alert(1)" is still a
+    // fully well-formed, click-triggered XSS payload even when escaped. Only
+    // allow http(s) links through; anything else renders as plain text via a
+    // harmless "#" anchor.
+    private String safeHref(String url) {
+        if (url == null) return "#";
+        String trimmed = url.trim();
+        String withScheme = trimmed.matches("(?i)^https?://.*") ? trimmed : "https://" + trimmed;
+        return withScheme.matches("(?i)^https?://.*") ? withScheme : "#";
     }
 }

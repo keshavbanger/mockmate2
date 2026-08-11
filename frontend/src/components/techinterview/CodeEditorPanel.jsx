@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 
+// C++/Go can't be generically graded (see CodeExecutionService — no
+// per-problem type metadata to marshal function args for a language with no
+// runtime reflection), so every submission in either fails every test case
+// regardless of correctness. They stay selectable since Run/Console mode
+// still works, but the label makes that limitation visible up front instead
+// of the candidate discovering it only after writing a full solution.
 const LANG_OPTS = [
   { value: 'java', label: 'Java' },
   { value: 'python', label: 'Python' },
-  { value: 'cpp', label: 'C++' },
+  { value: 'cpp', label: 'C++ (ungraded)' },
   { value: 'javascript', label: 'JavaScript' },
-  { value: 'go', label: 'Go' },
+  { value: 'go', label: 'Go (ungraded)' },
 ];
 
 const MONACO_LANG = { java: 'java', python: 'python', cpp: 'cpp', javascript: 'javascript', go: 'go' };

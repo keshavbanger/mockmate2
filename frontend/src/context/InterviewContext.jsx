@@ -27,7 +27,6 @@ const initialState = {
     startTime: null,
     endTime: null,
     status: null,            // 'active', 'completed', etc.
-    recordingPath: null,     // path to uploaded recording on server
     currentQuestionIndex: 0, // current question being answered
   },
   reportData: null,
@@ -50,7 +49,6 @@ const A = {
   SET_END_TIME:         'SET_END_TIME',
   SET_REPORT_DATA:      'SET_REPORT_DATA',
   SET_STATUS:           'SET_STATUS',
-  SET_RECORDING_UPLOADED: 'SET_RECORDING_UPLOADED',
   SET_CURRENT_QUESTION: 'SET_CURRENT_QUESTION',
   SET_INTERIM_TRANSCRIPT: 'SET_INTERIM_TRANSCRIPT',
   SET_REVEALED_QUESTION_INDEX: 'SET_REVEALED_QUESTION_INDEX',
@@ -200,12 +198,6 @@ function reducer(state, action) {
         sessionMetrics: { ...state.sessionMetrics, status: action.payload },
       };
 
-    case A.SET_RECORDING_UPLOADED:
-      return {
-        ...state,
-        sessionMetrics: { ...state.sessionMetrics, recordingPath: action.payload },
-      };
-
     case A.SET_CURRENT_QUESTION:
       return {
         ...state,
@@ -251,7 +243,6 @@ export function InterviewProvider({ children }) {
   const setEndTime        = useCallback((t)    => dispatch({ type: A.SET_END_TIME,         payload: t }),     []);
   const setReportData     = useCallback((data) => dispatch({ type: A.SET_REPORT_DATA,      payload: data }),  []);
   const setStatus         = useCallback((status) => dispatch({ type: A.SET_STATUS,         payload: status }), []);
-  const setRecordingUploaded = useCallback((path) => dispatch({ type: A.SET_RECORDING_UPLOADED, payload: path }), []);
   const setCurrentQuestion = useCallback((idx)  => dispatch({ type: A.SET_CURRENT_QUESTION,  payload: idx }),  []);
   const reset             = useCallback(()     => dispatch({ type: A.RESET }),                                []);
 
@@ -278,7 +269,6 @@ export function InterviewProvider({ children }) {
       setEndTime,
       setReportData,
       setStatus,
-      setRecordingUploaded,
       setCurrentQuestion,
       reset,
     }}>

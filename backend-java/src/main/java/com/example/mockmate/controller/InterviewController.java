@@ -1,6 +1,7 @@
 package com.example.mockmate.controller;
 
 import com.example.mockmate.dto.response.ResumeParsedResponse;
+import com.example.mockmate.security.HmacTokenUtil;
 import com.example.mockmate.service.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,11 +10,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.mockmate.repository.InterviewRepository;
 import com.example.mockmate.model.Interview;
+import com.example.mockmate.model.User;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.nio.file.Files;
@@ -42,19 +46,39 @@ public class InterviewController {
     private final WebClient.Builder webClientBuilder;
     private final InterviewRepository interviewRepository;
     private final GroqWhisperService groqWhisperService;
+    private final HmacTokenUtil hmacTokenUtil;
 
     @Value("${groq.api-key:}")
     private String groqApiKey;
 
+    // Every write/read below that takes a session_id used to trust that
+    // "authenticated" was enough, with no check that the caller was the
+    // person who actually created that session — any two logged-in users
+    // could read or mutate each other's live interview by sessionId alone.
+    // This is the one check that closes that gap everywhere it's called.
+    private ResponseEntity<?> ownershipError() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("detail", "You do not have access to this session"));
+    }
+
+    private boolean isOwnedByOther(Map<String, Object> session, User user) {
+        Object ownerId = session.get("user_id");
+        if (ownerId == null) return false; // no owner recorded yet (e.g. pre-login session) — allow, startInterview claims it
+        if (user == null) return true;
+        return !ownerId.equals(user.getId());
+    }
+
     @PostMapping("/start-interview")
     public ResponseEntity<?> startInterview(
             @RequestBody Map<String, Object> request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.example.mockmate.model.User user) {
+            @AuthenticationPrincipal User user) {
         try {
             String sessionId = (String) request.get("session_id");
             Map<String, Object> sessionData = sessionStoreService.getSession(sessionId);
             if (sessionData == null) {
                 return ResponseEntity.badRequest().body(Map.of("detail", "Session not found"));
+            }
+            if (isOwnedByOther(sessionData, user)) {
+                return ownershipError();
             }
             if (user != null) {
                 sessionData.put("user_id", user.getId());
@@ -131,13 +155,16 @@ public class InterviewController {
     }
 
     @PostMapping("/save-turn")
-    public ResponseEntity<?> saveTurn(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> saveTurn(@RequestBody Map<String, Object> request, @AuthenticationPrincipal User user) {
         String sessionId = (String) request.get("session_id");
         Map<String, Object> turnData = castMap(request.get("turn_data"));
 
         Map<String, Object> session = sessionStoreService.getSession(sessionId);
         if (session == null) {
             return ResponseEntity.badRequest().body(Map.of("detail", "Session not found"));
+        }
+        if (isOwnedByOther(session, user)) {
+            return ownershipError();
         }
 
         List<Map<String, Object>> turns = castMapList(session.getOrDefault("turns", new ArrayList<>()));
@@ -148,13 +175,16 @@ public class InterviewController {
     }
 
     @PostMapping("/end-interview")
-    public ResponseEntity<?> endInterview(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> endInterview(@RequestBody Map<String, Object> request, @AuthenticationPrincipal User user) {
         String sessionId = (String) request.get("session_id");
         String conversationId = (String) request.get("conversation_id");
 
         Map<String, Object> session = sessionStoreService.getSession(sessionId);
         if (session == null) {
             return ResponseEntity.badRequest().body(Map.of("detail", "Session not found"));
+        }
+        if (isOwnedByOther(session, user)) {
+            return ownershipError();
         }
 
         try {
@@ -170,13 +200,16 @@ public class InterviewController {
     }
 
     @PostMapping("/save-emotion-snapshots")
-    public ResponseEntity<?> saveEmotionSnapshots(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> saveEmotionSnapshots(@RequestBody Map<String, Object> request, @AuthenticationPrincipal User user) {
         String sessionId = (String) request.get("session_id");
         List<Map<String, Object>> snapshots = castMapList(request.get("snapshots"));
 
         Map<String, Object> session = sessionStoreService.getSession(sessionId);
         if (session == null) {
             return ResponseEntity.badRequest().body(Map.of("detail", "Session not found"));
+        }
+        if (isOwnedByOther(session, user)) {
+            return ownershipError();
         }
 
         List<Map<String, Object>> existingSnapshots = castMapList(session.getOrDefault("emotion_snapshots", new ArrayList<>()));
@@ -187,13 +220,16 @@ public class InterviewController {
     }
 
     @PostMapping("/mock-chat")
-    public ResponseEntity<?> mockChat(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> mockChat(@RequestBody Map<String, Object> request, @AuthenticationPrincipal User user) {
         String sessionId = (String) request.get("session_id");
         String userText = (String) request.get("user_text");
 
         Map<String, Object> session = sessionStoreService.getSession(sessionId);
         if (session == null) {
             return ResponseEntity.badRequest().body(Map.of("detail", "Session not found"));
+        }
+        if (isOwnedByOther(session, user)) {
+            return ownershipError();
         }
 
         List<Map<String, Object>> turns = castMapList(session.getOrDefault("turns", new ArrayList<>()));
@@ -392,7 +428,13 @@ public class InterviewController {
     }
 
     @PostMapping("/tavus-webhook")
-    public ResponseEntity<?> tavusWebhook(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<?> tavusWebhook(
+            @RequestBody Map<String, Object> payload,
+            @RequestParam(value = "wsec", required = false) String wsec) {
+        if (!hmacTokenUtil.verify(TavusService.WEBHOOK_TOKEN_INPUT, wsec)) {
+            log.warn("[Tavus Webhook] Rejected — missing or invalid wsec token");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("detail", "Invalid webhook token"));
+        }
         log.info("[Tavus Webhook] Received payload: {}", payload);
         try {
             String eventType = (String) payload.get("event_type");
@@ -427,7 +469,7 @@ public class InterviewController {
     }
 
     @PostMapping("/generate-report")
-    public ResponseEntity<?> generateReport(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> generateReport(@RequestBody Map<String, Object> request, @AuthenticationPrincipal User user) {
         try {
             String sessionId = (String) request.get("session_id");
             if (sessionId == null) {
@@ -438,6 +480,9 @@ public class InterviewController {
                 Map<String, Object> sessionData = sessionStoreService.getSession(sessionId);
                 if (sessionData == null) {
                     return ResponseEntity.badRequest().body(Map.of("detail", "Session not found or expired"));
+                }
+                if (isOwnedByOther(sessionData, user)) {
+                    return ownershipError();
                 }
 
                 // Defensive type logging
@@ -576,15 +621,33 @@ public class InterviewController {
         }
     }
 
+    // Only real audio containers a browser MediaRecorder would actually
+    // produce — without this, any content-type was accepted and stored under
+    // an attacker-chosen extension, then served back by getRecording.
+    private static final java.util.Set<String> ALLOWED_AUDIO_CONTENT_TYPES = java.util.Set.of(
+            "audio/webm", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/ogg");
+
     @PostMapping(value = "/save-audio-turn", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> saveAudioTurn(
             @RequestParam("session_id") String sessionId,
             @RequestParam("question_index") int questionIndex,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal User user) {
         try {
             Map<String, Object> session = sessionStoreService.getSession(sessionId);
             if (session == null) {
                 return ResponseEntity.badRequest().body(Map.of("detail", "Session not found"));
+            }
+            if (isOwnedByOther(session, user)) {
+                return ownershipError();
+            }
+
+            // MediaRecorder's actual content-type often carries codec params,
+            // e.g. "audio/webm;codecs=opus" — compare only the base type.
+            String contentType = file.getContentType();
+            String baseContentType = contentType == null ? null : contentType.split(";")[0].trim().toLowerCase();
+            if (baseContentType == null || !ALLOWED_AUDIO_CONTENT_TYPES.contains(baseContentType)) {
+                return ResponseEntity.badRequest().body(Map.of("detail", "Unsupported audio content type: " + contentType));
             }
 
             // Create recordings directory if not exists
@@ -619,8 +682,12 @@ public class InterviewController {
                 transcript = "No answer recorded.";
             }
 
-            // Formulate audio URL for playback
-            String audioUrl = "/api/recordings/" + filename;
+            // /api/recordings/** stays permitAll (an <audio src> can't send an
+            // Authorization header), so this signed token is what actually
+            // gates access instead — without it, anyone who learned a
+            // sessionId could list/guess filenames and play back a
+            // stranger's recorded interview answers.
+            String audioUrl = "/api/recordings/" + filename + "?sig=" + hmacTokenUtil.sign(filename);
 
             // Save turn to the session list (prevent duplicate turns for the same question index)
             List<Map<String, Object>> turns = castMapList(session.getOrDefault("turns", new ArrayList<>()));
@@ -679,10 +746,18 @@ public class InterviewController {
     }
 
     @GetMapping("/recordings/{filename:.+}")
-    public ResponseEntity<org.springframework.core.io.Resource> getRecording(@PathVariable String filename) {
+    public ResponseEntity<org.springframework.core.io.Resource> getRecording(
+            @PathVariable String filename,
+            @RequestParam(value = "sig", required = false) String sig) {
         try {
-            // This endpoint is unauthenticated (permitAll), so filename must never be
-            // allowed to escape the recordings directory via "../" path traversal.
+            // This endpoint is unauthenticated (permitAll — an <audio src> can't
+            // send an Authorization header), so both checks below matter: the
+            // path-traversal guard, and the signature that stands in for auth —
+            // without it, knowing/guessing a filename alone was enough to play
+            // back a stranger's recording.
+            if (!hmacTokenUtil.verify(filename, sig)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
             Path recordingsDir = Paths.get("data", "recordings").toAbsolutePath().normalize();
             Path filePath = recordingsDir.resolve(filename).normalize();
             if (!filePath.startsWith(recordingsDir)) {

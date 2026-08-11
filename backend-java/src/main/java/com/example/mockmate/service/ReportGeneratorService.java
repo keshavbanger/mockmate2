@@ -8,10 +8,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import jakarta.annotation.PostConstruct;
 
+import jakarta.annotation.PreDestroy;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -46,12 +51,36 @@ public class ReportGeneratorService {
     private final ObjectMapper objectMapper;
     private final FillerDetectorService fillerDetectorService;
 
+    // The qualitative + coaching calls below block the calling thread for up
+    // to TIMEOUT_SEC*2 seconds each (retry-on-timeout via .block()). Running
+    // them via the bare CompletableFuture.supplyAsync(...) default would put
+    // them on ForkJoinPool.commonPool() — a pool shared by the entire JVM,
+    // including any other parallel streams / unrelated CompletableFutures.
+    // Two 20-40s blocking occupants per report request would starve that
+    // shared pool under load and stall unrelated app code, not just report
+    // generation. A dedicated pool isolates the blast radius to this service.
+    private final ExecutorService reportExecutor = Executors.newCachedThreadPool(namedThreadFactory("report-groq"));
+
     @Value("${groq.api-key:}")
     private String groqApiKey;
 
     @PostConstruct
     public void init() {
         if (groqApiKey != null) groqApiKey = groqApiKey.trim().replace("\"","").replace("'","");
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        reportExecutor.shutdown();
+    }
+
+    private static java.util.concurrent.ThreadFactory namedThreadFactory(String prefix) {
+        AtomicInteger counter = new AtomicInteger(1);
+        return runnable -> {
+            Thread t = new Thread(runnable, prefix + "-" + counter.getAndIncrement());
+            t.setDaemon(true);
+            return t;
+        };
     }
 
     public ReportGeneratorService(WebClient.Builder webClientBuilder,
@@ -102,9 +131,9 @@ public class ReportGeneratorService {
         // Stage 2: Parallel Groq calls
         final String input = inputJson;
         CompletableFuture<Map<String, Object>> qualFuture =
-            CompletableFuture.supplyAsync(() -> callGroqQualitativeWithFallback(input, metrics));
+            CompletableFuture.supplyAsync(() -> callGroqQualitativeWithFallback(input, metrics), reportExecutor);
         CompletableFuture<Map<String, Object>> coachFuture =
-            CompletableFuture.supplyAsync(() -> callGroqCoachingWithFallback(input, metrics));
+            CompletableFuture.supplyAsync(() -> callGroqCoachingWithFallback(input, metrics), reportExecutor);
         CompletableFuture.allOf(qualFuture, coachFuture).join();
 
         Map<String, Object> qual  = qualFuture.join();

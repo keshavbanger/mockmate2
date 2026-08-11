@@ -45,8 +45,6 @@ public class ATSDownloadService {
     private final HtmlRenderer     htmlRenderer;
     private final TemplateRegistry templateRegistry;
 
-    // Legacy renderer — kept for backward compat until all callers migrate
-    private final ResumeTemplateRenderer templateRenderer;
     private final ResumeATSEnforcer      atsEnforcer;
 
     static final String ATS_DIR = "reports/ats";

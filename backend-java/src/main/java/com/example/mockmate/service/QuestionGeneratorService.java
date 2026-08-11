@@ -98,8 +98,18 @@ public class QuestionGeneratorService {
             }
             """;
 
-    // ── Thread-local: stores JD extras between service and controller ─────────
-    private final ThreadLocal<Map<String, Object>> jdExtras = new ThreadLocal<>();
+    // ── Result of a generation call: questions + optional JD/company extras ──
+    // Previously this "extra" data (skillGaps/matchedSkills/richQuestions)
+    // was smuggled back to the controller via a ThreadLocal set here and
+    // read+cleared in a separate getLastJdExtras() call. On a pooled servlet
+    // thread that's a cross-request data leak: if anything threw between
+    // the set() and the controller's read (e.g. one of the several
+    // updateSession() calls in between), the ThreadLocal was never cleared,
+    // and the NEXT unrelated request served by that same reused thread —
+    // even one for a different user — would pick up the stale extras.
+    // Returning the extras directly ties their lifetime to the call stack
+    // instead of the thread, which makes that leak impossible.
+    public record Result(List<String> questions, Map<String, Object> extras) {}
 
     public QuestionGeneratorService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
         this.webClient = webClientBuilder.baseUrl("https://api.groq.com/openai/v1/").build();
@@ -115,7 +125,7 @@ public class QuestionGeneratorService {
     }
 
     // ── Public API: backward-compat overload ──────────────────────────────────
-    public List<String> generateQuestions(
+    public Result generateQuestions(
             ResumeParsedResponse resumeData,
             String interviewType,
             String difficulty,
@@ -125,7 +135,7 @@ public class QuestionGeneratorService {
     }
 
     // ── Public API: JD-aware (old 5-arg) ─────────────────────────────────────
-    public List<String> generateQuestions(
+    public Result generateQuestions(
             ResumeParsedResponse resumeData,
             String interviewType,
             String difficulty,
@@ -136,7 +146,7 @@ public class QuestionGeneratorService {
     }
 
     // ── Public API: full (company + JD) — main entry point ───────────────────
-    public List<String> generateQuestions(
+    public Result generateQuestions(
             ResumeParsedResponse resumeData,
             String interviewType,
             String difficulty,
@@ -150,17 +160,10 @@ public class QuestionGeneratorService {
 
         // Use standard plain-array prompt only when there is no JD and no company style
         if (!hasJD && !hasCompany) {
-            return generateStandard(resumeData, interviewType, difficulty, language);
+            return new Result(generateStandard(resumeData, interviewType, difficulty, language), null);
         }
 
         return generateUnified(resumeData, jobDescription, styleGuide, companyId);
-    }
-
-    // ── Retrieve and clear the thread-local JD extras ────────────────────────
-    public Map<String, Object> getLastJdExtras() {
-        Map<String, Object> extras = jdExtras.get();
-        jdExtras.remove();
-        return extras;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -185,10 +188,10 @@ public class QuestionGeneratorService {
     // ────────────────────────────────────────────────────────────────────────────
     // INTERNAL: unified path → structured JSON schema
     // ────────────────────────────────────────────────────────────────────────────
-    private List<String> generateUnified(ResumeParsedResponse r,
-                                          String jobDescription,
-                                          String styleGuide,
-                                          String companyId) {
+    private Result generateUnified(ResumeParsedResponse r,
+                                    String jobDescription,
+                                    String styleGuide,
+                                    String companyId) {
         boolean hasJD = jobDescription != null && !jobDescription.isBlank();
 
         // Build the optional JD block
@@ -240,7 +243,7 @@ public class QuestionGeneratorService {
     }
 
     // ── Groq call: unified schema (company/JD path) ───────────────────────────
-    private List<String> callGroqForUnifiedSchema(String prompt) {
+    private Result callGroqForUnifiedSchema(String prompt) {
         String raw = callGroq(prompt, 3500,
                 "You are a senior technical interviewer. Return ONLY valid JSON matching the requested schema, no markdown.");
         try {
@@ -275,18 +278,16 @@ public class QuestionGeneratorService {
 
             String interviewStyle = parsed.path("interviewStyle").asText("general");
 
-            // Stash everything for the controller
             Map<String, Object> extras = new HashMap<>();
             extras.put("skillGaps",      skillGaps);
             extras.put("matchedSkills",  matchedSkills);
             extras.put("interviewStyle", interviewStyle);
             extras.put("richQuestions",  richQuestions);
-            jdExtras.set(extras);
 
             log.info("Unified mode ({}): {} questions, {} gaps, {} matches",
                     interviewStyle, questions.size(), skillGaps.size(), matchedSkills.size());
 
-            return questions.stream().map(String::trim).collect(Collectors.toList());
+            return new Result(questions.stream().map(String::trim).collect(Collectors.toList()), extras);
         } catch (Exception e) {
             log.error("Failed to parse unified Groq response: {}", raw, e);
             throw new RuntimeException("Failed to parse unified Groq response", e);

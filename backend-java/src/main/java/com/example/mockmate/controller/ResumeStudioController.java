@@ -1,6 +1,7 @@
 package com.example.mockmate.controller;
 
 import com.example.mockmate.model.*;
+import com.example.mockmate.security.AtsReportAccessGuard;
 import com.example.mockmate.service.ATSDownloadService;
 import com.example.mockmate.service.ResumeHtmlGeneratorService;
 import com.example.mockmate.renderer.LatexRenderer;
@@ -16,7 +17,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/resume-studio")
-@CrossOrigin(origins = {"http://localhost:5173","http://localhost:3000"})
 @RequiredArgsConstructor
 public class ResumeStudioController {
 
@@ -24,15 +24,29 @@ public class ResumeStudioController {
     private final ResumeHtmlGeneratorService resumeHtmlGeneratorService;
     private final LatexRenderer latexRenderer;
     private final TemplateRegistry templateRegistry;
+    private final AtsReportAccessGuard accessGuard;
+
+    // Every reportId-scoped endpoint below used to skip ownership entirely —
+    // ATSController already enforced this for the same reportId (see
+    // AtsReportAccessGuard), Studio just never got the same treatment even
+    // though it reads/overwrites the exact same underlying files.
+    private ResponseEntity<?> ownershipError() {
+        return ResponseEntity.status(403).body(Map.of("error", "You do not have access to this report"));
+    }
 
     // -- Load reconstructed resume for editor -----------------------------------
     @GetMapping("/load/{reportId}")
     public ResponseEntity<?> load(
             @PathVariable String reportId,
             @RequestParam(defaultValue = "") String jd,
-            @RequestParam(defaultValue = "classic") String template) {
+            @RequestParam(defaultValue = "classic") String template,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
             log.info("[Studio] Load reportId={} template={}", reportId, template);
+            ATSReport report = atsDownloadService.loadReport(reportId);
+            if (!accessGuard.isOwnedByCaller(report, authHeader)) {
+                return ownershipError();
+            }
             ReconstructedResume resume = atsDownloadService.loadForStudio(reportId, jd, template);
             return ResponseEntity.ok(resume);
         } catch (Exception e) {
@@ -43,10 +57,19 @@ public class ResumeStudioController {
 
     // -- Save edited resume ----------------------------------------------------
     @PostMapping("/save/{reportId}")
-    public ResponseEntity<Map<String, String>> save(
+    public ResponseEntity<?> save(
             @PathVariable String reportId,
-            @RequestBody ReconstructedResume edited) {
+            @RequestBody ReconstructedResume edited,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         log.info("[Studio] Save reportId={}", reportId);
+        try {
+            ATSReport report = atsDownloadService.loadReport(reportId);
+            if (!accessGuard.isOwnedByCaller(report, authHeader)) {
+                return ownershipError();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(404).body(Map.of("error", "Report not found"));
+        }
         atsDownloadService.saveReconstructed(reportId, edited);
         return ResponseEntity.ok(Map.of("status", "saved", "reportId", reportId));
     }
@@ -95,9 +118,14 @@ public class ResumeStudioController {
     public ResponseEntity<byte[]> downloadFromReport(
             @PathVariable String reportId,
             @RequestParam(required = false, defaultValue = "") String jd,
-            @RequestParam(defaultValue = "classic") String template) {
+            @RequestParam(defaultValue = "classic") String template,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
             log.info("[Studio] DownloadFromReport reportId={} template={}", reportId, template);
+            ATSReport ownerCheck = atsDownloadService.loadReport(reportId);
+            if (!accessGuard.isOwnedByCaller(ownerCheck, authHeader)) {
+                return ResponseEntity.status(403).build();
+            }
             ATSDownloadResult result = atsDownloadService.generate(reportId, jd, template);
             String name = result.getReconstructed() != null && result.getReconstructed().getName() != null
                 ? sanitizeFilename(result.getReconstructed().getName()) : "resume";
@@ -119,9 +147,14 @@ public class ResumeStudioController {
     public ResponseEntity<?> confidence(
             @PathVariable String reportId,
             @RequestParam(defaultValue = "") String jd,
-            @RequestParam(defaultValue = "classic") String template) {
+            @RequestParam(defaultValue = "classic") String template,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
             log.info("[Studio] Confidence check reportId={}", reportId);
+            ATSReport report = atsDownloadService.loadReport(reportId);
+            if (!accessGuard.isOwnedByCaller(report, authHeader)) {
+                return ownershipError();
+            }
             ReconstructedResume resume = atsDownloadService.loadForStudio(reportId, jd, template);
             ResumeFieldConfidence conf = resumeHtmlGeneratorService.analyzeConfidence(resume);
             return ResponseEntity.ok(Map.of(
@@ -206,9 +239,18 @@ public class ResumeStudioController {
     @PutMapping("/{resumeId}/template")
     public ResponseEntity<?> switchTemplate(
             @PathVariable String resumeId,
-            @RequestParam String templateId) {
+            @RequestParam String templateId,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
             log.info("[Studio] Template switch resumeId={} newTemplate={}", resumeId, templateId);
+            try {
+                ATSReport report = atsDownloadService.loadReport(resumeId);
+                if (!accessGuard.isOwnedByCaller(report, authHeader)) {
+                    return ownershipError();
+                }
+            } catch (Exception e) {
+                return ResponseEntity.status(404).body(Map.of("error", "Report not found"));
+            }
             long start = System.currentTimeMillis();
             ATSDownloadResult result = atsDownloadService.switchTemplate(resumeId, templateId);
             long elapsed = System.currentTimeMillis() - start;

@@ -71,23 +71,33 @@ export default function ResumeStudioPage() {
   // ── Load from API ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!reportId) return;
+    const controller = new AbortController();
     setLoading(true);
     fetch(`${BASE}/api/resume-studio/load/${reportId}?jd=${encodeURIComponent(jd)}&template=${template}`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
+      headers: { Authorization: `Bearer ${getToken()}` },
+      signal: controller.signal,
     })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => { setResume(data); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
+      .catch(e => { if (e.name !== 'AbortError') { setError(e.message); setLoading(false); } });
+    return () => controller.abort();
   }, [reportId]); // load once on mount
 
   // ── Live ATS scoring (debounced) ──────────────────────────────────────────────
+  // AbortController here does double duty: it cancels the in-flight request
+  // on unmount, AND cancels the previous request whenever a newer one starts
+  // (effect cleanup runs before the next run). Without it, a slower earlier
+  // response could resolve after a newer one and overwrite atsScore/missing/
+  // quickFixes with stale data, and setState could fire after unmount.
   useEffect(() => {
     if (!debouncedResume) return;
+    const controller = new AbortController();
     setScoring(true);
     fetch(`${BASE}/api/resume-studio/score?jd=${encodeURIComponent(jd)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(debouncedResume),
+      signal: controller.signal,
     })
       .then(r => r.json())
       .then(data => {
@@ -96,20 +106,23 @@ export default function ResumeStudioPage() {
         setQuickFixes(data.quickFixes || []);
         setScoring(false);
       })
-      .catch(() => setScoring(false));
+      .catch(e => { if (e.name !== 'AbortError') setScoring(false); });
+    return () => controller.abort();
   }, [debouncedResume, jd]);
 
   // ── Auto-save edited resume (debounced) ──────────────────────────────────────
   useEffect(() => {
     if (!debouncedResume || !reportId) return;
+    const controller = new AbortController();
     setSaving(true);
     fetch(`${BASE}/api/resume-studio/save/${reportId}`, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${getToken()}`
       },
       body: JSON.stringify(debouncedResume),
+      signal: controller.signal,
     })
       .then(r => {
         if (!r.ok) throw new Error('Save failed');
@@ -117,9 +130,11 @@ export default function ResumeStudioPage() {
       })
       .then(() => setSaving(false))
       .catch(e => {
+        if (e.name === 'AbortError') return;
         console.error('[Studio] Auto-save error:', e);
         setSaving(false);
       });
+    return () => controller.abort();
   }, [debouncedResume, reportId]);
 
   // ── Download DOCX ─────────────────────────────────────────────────────────────

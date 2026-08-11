@@ -2,10 +2,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { useInterview } from '../context/InterviewContext.jsx';
 import { countFillers, totalFillerCount, highlightFillers, calcWPM } from '../utils/fillerWords.js';
-import VideoRecorder from '../utils/videoRecorder.js';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition.js';
 import { saveTurn, saveAudioTurn, sendMockChat } from '../utils/api.js';
 import AudioRecorder from '../utils/audioRecorder.js';
+import { useToast } from './Toast.jsx';
 
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 const WASM_URL  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
@@ -26,14 +26,20 @@ function classifyEmotion(blendshapes) {
   let emotion = 'Neutral';
   if (smile > 0.4 && browDown < 0.2) emotion = 'Confident';
   else if (browDown > 0.35)           emotion = 'Nervous';
+  // The breakdown must agree with `emotion` above — it used to be computed
+  // from independent thresholds (e.g. `smile > 0.4` for confident regardless
+  // of browDown), so a frame labeled "Nervous" could still show a nonzero
+  // "confident" share, contradicting the headline label shown to the user
+  // and skewing the backend's weighted confidenceScore (ReportGeneratorService
+  // .computeEmotionScore sums these fields directly across all snapshots).
   return {
     emotion,
     confidence: parseFloat(confidence.toFixed(3)),
     scores: { smile, browDown, eyeContact, jawOpen },
     emotions: {
-      confident: smile > 0.4 ? smile : 0,
-      nervous:   browDown,
-      neutral:   emotion === 'Neutral' ? 1 - Math.max(smile, browDown) : 0,
+      confident: emotion === 'Confident' ? confidence : 0,
+      nervous:   emotion === 'Nervous'   ? confidence : 0,
+      neutral:   emotion === 'Neutral'   ? confidence : 0,
     },
   };
 }
@@ -41,6 +47,7 @@ function classifyEmotion(blendshapes) {
 // ─── CandidatePanel ───────────────────────────────────────────────────────────
 export default function CandidatePanel() {
   const ctx = useInterview();
+  const { addToast, ToastContainer } = useToast();
 
   const audioRecorderRef = useRef(null);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
@@ -76,7 +83,7 @@ export default function CandidatePanel() {
     if (res.success) {
       setIsRecordingAudio(true);
     } else {
-      alert('Failed to access microphone: ' + res.error);
+      addToast('Failed to access microphone: ' + res.error, 'error');
     }
   };
 
@@ -100,12 +107,18 @@ export default function CandidatePanel() {
       // Save transcription to local transcript context
       ctx.updateTranscript(transcribedText);
 
-      // Trigger dynamic next-question generation on backend
-      await generateNextQuestion(transcribedText);
+      // Trigger dynamic next-question generation on backend. alreadySaved=true
+      // because saveAudioTurn just above already created/updated this
+      // question's candidate turn — without this, generateNextQuestion's own
+      // saveTurn call below added a SECOND turn for the same question_index,
+      // and the report builder merges duplicates by string-concatenating
+      // them, so every avatar-mode answer ended up literally joined with
+      // itself (inflating WPM, filler-word counts, and the score).
+      await generateNextQuestion(transcribedText, true);
 
     } catch (error) {
       console.error('[CandidatePanel] Failed to save/transcribe audio:', error);
-      alert('Transcription failed. Please try again.');
+      addToast('Transcription failed. Please try again.', 'error');
     } finally {
       setIsTranscribing(false);
     }
@@ -176,7 +189,7 @@ export default function CandidatePanel() {
       ctxRef.current.setCurrentQuestion(qIdx + 1);
     } catch (err) {
       console.error('[CandidatePanel] Failed to generate next question:', err);
-      alert('Failed to get the next question from AI. Please try again.');
+      addToast('Failed to get the next question from AI. Please try again.', 'error');
     } finally {
       ctx.setGeneratingQuestion(false);
     }
@@ -248,13 +261,6 @@ export default function CandidatePanel() {
   // ── Per-question timing ──────────────────────────────────────────────────
   const questionStartTimeRef = useRef(Date.now());
   const prevQuestionRef      = useRef(ctx.sessionMetrics.currentQuestionIndex);
-
-  // ── Auto-save answer (mock mode) when question index advances ────────────
-  // Bypass: turns are now saved synchronously before the index advances in dynamic mode.
-  useEffect(() => {
-    return;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx.sessionMetrics.currentQuestionIndex, recordedQuestions]);
 
   // ── On completion: flush last answer (mock mode only) ────────────────────
   useEffect(() => {
@@ -369,22 +375,6 @@ export default function CandidatePanel() {
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [mpReady, runDetection]);
 
-  // ── Video recording ───────────────────────────────────────────────────────
-  const recorderRef = useRef(null);
-  useEffect(() => {
-    const initRecorder = async () => {
-      if (!recorderRef.current) recorderRef.current = new VideoRecorder();
-      const status = ctx.sessionMetrics?.status;
-      if (status === 'active' && !recorderRef.current.getIsRecording()) {
-        const result = await recorderRef.current.start();
-        if (!result.success) console.warn('[VideoRecorder] Failed:', result.error);
-      } else if (status === 'completed' && recorderRef.current.getIsRecording()) {
-        try { await recorderRef.current.stop(); } catch (e) { console.error(e); }
-      }
-    };
-    initRecorder();
-  }, [ctx.sessionMetrics?.status]);
-
   // ── What text to show in Live Transcript area ─────────────────────────────
   // Live Tavus: use ctx.sessionMetrics.transcript (fed by TavusAvatar postMessage handler)
   // Mock: use finalText from Web SpeechRecognition
@@ -404,6 +394,7 @@ export default function CandidatePanel() {
 
   return (
     <div className="flex flex-col gap-6 h-full">
+      <ToastContainer />
 
       {/* ── Webcam feed ─────────────────────────────────────────────────── */}
       <div className="relative rounded-3xl overflow-hidden border border-black/[0.03] bg-white shadow-lg aspect-video w-full flex-shrink-0">

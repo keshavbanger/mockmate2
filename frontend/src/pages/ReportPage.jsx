@@ -16,13 +16,11 @@ import RadarChart from '../components/report/RadarChart.jsx';
 import ConfidenceTrendChart from '../components/report/ConfidenceTrendChart.jsx';
 import EmotionPieChart from '../components/report/EmotionPieChart.jsx';
 import InterviewTimeline from '../components/report/InterviewTimeline.jsx';
-import InterviewRecording from '../components/report/InterviewRecording.jsx';
 import GrammarAnalysis from '../components/report/GrammarAnalysis.jsx';
 import VocabularyBreakdown from '../components/report/VocabularyBreakdown.jsx';
 import AnswerCards from '../components/report/AnswerCards.jsx';
 import FillerWordHeatmap from '../components/report/FillerWordHeatmap.jsx';
 import CoachingPlan from '../components/report/CoachingPlan.jsx';
-import ResumeGapAnalysis from '../components/report/ResumeGapAnalysis.jsx';
 // ── New premium sections ──
 import RecruiterReadiness from '../components/report/RecruiterReadiness.jsx';
 import RoleFitAssessment from '../components/report/RoleFitAssessment.jsx';

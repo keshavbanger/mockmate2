@@ -65,11 +65,14 @@ public class QuestionController {
 
             Boolean noAvatar = (Boolean) request.get("no_avatar");
             List<String> questions;
+            Map<String, Object> extras = null;
             if (Boolean.TRUE.equals(noAvatar)) {
                 questions = List.of("Please introduce yourself and share a brief overview of your background.");
             } else {
-                questions = questionGeneratorService.generateQuestions(
+                QuestionGeneratorService.Result result = questionGeneratorService.generateQuestions(
                         resumeData, interviewType, difficulty, language, jobDescription, companyId);
+                questions = result.questions();
+                extras = result.extras();
             }
 
             // ── Persist base session data ────────────────────────────────────
@@ -86,8 +89,7 @@ public class QuestionController {
                 sessionStoreService.updateSession(sessionId, "job_description", jobDescription);
             }
 
-            // ── Retrieve rich extras from the service (unified path only) ────
-            Map<String, Object> extras = questionGeneratorService.getLastJdExtras();
+            // ── Persist rich extras from the service (unified path only) ─────
             if (extras != null) {
                 Object skillGaps    = extras.get("skillGaps");
                 Object matchedSkills = extras.get("matchedSkills");

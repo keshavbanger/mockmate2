@@ -270,25 +270,65 @@ Return this exact JSON structure:
     // ── Resolve DSA Problem IDs ───────────────────────────────
     private void resolveDsaProblems(InterviewPlan plan) {
         if (plan.getInterviewPlan() == null || plan.getInterviewPlan().getRounds() == null) return;
+
+        // Tracks every problemId already assigned across the WHOLE plan, not
+        // just one round — without this, two unresolved refs (in the same or
+        // different rounds) could both fall back to the same default
+        // problem, and the candidate would see the identical problem twice
+        // in one interview.
+        Set<String> usedProblemIds = new HashSet<>();
+
+        // Lazily built once per plan, only if actually needed. This is
+        // DSAProblemService.selectProblems — a real difficulty/company/JD-
+        // relevance selector that used to sit completely unused, with DSA
+        // selection delegated entirely to the LLM's own LeetCode guesswork
+        // against this app's 9-problem bank. Used here as the fallback pool
+        // so a fallback is still difficulty/JD-relevant instead of always
+        // defaulting to "Two Sum".
+        List<DSAProblem> curatedPool = null;
+
         for (InterviewRound round : plan.getInterviewPlan().getRounds()) {
             if (round.getDsaProblems() == null) continue;
             for (InterviewRound.DSAProblemRef ref : round.getDsaProblems()) {
                 // Map LeetCode ID → local problem ID
                 String localId = "lc-" + String.format("%03d", ref.getLeetcodeId());
                 DSAProblem problem = dsaProblemService.getProblem(localId);
-                if (problem != null) {
-                    ref.setProblemId(localId);
+                DSAProblem resolved;
+                if (problem != null && !usedProblemIds.contains(localId)) {
+                    resolved = problem;
+                    // Already the LLM's original pick — title/difficulty
+                    // already match, no resync needed.
                 } else {
-                    // Try to find closest match
-                    DSAProblem closest = dsaProblemService.findByLeetcodeId(ref.getLeetcodeId());
-                    if (closest != null) {
-                        ref.setProblemId(closest.getId());
+                    // Either not in the local bank, or already used
+                    // elsewhere in this plan. ref.title/difficulty still
+                    // held the LLM's ORIGINAL pick until this fix — the AI
+                    // interviewer would tell the candidate "your challenge
+                    // is Number of Islands" while the editor actually loaded
+                    // Two Sum. Resync both fields to whatever problem
+                    // actually gets loaded so what's said matches what's shown.
+                    DSAProblem closest = problem == null ? dsaProblemService.findByLeetcodeId(ref.getLeetcodeId()) : null;
+                    if (closest != null && !usedProblemIds.contains(closest.getId())) {
+                        resolved = closest;
                     } else {
-                        // Fallback to a default easy problem
-                        ref.setProblemId("lc-001");
-                        log.warn("DSA problem lc-{} not found in bank, falling back to lc-001",
-                                ref.getLeetcodeId());
+                        if (curatedPool == null) {
+                            curatedPool = new ArrayList<>(dsaProblemService.selectProblems(
+                                    plan.getConfig().getRoleLevel(), plan.getConfig().getJdText(),
+                                    plan.getConfig().getCompanyStyle()));
+                        }
+                        resolved = curatedPool.stream()
+                                .filter(p -> !usedProblemIds.contains(p.getId()))
+                                .findFirst()
+                                .orElseGet(() -> dsaProblemService.getProblem("lc-001"));
+                        log.warn("DSA problem lc-{} unavailable or already used, falling back to curated pick {}",
+                                ref.getLeetcodeId(), resolved != null ? resolved.getId() : "lc-001");
                     }
+                }
+
+                ref.setProblemId(resolved != null ? resolved.getId() : "lc-001");
+                if (resolved != null) {
+                    ref.setTitle(resolved.getTitle());
+                    ref.setDifficulty(resolved.getDifficulty());
+                    usedProblemIds.add(resolved.getId());
                 }
             }
         }

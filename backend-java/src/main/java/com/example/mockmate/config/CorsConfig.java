@@ -13,21 +13,30 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    // Comma-separated allowlist, e.g. "http://localhost:5173,https://mockmate2.vercel.app,*"
-    @Value("${cors.allowed-origins:*}")
+    // Comma-separated allowlist, e.g. "http://localhost:5173,https://mockmate.live"
+    // No "*" default: with allowCredentials(true) below, a wildcard origin
+    // fallback means any site on the internet can make credentialed requests
+    // against this API the moment CORS_ALLOWED_ORIGINS isn't set — this
+    // default list is the actual known set of frontends instead.
+    @Value("${cors.allowed-origins:http://localhost:5173,https://mockmate2.vercel.app,https://mockmate.live,https://www.mockmate.live}")
     private String allowedOrigins;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        
+
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
 
-        if (origins.isEmpty() || origins.contains("*")) {
-            config.setAllowedOriginPatterns(List.of("*"));
+        // "*" is still honored if someone explicitly opts into it via the env
+        // var, but it's no longer what an unset/misconfigured deployment
+        // silently gets.
+        if (origins.isEmpty()) {
+            config.setAllowedOriginPatterns(List.of(
+                    "http://localhost:5173", "https://mockmate2.vercel.app",
+                    "https://mockmate.live", "https://www.mockmate.live"));
         } else {
             config.setAllowedOriginPatterns(origins);
         }

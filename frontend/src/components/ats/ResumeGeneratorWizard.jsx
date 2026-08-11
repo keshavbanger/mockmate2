@@ -4,6 +4,7 @@ import {
   getResumeGeneratorParsed, generateVerifiedResume,
   previewResumeHtml, downloadResumeHtml, downloadResumeLatex,
 } from '../../utils/api.js';
+import { useToast } from '../Toast.jsx';
 
 // Bullet fragment connector words the backend's own validator treats as
 // "dangling" (ResumeGenerationValidator.DANGLING_ENDINGS) — reused here so a
@@ -79,6 +80,7 @@ const HARD_BLOCK_MESSAGES = {
  * this one talks only to /api/resume-generator/*.
  */
 export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
+  const { addToast, ToastContainer } = useToast();
   const [step, setStep] = useState('loading'); // loading | blocked | wizard | generating | review | validation_error | error
   const [error, setError] = useState('');
   const [violations, setViolations] = useState([]);
@@ -276,18 +278,18 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
 
   const handleDownloadHtml = async () => {
     try { await downloadResumeHtml(generated.resume, template); }
-    catch (e) { alert('Download failed: ' + e.message); }
+    catch (e) { addToast('Download failed: ' + e.message, 'error'); }
   };
   const handleDownloadLatex = async () => {
     try { await downloadResumeLatex(generated.resume, template); }
-    catch (e) { alert('Download failed: ' + e.message); }
+    catch (e) { addToast('Download failed: ' + e.message, 'error'); }
   };
   const handleDownloadPdf = () => {
     if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.focus();
       iframeRef.current.contentWindow.print();
     } else {
-      alert('Please wait for the preview to load.');
+      addToast('Please wait for the preview to load.', 'error');
     }
   };
 
@@ -513,7 +515,13 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
                     <iframe ref={iframeRef} srcDoc={previewHtml} title="Resume Preview"
                       className="w-full h-full rounded-2xl shadow-xl bg-white border border-black/[0.05]"
                       style={{ minHeight: '460px', border: 'none' }}
-                      sandbox="allow-same-origin allow-scripts allow-modals" />
+                      // The generated resume HTML never contains a <script> tag, so
+                      // allow-scripts + allow-same-origin was pure downside: that
+                      // combination lets any injected script run with the app's own
+                      // origin instead of being sandboxed away. allow-modals is kept
+                      // because handleDownloadPdf calls contentWindow.print(), which
+                      // the sandbox blocks without it.
+                      sandbox="allow-modals" />
                   ) : (
                     <div className="flex items-center justify-center h-64 text-slate-400 font-medium text-sm">
                       {previewing ? 'Generating preview…' : 'Preview will appear here'}
@@ -555,6 +563,11 @@ export default function ResumeGeneratorWizard({ reportId, jd = '', onClose }) {
             </div>
           </div>
         </motion.div>
+        {/* Rendered outside the scale-animated panel above: framer-motion's
+            transform on that panel makes it a containing block for
+            position:fixed descendants, which would otherwise clip/misplace
+            the toast container instead of anchoring it to the viewport. */}
+        <ToastContainer />
       </motion.div>
     </AnimatePresence>
   );

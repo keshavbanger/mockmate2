@@ -2,12 +2,14 @@ package com.example.mockmate.controller;
 
 import com.example.mockmate.dto.response.InterviewSummaryDTO;
 import com.example.mockmate.model.AtsAnalysis;
-import com.example.mockmate.security.JwtUtil;
+import com.example.mockmate.model.User;
 import com.example.mockmate.repository.AtsAnalysisRepository;
 import com.example.mockmate.service.InterviewHistoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -16,19 +18,23 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestController
 @RequestMapping("/api/dashboard")
-@CrossOrigin(origins = "http://localhost:5173")
 @RequiredArgsConstructor
 public class DashboardController {
 
     private final InterviewHistoryService interviewHistoryService;
     private final AtsAnalysisRepository atsAnalysisRepository;
-    private final JwtUtil jwtUtil;
 
     @GetMapping("/summary")
-    public ResponseEntity<?> getDashboardSummary(
-            @RequestParam String userId,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
-            
+    public ResponseEntity<?> getDashboardSummary(@AuthenticationPrincipal User user) {
+        // Previously trusted a client-supplied ?userId= query param outright
+        // (the Authorization header was accepted but never actually used) —
+        // any authenticated user could view any other user's full dashboard
+        // just by changing the param. Always derive it from the token instead.
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String userId = user.getId();
+
         List<InterviewSummaryDTO> interviews = interviewHistoryService.getInterviewHistory(userId);
         List<AtsAnalysis> atsReports = atsAnalysisRepository.findByUserIdOrderByCreatedAtDesc(userId);
         

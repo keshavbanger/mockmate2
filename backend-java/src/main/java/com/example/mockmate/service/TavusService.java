@@ -1,5 +1,6 @@
 package com.example.mockmate.service;
 
+import com.example.mockmate.security.HmacTokenUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -67,9 +68,18 @@ public class TavusService {
             - Do not go off-topic. Bring the conversation back to the interview if needed.
             """;
 
-    public TavusService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper) {
+    private final HmacTokenUtil hmacTokenUtil;
+
+    // Not per-conversation — the callback_url is the same for every
+    // conversation this service creates, so the token only needs to prove
+    // "this call originated from our own createConversation," not identify
+    // which specific conversation it's for (conversation_id already does that).
+    public static final String WEBHOOK_TOKEN_INPUT = "tavus-webhook";
+
+    public TavusService(WebClient.Builder webClientBuilder, ObjectMapper objectMapper, HmacTokenUtil hmacTokenUtil) {
         this.webClient = webClientBuilder.baseUrl("https://tavusapi.com/v2").build();
         this.objectMapper = objectMapper;
+        this.hmacTokenUtil = hmacTokenUtil;
     }
 
     private boolean isTestMode() {
@@ -150,7 +160,11 @@ public class TavusService {
         payload.put("persona_id", personaId);
         payload.put("conversation_name", "Interview: " + candidateName);
         
-        String callbackUrl = backendUrl + "/api/tavus-webhook";
+        // wsec proves the incoming webhook call actually came from a request
+        // we initiated — without it, anyone who observes a conversation_id
+        // (it's echoed back to the frontend) could POST a forged
+        // system.shutdown event and force-complete a stranger's interview.
+        String callbackUrl = backendUrl + "/api/tavus-webhook?wsec=" + hmacTokenUtil.sign(WEBHOOK_TOKEN_INPUT);
         if (callbackUrl != null && !callbackUrl.contains("localhost") && !callbackUrl.contains("127.0.0.1") && callbackUrl.startsWith("https://")) {
             payload.put("callback_url", callbackUrl);
             log.info("[TavusService] Configured webhook callback_url: {}", callbackUrl);

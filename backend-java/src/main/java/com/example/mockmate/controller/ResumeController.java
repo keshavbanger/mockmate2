@@ -49,6 +49,16 @@ public class ResumeController {
                 session = new java.util.HashMap<>();
                 session.put("status", "initialized");
                 session.put("created_at", System.currentTimeMillis() / 1000.0);
+            } else {
+                // Unlike SessionController.createSession, this endpoint can hit an
+                // EXISTING session — don't let it silently reassign ownership away
+                // from whoever already owns it (see SessionController.getSession's
+                // ownership check for the same pattern on the read path).
+                Object existingOwner = session.get("user_id");
+                if (existingOwner != null && (user == null || !existingOwner.equals(user.getId()))) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(Map.of("detail", "You do not have access to this session"));
+                }
             }
             if (user != null) {
                 session.put("user_id", user.getId());

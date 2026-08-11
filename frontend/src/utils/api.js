@@ -292,11 +292,20 @@ export const generateInterviewPlan = (formData) =>
 export const startTechInterview = (payload) =>
   api.post('/tech-interview/start', payload);
 
+// Worst case per AIInterviewerService/OpenRouterFallbackService: 2 models x
+// 2 attempts x up to 30s + fallback ~= up to ~211s, on top of any code/SQL
+// execution this same call performs first. The shared axios instance's
+// default (160s) is shorter than that worst case, so a legitimately slow
+// (not hung) backend call could get aborted client-side while the backend
+// keeps working and still persists the turn.
 export const submitTechAnswer = (sessionId, payload) =>
-  api.post(`/tech-interview/${sessionId}/answer`, payload);
+  api.post(`/tech-interview/${sessionId}/answer`, payload, { timeout: 230000 });
 
+// Backend grades test cases sequentially, each with its own 10s Piston
+// timeout (CodeExecutionService) — a problem with more than one test case
+// can legitimately take longer than the 15s this used to be capped at.
 export const executeTechCode = (sessionId, payload) =>
-  api.post(`/tech-interview/${sessionId}/execute-code`, payload, { timeout: 15000 });
+  api.post(`/tech-interview/${sessionId}/execute-code`, payload, { timeout: 90000 });
 
 export const executeTechSQL = (sessionId, payload) =>
   api.post(`/tech-interview/${sessionId}/execute-sql`, payload);

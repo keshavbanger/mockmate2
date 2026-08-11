@@ -153,6 +153,30 @@ public class TechInterviewStateService {
         TechInterviewSession s = getSession(sessionId);
         if (s == null || problemId == null) return;
         s.setActiveDsaProblemId(problemId);
+
+        // InterviewRound.currentDsaIndex is read by AIInterviewerService to
+        // build the DSA context for the round's currently-active problem,
+        // but nothing ever wrote to it — any round configured with 2+ DSA
+        // problems permanently stuck on index 0, so a candidate could never
+        // actually be moved to a round's second problem even though the
+        // plan called for it. Keep it in sync with whichever problem in the
+        // current round is now active.
+        if (s.getPlan() != null && s.getPlan().getInterviewPlan() != null) {
+            List<InterviewRound> rounds = s.getPlan().getInterviewPlan().getRounds();
+            int ri = s.getCurrentRoundIndex();
+            if (rounds != null && ri >= 0 && ri < rounds.size()) {
+                InterviewRound round = rounds.get(ri);
+                if (round.getDsaProblems() != null) {
+                    for (int i = 0; i < round.getDsaProblems().size(); i++) {
+                        InterviewRound.DSAProblemRef ref = round.getDsaProblems().get(i);
+                        if (ref != null && problemId.equals(ref.getProblemId())) {
+                            round.setCurrentDsaIndex(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         persistSession(s);
     }
 
@@ -210,6 +234,17 @@ public class TechInterviewStateService {
         TechInterviewSession.CandidatePerformance perf = session.getCandidatePerformance();
         if (perf == null) return;
 
+        // A SYSTEM_ERROR turn (both Groq and the OpenRouter fallback failed)
+        // is recorded with score=0/quality=WEAK purely as a placeholder so
+        // the turn history stays complete — it was never folded into
+        // running/final scoring here before this comment either... except
+        // it was: this method used to average over ALL turns unconditionally,
+        // so a transient third-party outage measurably lowered the running
+        // average and (via InterviewEvaluationService reading the same
+        // turns) the final report, penalizing the candidate for an infra
+        // failure that was never actually evaluating their answer.
+        if ("SYSTEM_ERROR".equals(turn.getAction())) return;
+
         TechInterviewSession.CandidatePerformance.AnswerQuality aq =
                 new TechInterviewSession.CandidatePerformance.AnswerQuality();
         aq.setQuality(turn.getQuality() != null ? turn.getQuality() : "ADEQUATE");
@@ -221,8 +256,11 @@ public class TechInterviewStateService {
         last3.add(aq);
 
         List<TechInterviewSession.InterviewTurn> allTurns = session.getTurns();
-        if (!allTurns.isEmpty()) {
-            double avg = allTurns.stream().mapToInt(TechInterviewSession.InterviewTurn::getScore).average().orElse(0);
+        List<TechInterviewSession.InterviewTurn> scorable = allTurns.stream()
+                .filter(t -> !"SYSTEM_ERROR".equals(t.getAction()))
+                .toList();
+        if (!scorable.isEmpty()) {
+            double avg = scorable.stream().mapToInt(TechInterviewSession.InterviewTurn::getScore).average().orElse(0);
             perf.setRunningAverageScore((int) avg);
         }
     }

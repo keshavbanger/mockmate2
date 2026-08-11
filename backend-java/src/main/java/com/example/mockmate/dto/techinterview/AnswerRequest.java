@@ -1,6 +1,8 @@
 package com.example.mockmate.dto.techinterview;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -9,13 +11,18 @@ import lombok.NoArgsConstructor;
 public class AnswerRequest {
     private String answerText;
     private int turnId;
+    @Valid
     private CodeSubmission codeSubmission;
+    @Valid
     private SQLSubmission sqlSubmission;
     private ComplexityAnswer complexityAnswer;
     private String whiteboardSnapshot;
 
     @Data @NoArgsConstructor
     public static class CodeSubmission {
+        // Same size cap as CodeExecuteRequest.code — this is the same value
+        // re-submitted through /answer for the final graded run.
+        @Size(max = 50_000, message = "Code submission is too large (max 50,000 characters)")
         private String code;
         private String language;
         private String problemId;
@@ -34,6 +41,7 @@ public class AnswerRequest {
 
     @Data @NoArgsConstructor
     public static class SQLSubmission {
+        @Size(max = 20_000, message = "Query is too large (max 20,000 characters)")
         private String query;
         private String problemId;
         private Object result;

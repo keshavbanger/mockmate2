@@ -6,8 +6,10 @@ import com.example.mockmate.dto.techinterview.SQLExecuteRequest;
 import com.example.mockmate.model.User;
 import com.example.mockmate.model.techinterview.*;
 import com.example.mockmate.service.*;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,6 +34,25 @@ public class TechnicalInterviewController {
     private final DSAProblemService dsaProblemService;
     private final ResumeTextExtractor resumeTextExtractor;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    // None of the session-scoped endpoints below used to compare the
+    // session's owner against the authenticated caller — SecurityConfig only
+    // required *some* authenticated user, not the session owner, so any
+    // logged-in user who obtained another user's sessionId could read their
+    // transcript/report, continue answering for them, or submit code/SQL
+    // under their session. Sessions created without a token are tagged
+    // "anon" (see startInterview) and stay accessible to anyone holding the
+    // sessionId, same as the anonymous-report convention used elsewhere.
+    private ResponseEntity<?> ownershipError() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "You do not have access to this session"));
+    }
+
+    private boolean isOwnedByOther(TechInterviewSession session, User user) {
+        String owner = session.getUserId();
+        if (owner == null || "anon".equals(owner)) return false;
+        String callerId = user != null && user.getId() != null ? String.valueOf(user.getId()) : null;
+        return !owner.equals(callerId);
+    }
 
     // ── POST /plan — Generate + preview plan ──────────────────
     @PostMapping(value = "/plan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -162,12 +183,13 @@ public class TechnicalInterviewController {
     @PostMapping("/{sessionId}/answer")
     public ResponseEntity<?> submitAnswer(
             @PathVariable String sessionId,
-            @RequestBody AnswerRequest request,
+            @Valid @RequestBody AnswerRequest request,
             @AuthenticationPrincipal User user) {
 
         try {
             TechInterviewSession session = stateService.getSession(sessionId);
             if (session == null) return ResponseEntity.notFound().build();
+            if (isOwnedByOther(session, user)) return ownershipError();
 
             // Handle code submission if present
             CodeExecutionResult codeResult = null;
@@ -240,7 +262,14 @@ public class TechnicalInterviewController {
             turn.setAction(aiResp.getAction());
             if (aiResp.getCurrentAnswerEvaluation() != null) {
                 var eval = aiResp.getCurrentAnswerEvaluation();
-                turn.setScore(eval.getScore());
+                // Unlike the DSA scoring path (computeDsaScore, explicitly
+                // clamped below), this score comes straight from the LLM's
+                // JSON response with no bounds check — combined with the
+                // prompt-injection surface on the candidate's raw answer
+                // text (see AIInterviewerService.processAnswer), a
+                // manipulated or simply hallucinated out-of-range value
+                // would otherwise be stored and averaged into the report as-is.
+                turn.setScore(Math.max(0, Math.min(100, eval.getScore())));
                 turn.setQuality(eval.getQuality());
                 turn.setTopicAssessed(eval.getTopicAssessed());
                 turn.setCorrectPoints(eval.getCorrectPoints());
@@ -295,8 +324,13 @@ public class TechnicalInterviewController {
     @PostMapping("/{sessionId}/execute-code")
     public ResponseEntity<?> executeCode(
             @PathVariable String sessionId,
-            @RequestBody CodeExecuteRequest request) {
+            @Valid @RequestBody CodeExecuteRequest request,
+            @AuthenticationPrincipal User user) {
         try {
+            TechInterviewSession session = stateService.getSession(sessionId);
+            if (session == null) return ResponseEntity.notFound().build();
+            if (isOwnedByOther(session, user)) return ownershipError();
+
             // Console/"run with custom input" requests don't grade against the
             // problem's fixed test cases — they just run the candidate's code
             // against whatever input they typed and return raw output.
@@ -316,8 +350,13 @@ public class TechnicalInterviewController {
     @PostMapping("/{sessionId}/execute-sql")
     public ResponseEntity<?> executeSQL(
             @PathVariable String sessionId,
-            @RequestBody SQLExecuteRequest request) {
+            @Valid @RequestBody SQLExecuteRequest request,
+            @AuthenticationPrincipal User user) {
         try {
+            TechInterviewSession session = stateService.getSession(sessionId);
+            if (session == null) return ResponseEntity.notFound().build();
+            if (isOwnedByOther(session, user)) return ownershipError();
+
             SQLExecutionResult result = sqlExecutionService.executeQuery(
                     request.getQuery(), request.getProblemId(), sessionId);
             return ResponseEntity.ok(result);
@@ -331,7 +370,11 @@ public class TechnicalInterviewController {
     @PostMapping("/{sessionId}/save-whiteboard")
     public ResponseEntity<?> saveWhiteboard(
             @PathVariable String sessionId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal User user) {
+        TechInterviewSession session = stateService.getSession(sessionId);
+        if (session == null) return ResponseEntity.notFound().build();
+        if (isOwnedByOther(session, user)) return ownershipError();
         stateService.saveWhiteboard(sessionId, body.get("snapshot"));
         return ResponseEntity.ok(Map.of("saved", true));
     }
@@ -344,6 +387,7 @@ public class TechnicalInterviewController {
         try {
             TechInterviewSession session = stateService.getSession(sessionId);
             if (session == null) return ResponseEntity.notFound().build();
+            if (isOwnedByOther(session, user)) return ownershipError();
             stateService.endSession(sessionId);
             TechInterviewReport report = evaluationService.evaluate(session);
             // Persist report
@@ -360,20 +404,21 @@ public class TechnicalInterviewController {
 
     // ── GET /report/{sessionId} ───────────────────────────────
     @GetMapping("/report/{sessionId}")
-    public ResponseEntity<?> getReport(@PathVariable String sessionId) {
+    public ResponseEntity<?> getReport(@PathVariable String sessionId, @AuthenticationPrincipal User user) {
         try {
+            TechInterviewSession session = stateService.getSession(sessionId);
+            if (session == null) return ResponseEntity.notFound().build();
+            if (isOwnedByOther(session, user)) return ownershipError();
+
             java.io.File reportFile = new java.io.File(
                     "data/sessions/technical/" + sessionId + "/report.json");
             if (!reportFile.exists()) {
                 // Generate on demand
-                TechInterviewSession session = stateService.getSession(sessionId);
-                if (session == null) return ResponseEntity.notFound().build();
                 TechInterviewReport report = evaluationService.evaluate(session);
                 saveReport(sessionId, report);
                 return ResponseEntity.ok(report);
             }
-            TechInterviewReport report = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readValue(reportFile, TechInterviewReport.class);
+            TechInterviewReport report = objectMapper.readValue(reportFile, TechInterviewReport.class);
             return ResponseEntity.ok(report);
         } catch (Exception e) {
             log.error("Report fetch failed for session {}", sessionId, e);
@@ -383,7 +428,15 @@ public class TechnicalInterviewController {
 
     // ── GET /history/{userId} ─────────────────────────────────
     @GetMapping("/history/{userId}")
-    public ResponseEntity<?> getHistory(@PathVariable String userId) {
+    public ResponseEntity<?> getHistory(@PathVariable String userId, @AuthenticationPrincipal User user) {
+        // {userId} in the path is NOT trusted — history is always scoped to
+        // the caller's own identity resolved from their JWT, same pattern as
+        // ATSController.getHistory, so a client can't pull another user's
+        // full interview history just by changing the path segment.
+        if (user == null || user.getId() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Login required to view interview history"));
+        }
+        String callerId = String.valueOf(user.getId());
         try {
             java.io.File baseDir = new java.io.File("data/sessions/technical");
             List<Map<String, Object>> history = new ArrayList<>();
@@ -394,9 +447,8 @@ public class TechnicalInterviewController {
                         java.io.File state = new java.io.File(dir, "state.json");
                         if (state.exists()) {
                             try {
-                                TechInterviewSession s = new com.fasterxml.jackson.databind.ObjectMapper()
-                                        .readValue(state, TechInterviewSession.class);
-                                if (userId.equals(s.getUserId())) {
+                                TechInterviewSession s = objectMapper.readValue(state, TechInterviewSession.class);
+                                if (callerId.equals(s.getUserId())) {
                                     Map<String, Object> entry = new LinkedHashMap<>();
                                     entry.put("sessionId", s.getSessionId());
                                     entry.put("date", s.getStartedAt() * 1000);
@@ -430,9 +482,10 @@ public class TechnicalInterviewController {
 
     // ── GET /{sessionId}/debug ──────────────────────────────────
     @GetMapping("/{sessionId}/debug")
-    public ResponseEntity<?> getSessionDebugInfo(@PathVariable String sessionId) {
+    public ResponseEntity<?> getSessionDebugInfo(@PathVariable String sessionId, @AuthenticationPrincipal User user) {
         TechInterviewSession session = stateService.getSession(sessionId);
         if (session == null) return ResponseEntity.notFound().build();
+        if (isOwnedByOther(session, user)) return ownershipError();
 
         Map<String, Object> debug = new LinkedHashMap<>();
         debug.put("sessionId", session.getSessionId());
@@ -585,8 +638,7 @@ public class TechnicalInterviewController {
         try {
             java.io.File dir = new java.io.File("data/sessions/technical/" + sessionId);
             dir.mkdirs();
-            new com.fasterxml.jackson.databind.ObjectMapper().writeValue(
-                    new java.io.File(dir, "report.json"), report);
+            objectMapper.writeValue(new java.io.File(dir, "report.json"), report);
         } catch (Exception e) {
             log.error("Failed to save report for session {}", sessionId, e);
         }

@@ -16,13 +16,41 @@ services:
     image: ghcr.io/engineer-man/piston
     container_name: piston_api
     restart: unless-stopped
+    # Required by Piston's isolate-based per-job sandboxing — not something
+    # this app can remove without breaking execution. Residual risk: if
+    # isolate/Piston itself is ever escaped (not just buggy candidate code),
+    # it yields full host compromise rather than being contained. Worth
+    # tracking as a known, accepted risk given the whole point of this
+    # service is running fully untrusted code.
     privileged: true
     ports:
-      - "2000:2000"
+      # Bound to loopback only — Piston has no built-in auth of its own, and
+      # backend-java talks to it via PISTON_URL=http://localhost:2000 on the
+      # same host (see application.yml), so this doesn't need to be reachable
+      # from anywhere else. Without an explicit bind address Docker publishes
+      # to 0.0.0.0 by default, which would make this full unauthenticated
+      # arbitrary code execution for anyone who finds the host's IP:2000.
+      - "127.0.0.1:2000:2000"
     volumes:
       - piston_packages:/piston/packages
     tmpfs:
       - /piston/jobs:exec
+    # No server-enforced ceiling existed before this — a single submission
+    # (fork bomb, infinite loop, memory hog) could consume unbounded host
+    # resources; the only prior guard was a 15s *client-side* axios timeout,
+    # which stops the browser from waiting but does nothing to stop the job.
+    # Container-level ceiling (whole Piston process):
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+    # Per-job ceilings (Piston's own isolate sandboxing, one per submission):
+    environment:
+      PISTON_RUN_MEMORY_LIMIT: "268435456"     # 256MB per run
+      PISTON_COMPILE_MEMORY_LIMIT: "268435456" # 256MB per compile
+      PISTON_RUN_TIMEOUT: "10000"              # ms — matches CodeExecutionService's per-test-case timeout
+      PISTON_COMPILE_TIMEOUT: "10000"          # ms
+      PISTON_OUTPUT_MAX_SIZE: "1024000"        # ~1MB stdout/stderr per job
+      PISTON_MAX_PROCESS_COUNT: "64"           # blocks fork-bomb-style submissions
 
 volumes:
   piston_packages:

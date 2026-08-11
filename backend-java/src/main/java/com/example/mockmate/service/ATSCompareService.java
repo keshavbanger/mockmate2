@@ -1,6 +1,7 @@
 package com.example.mockmate.service;
 
 import com.example.mockmate.model.ATSReport;
+import jakarta.annotation.PreDestroy;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
@@ -17,6 +22,30 @@ import java.util.List;
 public class ATSCompareService {
 
     private final ATSAnalyzerService atsAnalyzerService;
+
+    // The two analyze() calls below are fully independent (different files,
+    // same jdText) but each blocks on a Groq call for several seconds — used
+    // to run back-to-back, so a slow/erroring Groq call on file A delayed
+    // even starting file B. A dedicated executor (not the shared
+    // ForkJoinPool.commonPool(), see ReportGeneratorService for the same
+    // reasoning) lets them run concurrently without risking unrelated app
+    // code being starved by these long blocking calls.
+    private final ExecutorService compareExecutor =
+            Executors.newCachedThreadPool(namedThreadFactory("ats-compare"));
+
+    @PreDestroy
+    public void shutdown() {
+        compareExecutor.shutdown();
+    }
+
+    private static java.util.concurrent.ThreadFactory namedThreadFactory(String prefix) {
+        AtomicInteger counter = new AtomicInteger(1);
+        return runnable -> {
+            Thread t = new Thread(runnable, prefix + "-" + counter.getAndIncrement());
+            t.setDaemon(true);
+            return t;
+        };
+    }
 
     // ── Result DTO ─────────────────────────────────────────────────────────────────
     @Data
@@ -36,8 +65,14 @@ public class ATSCompareService {
 
         log.info("[ATSCompare] Comparing two resumes for userId={}", userId);
 
-        ATSReport reportA = atsAnalyzerService.analyze(fileA, jdText, userId);
-        ATSReport reportB = atsAnalyzerService.analyze(fileB, jdText, userId);
+        CompletableFuture<ATSReport> futureA =
+                CompletableFuture.supplyAsync(() -> atsAnalyzerService.analyze(fileA, jdText, userId), compareExecutor);
+        CompletableFuture<ATSReport> futureB =
+                CompletableFuture.supplyAsync(() -> atsAnalyzerService.analyze(fileB, jdText, userId), compareExecutor);
+        CompletableFuture.allOf(futureA, futureB).join();
+
+        ATSReport reportA = futureA.join();
+        ATSReport reportB = futureB.join();
 
         String       winner         = determineWinner(reportA, reportB);
         List<String> keyDifferences = buildKeyDifferences(reportA, reportB);

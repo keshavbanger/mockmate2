@@ -21,10 +21,18 @@ public class FillerDetectorService {
     @Value("${groq.api-key:}")
     private String groqApiKey;
 
+    // "actually", "literally", "right", "so", and "well" used to be on this
+    // list, but a bare \b<word>\b match can't tell filler usage apart from
+    // ordinary grammatical usage — "so I could pursue software engineering",
+    // "the right approach", "well-structured", "actually implemented" are
+    // all completely normal technical speech, not hesitation. Counting every
+    // occurrence of those words as a filler inflated fillerCount for
+    // articulate candidates and unfairly dragged down fillerScore (35% of
+    // communicationScore in ReportGeneratorService). Kept only words/phrases
+    // that are filler in essentially all real usages.
     private static final List<String> FILLER_WORDS = List.of(
             "you know", "kind of", "sort of", "you see", "i mean", "i guess",
-            "um", "uh", "hmm", "err", "like", "basically", "actually",
-            "literally", "right", "so", "well"
+            "um", "umm", "uh", "uhh", "hmm", "err", "like", "basically"
     );
 
     private static final Map<String, Pattern> FILLER_PATTERNS = FILLER_WORDS.stream()

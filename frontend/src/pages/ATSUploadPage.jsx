@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate }           from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { analyzeATS, compareResumes } from '../utils/api.js';
@@ -10,12 +10,25 @@ const STEPS = [
   'Building your report…',
 ];
 
-function Dropzone({ label, file, onFile, id }) {
+// Matches the "Max 10 MB" copy shown next to every dropzone — that copy used
+// to be purely cosmetic since only the file extension was checked, so an
+// oversized file passed client validation and only failed late, at the
+// backend, with a generic error.
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+function validateFile(f) {
+  const name = f.name.toLowerCase();
+  if (!name.endsWith('.pdf') && !name.endsWith('.docx')) return 'Only PDF and DOCX files are supported.';
+  if (f.size > MAX_FILE_SIZE) return `File is too large (${(f.size / 1024 / 1024).toFixed(1)} MB) — max size is 10 MB.`;
+  return null;
+}
+
+function Dropzone({ label, file, onFile, onError, id }) {
   const [dragging, setDragging] = useState(false);
 
   const validate = (f) => {
-    const name = f.name.toLowerCase();
-    if (!name.endsWith('.pdf') && !name.endsWith('.docx')) return false;
+    const err = validateFile(f);
+    if (err) { onError?.(err); return false; }
     onFile(f);
     return true;
   };
@@ -71,17 +84,27 @@ export default function ATSUploadPage() {
   const [stepIdx,  setStepIdx]  = useState(0);
   const [error,    setError]    = useState('');
 
+  // Tracks the fake-progress interval so it can be torn down from both the
+  // unmount cleanup below AND handleAnalyze's finally block — it used to
+  // only clear itself after 4 ticks (~7.2s), so navigating away mid-request
+  // (or a request that ran longer than that) left it calling setStepIdx on
+  // an unmounted component for the rest of its run.
+  const stepIntervalRef = useRef(null);
+
+  useEffect(() => () => clearInterval(stepIntervalRef.current), []);
+
   /* Animate through loading steps */
   const runSteps = () => {
     let i = 0;
-    const iv = setInterval(() => {
+    stepIntervalRef.current = setInterval(() => {
       i++;
       if (i < STEPS.length) setStepIdx(i);
-      else clearInterval(iv);
+      else clearInterval(stepIntervalRef.current);
     }, 1800);
   };
 
   const handleAnalyze = async () => {
+    if (loading) return; // guards against a double-click landing before disabled= takes effect
     if (!compare && !file)   return setError('Please upload your resume.');
     if (compare && (!fileA || !fileB)) return setError('Please upload both resumes for comparison.');
     if (!jdText.trim())      return setError('Please paste the job description.');
@@ -101,6 +124,7 @@ export default function ATSUploadPage() {
     } catch (err) {
       setError(err.message || 'Analysis failed. Please try again.');
     } finally {
+      clearInterval(stepIntervalRef.current);
       setLoading(false);
     }
   };
@@ -219,15 +243,15 @@ export default function ATSUploadPage() {
               transition={{ duration: 0.35 }}
               className="grid grid-cols-2 gap-4"
             >
-              <Dropzone label="Resume A" file={fileA} onFile={setFileA} id="ats-file-a" />
-              <Dropzone label="Resume B" file={fileB} onFile={setFileB} id="ats-file-b" />
+              <Dropzone label="Resume A" file={fileA} onFile={setFileA} onError={setError} id="ats-file-a" />
+              <Dropzone label="Resume B" file={fileB} onFile={setFileB} onError={setError} id="ats-file-b" />
             </motion.div>
           ) : (
             <motion.div
               key="single"
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.35 }}
-              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { const n = f.name.toLowerCase(); if (!n.endsWith('.pdf') && !n.endsWith('.docx')) { setError('Only PDF and DOCX files are supported.'); return; } setError(''); setFile(f); }}}
+              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { const err = validateFile(f); if (err) { setError(err); return; } setError(''); setFile(f); }}}
               onDragOver={(e) => e.preventDefault()}
               className={`relative flex flex-col items-center justify-center gap-4 p-12 rounded-3xl border-2 border-dashed
                 transition-all duration-300 cursor-pointer overflow-hidden shadow-sm
@@ -235,7 +259,7 @@ export default function ATSUploadPage() {
                   'border-black/10 bg-white hover:border-[var(--brand-primary)] hover:bg-[var(--brand-light)]/40'}`}
             >
               <input id="ats-file-input" type="file" accept=".pdf,.docx"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) { const n = f.name.toLowerCase(); if (!n.endsWith('.pdf') && !n.endsWith('.docx')) { setError('Only PDF and DOCX files are supported.'); return; } setError(''); setFile(f); }}}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) { const err = validateFile(f); if (err) { setError(err); return; } setError(''); setFile(f); }}}
                 className="absolute inset-0 opacity-0 cursor-pointer" />
               {file ? (
                 <>

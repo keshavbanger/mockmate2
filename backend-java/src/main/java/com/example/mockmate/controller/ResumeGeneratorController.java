@@ -1,6 +1,7 @@
 package com.example.mockmate.controller;
 
 import com.example.mockmate.model.*;
+import com.example.mockmate.security.AtsReportAccessGuard;
 import com.example.mockmate.service.ATSDownloadService;
 import com.example.mockmate.service.ResumeGenerationGateService;
 import com.example.mockmate.service.ResumeGenerationValidator;
@@ -23,7 +24,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/resume-generator")
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 @RequiredArgsConstructor
 public class ResumeGeneratorController {
 
@@ -31,6 +31,7 @@ public class ResumeGeneratorController {
     private final ResumeGenerationGateService gateService;
     private final ResumeWriterService writerService;
     private final ResumeGenerationValidator validator;
+    private final AtsReportAccessGuard accessGuard;
 
     // ── Step 0: parsed data + gate result + skill suggestions ────────────
     // The Fill Gaps Wizard's starting point: what was actually parsed, which
@@ -40,10 +41,15 @@ public class ResumeGeneratorController {
     // listed, exactly the "near-zero effort" fix the analysis prompt ranks
     // highest).
     @GetMapping("/parsed/{reportId}")
-    public ResponseEntity<?> parsed(@PathVariable String reportId) {
+    public ResponseEntity<?> parsed(
+            @PathVariable String reportId,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
         try {
-            ResumeData resumeData = atsDownloadService.loadParsedResumeData(reportId);
             ATSReport report = atsDownloadService.loadReport(reportId);
+            if (!accessGuard.isOwnedByCaller(report, authHeader)) {
+                return ResponseEntity.status(403).body(Map.of("error", "You do not have access to this report"));
+            }
+            ResumeData resumeData = atsDownloadService.loadParsedResumeData(reportId);
 
             List<String> suggestedSkills = List.of();
             if (report.getHonestAssessment() != null && report.getHonestAssessment().getCoverage() != null

@@ -64,7 +64,22 @@ export default function TavusAvatar({ conversationUrl }) {
   // In live Tavus mode, Tavus owns the microphone. Candidate speech comes
   // through Tavus transcript events, NOT Web SpeechRecognition (which conflicts).
   useEffect(() => {
+    // Without this, a forged postMessage from any origin (e.g. this page
+    // embedded in a hostile frame, or another script in the same window)
+    // could inject fake transcript turns straight into the interview record
+    // that feeds scoring. The iframe's own src IS the only origin a
+    // legitimate Tavus/daily.co message can come from, so derive the
+    // allowlist from it directly rather than hardcoding a domain guess.
+    let expectedOrigin = null;
+    try {
+      expectedOrigin = conversationUrl ? new URL(conversationUrl).origin : null;
+    } catch {
+      expectedOrigin = null;
+    }
+
     const handleMessage = (event) => {
+      if (!expectedOrigin || event.origin !== expectedOrigin) return;
+
       const payload = event.data;
       if (!payload || typeof payload !== 'object') return;
 

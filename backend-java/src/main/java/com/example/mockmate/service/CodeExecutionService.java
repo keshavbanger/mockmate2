@@ -65,22 +65,21 @@ public class CodeExecutionService {
         String lang = language != null ? language.toLowerCase() : "java";
         String[] pistonLang = LANGUAGE_MAP.getOrDefault(lang, new String[]{"java", "15.0.2"});
 
-        // Test cases are logically independent Piston calls, and running them
-        // concurrently (via CompletableFuture.supplyAsync) was tried here to
-        // cut wall-clock latency roughly N-fold. It was reverted: live testing
-        // showed this self-hosted Piston instance isn't safe under concurrent
-        // requests that use the same source filename ("Main.java") — two
-        // simultaneous submissions of the exact same correct solution
-        // intermittently came back with empty stdout and no error (exit code
-        // 0, nothing printed), silently marking a CORRECT solution as failed.
-        // That's a worse bug than the sequential latency it was meant to fix,
-        // so this stays sequential until Piston-side job isolation is
-        // confirmed safe for concurrent same-filename requests.
+        // Test cases within ONE submission still run sequentially (kept
+        // simple; per-test-case latency here is already small relative to
+        // the ~10s Piston round trip). The real fix for the collision this
+        // comment used to describe is jobId below: every submission from
+        // every candidate now gets its own uniquely-named source file/class,
+        // so two DIFFERENT candidates hitting Piston at the same moment can
+        // no longer collide on the shared literal filename "Main.java" — the
+        // actual cause of the "correct solution intermittently comes back
+        // with empty stdout" bug (see wrapJava/sourceFileName).
+        String jobId = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         List<CodeExecutionResult.TestResult> results = new ArrayList<>();
         int passed = 0;
         String sharedCompilationError = null;
         for (DSAProblem.TestCase tc : testCases) {
-            CodeExecutionResult.TestResult r = runSingleTestCase(code, lang, pistonLang, tc, problem);
+            CodeExecutionResult.TestResult r = runSingleTestCase(code, lang, pistonLang, tc, problem, jobId);
             results.add(r);
             if (r.isPassed()) passed++;
             // A compile error is identical for every test case since it's the
@@ -134,7 +133,8 @@ public class CodeExecutionService {
         // expectedOutput intentionally left null — runSingleTestCase treats
         // that as "no verdict to compute", just report the raw output.
 
-        CodeExecutionResult.TestResult r = runSingleTestCase(code, lang, pistonLang, custom, problem);
+        String jobId = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        CodeExecutionResult.TestResult r = runSingleTestCase(code, lang, pistonLang, custom, problem, jobId);
 
         CodeExecutionResult result = new CodeExecutionResult();
         result.setSuccess(true);
@@ -148,7 +148,7 @@ public class CodeExecutionService {
     // ── Run Single Test Case ──────────────────────────────────
     private CodeExecutionResult.TestResult runSingleTestCase(
             String candidateCode, String lang, String[] pistonLang,
-            DSAProblem.TestCase tc, DSAProblem problem) {
+            DSAProblem.TestCase tc, DSAProblem problem, String jobId) {
 
         CodeExecutionResult.TestResult result = new CodeExecutionResult.TestResult();
         result.setInput(tc.isHidden() ? "[hidden]" : tc.getInput());
@@ -179,17 +179,17 @@ public class CodeExecutionService {
         }
 
         try {
-            String wrappedCode = wrapCode(candidateCode, lang, problem, tc.getInput());
+            String wrappedCode = wrapCode(candidateCode, lang, problem, tc.getInput(), jobId);
 
             // Without an explicit filename, Piston assigns its own internal
             // name and its Java runner picks the wrong class to execute (it
             // ran "Solution" instead of "Main", the class that actually has
-            // main()). The wrapper always names its public entry class "Main"
-            // for Java — the filename must match that exactly.
+            // main()). The wrapper names its public entry class uniquely per
+            // job for Java — the filename must match that exactly.
             Map<String, Object> body = new HashMap<>();
             body.put("language", pistonLang[0]);
             body.put("version", pistonLang[1]);
-            body.put("files", List.of(Map.of("name", sourceFileName(lang), "content", wrappedCode)));
+            body.put("files", List.of(Map.of("name", sourceFileName(lang, jobId), "content", wrappedCode)));
             body.put("stdin", tc.getInput());
 
             String response = webClientBuilder.build()
@@ -229,7 +229,16 @@ public class CodeExecutionService {
 
             if (code2 != 0 || (!stderr.isEmpty() && stdout.isEmpty())) {
                 result.setPassed(false);
-                result.setActualOutput("Runtime Error: " + (stderr.isEmpty() ? "Exit code " + code2 : stderr));
+                // Input/expected/actual output are redacted for hidden test
+                // cases everywhere else in this method — this branch used to
+                // be the one exception, setting raw stderr unconditionally.
+                // Since the candidate's function already receives the hidden
+                // input as parameters, printing it and then throwing was a
+                // trivial way to exfiltrate it through this "Runtime Error"
+                // message, defeating the redaction enforced everywhere else.
+                result.setActualOutput(tc.isHidden()
+                        ? "Runtime Error"
+                        : "Runtime Error: " + (stderr.isEmpty() ? "Exit code " + code2 : stderr));
             } else {
                 String actual = stdout.trim();
                 result.setActualOutput(tc.isHidden() ? "[hidden]" : actual);
@@ -254,9 +263,9 @@ public class CodeExecutionService {
 
     // cpp/go never reach here — runSingleTestCase short-circuits them before
     // calling wrapCode (see the "Unsupported Language" branch above).
-    private String wrapCode(String code, String lang, DSAProblem problem, String input) {
+    private String wrapCode(String code, String lang, DSAProblem problem, String input, String jobId) {
         return switch (lang) {
-            case "java"       -> wrapJava(code, problem, input);
+            case "java"       -> wrapJava(code, problem, input, jobId);
             case "python", "python3" -> wrapPython(code, problem, input);
             case "javascript", "js" -> wrapJs(code, problem, input);
             default           -> code;
@@ -264,21 +273,24 @@ public class CodeExecutionService {
     }
 
     // Java requires the source filename to match its public class exactly
-    // ("Main", per wrapJava below) or Piston's runner picks the wrong class
-    // to execute. Other languages don't have this constraint but get an
-    // explicit name anyway for clarity/consistency.
-    private String sourceFileName(String lang) {
+    // (wrapJava names it "Main_<jobId>") or Piston's runner picks the wrong
+    // class to execute. Every language's filename is unique per job — see
+    // the jobId comment in execute()/executeCustom() for why: without this,
+    // two different candidates' concurrent submissions could collide inside
+    // Piston on the literal shared filename and silently corrupt each
+    // other's result (a real, already-reproduced bug, not hypothetical).
+    private String sourceFileName(String lang, String jobId) {
         return switch (lang) {
-            case "java"              -> "Main.java";
-            case "python", "python3" -> "main.py";
-            case "cpp", "c++"        -> "main.cpp";
-            case "javascript", "js"  -> "main.js";
-            case "go"                -> "main.go";
-            default                  -> "main";
+            case "java"              -> "Main_" + jobId + ".java";
+            case "python", "python3" -> "main_" + jobId + ".py";
+            case "cpp", "c++"        -> "main_" + jobId + ".cpp";
+            case "javascript", "js"  -> "main_" + jobId + ".js";
+            case "go"                -> "main_" + jobId + ".go";
+            default                  -> "main_" + jobId;
         };
     }
 
-    private String wrapJava(String code, DSAProblem problem, String input) {
+    private String wrapJava(String code, DSAProblem problem, String input, String jobId) {
         String cleanCode = code != null ? code.trim() : "";
         if (!cleanCode.contains("class ")) {
             cleanCode = "class Solution {\n" + cleanCode + "\n}";
@@ -297,7 +309,7 @@ import java.util.*;
 import java.util.stream.*;
 import java.lang.reflect.*;
 
-public class Main {
+public class Main_%s {
     public static void main(String[] args) throws Exception {
         Solution sol = new Solution();
         Method targetMethod = null;
@@ -358,7 +370,7 @@ public class Main {
 }
 
 %s
-""".formatted(escapedInput, cleanCode);
+""".formatted(jobId, escapedInput, cleanCode);
     }
 
     // Python is dynamically typed, so unlike Java there's no need to know each

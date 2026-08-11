@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import Split from 'react-split';
 import {
@@ -41,6 +41,19 @@ export default function TechInterviewPage() {
   const [complexity, setComplexity]         = useState({ time: '', space: '' });
   const [problemLoadError, setProblemLoadError] = useState(null);
   const [lastProblemRequest, setLastProblemRequest] = useState(null);
+  // Tracks the pending "reset orb to idle" timeout so a new AI response
+  // arriving before the previous one's timer fires can cancel it — each
+  // response used to schedule its own uncancelled setTimeout, so an earlier
+  // timer could force the orb back to idle mid-way through a newer response,
+  // producing a visible flicker on rapid exchanges.
+  const orbIdleTimerRef = useRef(null);
+  // handleSendAnswer clears currentInput immediately (normal chat UX — the
+  // box empties as soon as you hit send, before the network call resolves).
+  // If that call then fails, Retry used to just re-invoke handleSendAnswer()
+  // with no args, which re-reads currentInput — already empty — so Retry
+  // silently no-op'd and the candidate's answer was unrecoverable. This ref
+  // preserves the text that was actually sent so Retry can resend it.
+  const lastSentTextRef = useRef('');
 
   // ── Timer & Round Info ────────────────────────────────────
   const [timeRemainingMinutes, setTimeRemaining] = useState(config.durationMinutes || 45);
@@ -51,8 +64,9 @@ export default function TechInterviewPage() {
     if (firstMessage) {
       setMessages([{ role: 'ai', text: firstMessage, timestamp: Date.now() }]);
       setOrbState('speaking');
-      const timer = setTimeout(() => setOrbState('idle'), 3000);
-      return () => clearTimeout(timer);
+      clearTimeout(orbIdleTimerRef.current);
+      orbIdleTimerRef.current = setTimeout(() => setOrbState('idle'), 3000);
+      return () => clearTimeout(orbIdleTimerRef.current);
     }
   }, [firstMessage]);
 
@@ -107,6 +121,7 @@ export default function TechInterviewPage() {
     if (!textToSend.trim() && !codeResToSend && !sqlResToSend) return;
 
     const answerText = textToSend.trim() || (codeResToSend ? '[Submitted solution via Code Editor]' : '[Submitted query via SQL Editor]');
+    lastSentTextRef.current = textToSend;
 
     if (typeof overrideText !== 'string') {
       setCurrentInput('');
@@ -150,10 +165,16 @@ export default function TechInterviewPage() {
       }]);
 
       setTurnId(t => t + 1);
-      setTimeRemaining(data.timeRemainingMinutes || timeRemainingMinutes);
+      // `data.timeRemainingMinutes` is a legitimate 0 once time's up, but
+      // `||` treats 0 as falsy and falls back to the stale (higher) value —
+      // the countdown would silently freeze instead of reaching 0.
+      setTimeRemaining(
+        typeof data.timeRemainingMinutes === 'number' ? data.timeRemainingMinutes : timeRemainingMinutes
+      );
       setOrbState(data.systemError ? 'idle' : 'speaking');
+      clearTimeout(orbIdleTimerRef.current);
       if (!data.systemError) {
-        setTimeout(() => setOrbState('idle'), 3500);
+        orbIdleTimerRef.current = setTimeout(() => setOrbState('idle'), 3500);
       }
 
       // Round changed?
@@ -183,8 +204,19 @@ export default function TechInterviewPage() {
       // result while the UI told them to "please re-submit your response" —
       // there was nothing left to resubmit without re-running the code first.
       if (!data.systemError) {
-        setCodeResult(null);
-        setSqlResult(null);
+        // /answer is now the only place a code/SQL submission actually gets
+        // executed (see handleSubmitCode/handleSubmitSQL) — it already runs
+        // the FULL test set including hidden cases, so surface that graded
+        // result here instead of immediately discarding it. A pre-call to
+        // /execute-code used to run the same code through Piston a second
+        // time just to populate this, doubling latency/Piston load/exposure
+        // to the concurrent-submission bug for every single Submit click.
+        setCodeResult(codeResToSend && data.codeResult
+          ? { ...data.codeResult, submittedCode: codeResToSend.submittedCode, isSubmitted: true }
+          : null);
+        setSqlResult(sqlResToSend && data.sqlResult
+          ? { ...data.sqlResult, query: sqlResToSend.query, isSubmitted: true }
+          : null);
         setComplexity({ time: '', space: '' });
       }
 
@@ -197,6 +229,18 @@ export default function TechInterviewPage() {
         timestamp: Date.now(),
       }]);
       setOrbState('idle');
+      // A failed /answer call means the code/SQL grading that would have
+      // happened server-side never ran — surface that in the editor's
+      // Results tab (instead of leaving it blank) so Retry has a submission
+      // to actually retry and the candidate isn't left guessing.
+      if (codeResToSend) {
+        setCodeResult({ success: false, submittedCode: codeResToSend.submittedCode, isSubmitted: true,
+          compilationError: 'Submission failed to reach the interviewer — click Retry above to resend.' });
+      }
+      if (sqlResToSend) {
+        setSqlResult({ success: false, query: sqlResToSend.query, isSubmitted: true,
+          error: 'Submission failed to reach the interviewer — click Retry above to resend.' });
+      }
     } finally {
       setLoading(false);
     }
@@ -255,6 +299,13 @@ export default function TechInterviewPage() {
       const res = { ...data, submittedCode: code, isSubmitted: false };
       setCodeResult(res);
       return res;
+    } catch (err) {
+      // Previously missing: an axios timeout/network error here became an
+      // unhandled rejection — the spinner just stopped with nothing shown.
+      const res = { success: false, submittedCode: code, isSubmitted: false,
+        compilationError: err?.message || 'Code execution failed. Please try again.' };
+      setCodeResult(res);
+      return res;
     } finally {
       setLoading(false);
     }
@@ -268,13 +319,21 @@ export default function TechInterviewPage() {
     }
     setLoading(true);
     try {
-      const { data } = await executeTechCode(sessionId, {
-        code, language,
-        problemId: currentProblem?.id,
-      });
-      const res = { ...data, submittedCode: code, isSubmitted: true };
+      // The /answer call below already runs this code through Piston once,
+      // against the FULL test set (including hidden cases), whenever
+      // codeSubmission.isSubmit=true — see handleSendAnswer's codeResult
+      // population above. Calling /execute-code here first, as this used
+      // to, ran the exact same code through Piston a second time for public
+      // tests alone, immediately before the graded run repeated them anyway.
+      return await handleSendAnswer(
+        '[Submitted solution via Code Editor]',
+        { submittedCode: code },
+        null
+      );
+    } catch (err) {
+      const res = { success: false, submittedCode: code, isSubmitted: true,
+        compilationError: err?.message || 'Code submission failed. Please try again.' };
       setCodeResult(res);
-      await handleSendAnswer('[Submitted solution via Code Editor]', res, null);
       return res;
     } finally {
       setLoading(false);
@@ -302,6 +361,11 @@ export default function TechInterviewPage() {
         problemId: currentProblem?.id,
       });
       const res = { ...data, query, isSubmitted: false };
+      setSqlResult(res);
+      return res;
+    } catch (err) {
+      const res = { success: false, query, isSubmitted: false,
+        error: err?.message || 'Query execution failed. Please try again.' };
       setSqlResult(res);
       return res;
     } finally {
@@ -339,13 +403,14 @@ export default function TechInterviewPage() {
     }
     setLoading(true);
     try {
-      const { data } = await executeTechSQL(sessionId, {
-        query,
-        problemId: currentProblem?.id,
-      });
-      const res = { ...data, query, isSubmitted: true };
+      // Same reasoning as handleSubmitCode: /answer re-executes the query
+      // itself for scoring, so a separate /execute-sql pre-call here was a
+      // fully redundant round trip for every SQL Submit click.
+      return await handleSendAnswer('[Submitted query via SQL Editor]', null, { query });
+    } catch (err) {
+      const res = { success: false, query, isSubmitted: true,
+        error: err?.message || 'Query submission failed. Please try again.' };
       setSqlResult(res);
-      await handleSendAnswer('[Submitted query via SQL Editor]', null, res);
       return res;
     } finally {
       setLoading(false);
@@ -421,7 +486,7 @@ export default function TechInterviewPage() {
                 currentInput={currentInput}
                 onInputChange={setCurrentInput}
                 onSend={handleSendAnswer}
-                onRetry={() => handleSendAnswer()}
+                onRetry={() => handleSendAnswer(lastSentTextRef.current)}
                 loading={loading}
                 activeRoundName={activeRound?.roundName || 'Technical Interview'}
                 activeTopic={activeRound?.topics?.[0] || ''}
