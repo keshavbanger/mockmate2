@@ -87,7 +87,14 @@ openrouter:
   model: ${OPENROUTER_MODEL:openai/gpt-oss-20b:free}
 code:
   execution:
-    provider: ${CODE_EXECUTION_PROVIDER:inapp}
+    # inapp runs candidate code as raw OS subprocesses directly on this
+    # server with zero sandboxing — anyone submitting code through the
+    # editor gets host-level code execution. judge0 runs it on Judge0's own
+    # sandboxed infrastructure instead (see Judge0ExecutionProvider) — no
+    # server to provision or secure ourselves, just JUDGE0_API_KEY below.
+    # piston (self-hosted, docker-compose.piston.yml) is a viable future
+    # option too, but needs a privileged-capable VPS Render can't provide.
+    provider: ${CODE_EXECUTION_PROVIDER:judge0}
 
 judge0:
   base-url: ${JUDGE0_BASE_URL:https://judge0-ce.p.rapidapi.com}
