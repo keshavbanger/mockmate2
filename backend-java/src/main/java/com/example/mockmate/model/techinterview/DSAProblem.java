@@ -34,9 +34,27 @@ public class DSAProblem {
     private OptimalSolution optimalSolution;
     private BruteForce bruteForce;
 
+    private ProblemSignature signature;
     private List<String> followUpQuestions;
     private String interviewerNotes;
     private RoleRelevance roleRelevance;
+
+    @Data
+    @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ProblemSignature {
+        private String functionName;
+        private List<Parameter> parameters;
+        private String returnType;
+
+        @Data
+        @NoArgsConstructor
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        public static class Parameter {
+            private String name;
+            private String type;
+        }
+    }
 
     // ── Nested classes ─────────────────────────────────────────
 
@@ -128,6 +146,7 @@ public class DSAProblem {
         pub.setFollowUpQuestions(this.followUpQuestions);
         // optimalSolution withheld until after interview
         pub.setBruteForce(this.bruteForce);
+        pub.setSignature(this.signature);
         pub.setRoleRelevance(this.roleRelevance);
         pub.setNeetcodeListNumber(this.neetcodeListNumber);
         return pub;

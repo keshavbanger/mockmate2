@@ -85,8 +85,15 @@ groq:
 openrouter:
   api-key: ${OPENROUTER_API_KEY:}
   model: ${OPENROUTER_MODEL:openai/gpt-oss-20b:free}
+code:
+  execution:
+    provider: ${CODE_EXECUTION_PROVIDER:judge0}
+
+judge0:
+  base-url: ${JUDGE0_BASE_URL:https://judge0-ce.p.rapidapi.com}
+  api-key: ${JUDGE0_API_KEY:}
+  api-host: ${JUDGE0_API_HOST:judge0-ce.p.rapidapi.com}
+
 piston:
-  # emkc.org's free public Piston API went whitelist-only on 2026-02-15.
-  # Defaults to a self-hosted instance (see docker-compose.piston.yml);
-  # override via PISTON_URL if pointing at a different host/provider.
+  # Legacy Piston fallback config
   url: ${PISTON_URL:http://localhost:2000/api/v2/execute}

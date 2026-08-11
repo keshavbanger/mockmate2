@@ -513,6 +513,16 @@ public class TechnicalInterviewController {
         return ResponseEntity.ok(problem);
     }
 
+    // ── GET /health/execution ────────────────────────────────
+    @GetMapping("/health/execution")
+    public ResponseEntity<?> getExecutionHealth() {
+        Map<String, Object> health = new LinkedHashMap<>();
+        health.put("status", "UP");
+        health.put("provider", codeExecutionService.getActiveProviderName());
+        health.put("supportedLanguages", List.of("java", "python", "javascript", "cpp", "go"));
+        return ResponseEntity.ok(health);
+    }
+
     // ── Helpers ───────────────────────────────────────────────
     private void updateDsaAttempt(String sessionId, TechInterviewSession session,
                                    AnswerRequest.CodeSubmission cs, CodeExecutionResult codeResult,

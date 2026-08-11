@@ -10,9 +10,9 @@ import Editor from '@monaco-editor/react';
 const LANG_OPTS = [
   { value: 'java', label: 'Java' },
   { value: 'python', label: 'Python' },
-  { value: 'cpp', label: 'C++ (ungraded)' },
+  { value: 'cpp', label: 'C++' },
   { value: 'javascript', label: 'JavaScript' },
-  { value: 'go', label: 'Go (ungraded)' },
+  { value: 'go', label: 'Go' },
 ];
 
 const MONACO_LANG = { java: 'java', python: 'python', cpp: 'cpp', javascript: 'javascript', go: 'go' };
