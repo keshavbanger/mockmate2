@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://mockmate.live/sitemap.xml
+Sitemap: https://www.mockmate.live/sitemap.xml
