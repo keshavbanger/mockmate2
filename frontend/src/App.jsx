@@ -26,6 +26,10 @@ const InterviewHistoryPage    = lazy(() => import('./pages/InterviewHistoryPage.
 const TechInterviewSetupPage  = lazy(() => import('./pages/TechInterviewSetupPage.jsx'));
 const TechInterviewPage       = lazy(() => import('./pages/TechInterviewPage.jsx'));
 const TechInterviewReportPage = lazy(() => import('./pages/TechInterviewReportPage.jsx'));
+const PricingPage             = lazy(() => import('./pages/PricingPage.jsx'));
+const ChangelogPage           = lazy(() => import('./pages/ChangelogPage.jsx'));
+const WhyMockMatePage         = lazy(() => import('./pages/WhyMockMatePage.jsx'));
+const ContactPage             = lazy(() => import('./pages/ContactPage.jsx'));
 
 function RouteFallback() {
   return (
@@ -43,8 +47,14 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
 
-      {/* ── Protected Core Interview Flow ── */}
+      {/* ── Public Info Pages ── */}
       <Route path="/" element={<LandingPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/changelog" element={<ChangelogPage />} />
+      <Route path="/why-mockmate" element={<WhyMockMatePage />} />
+      <Route path="/contact" element={<ContactPage />} />
+
+      {/* ── Protected Core Interview Flow ── */}
       <Route
         path="/dashboard"
         element={

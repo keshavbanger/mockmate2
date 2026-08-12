@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast.jsx';
 import { endInterview, generateReport, saveEmotionSnapshots, getSession } from '../utils/api.js';
 import { useAudioStream } from '../utils/audioVisualizer.jsx';
 import SpeechIndicator from '../utils/speechIndicator.jsx';
+import useBackNavigationGuard from '../hooks/useBackNavigationGuard';
 
 // ─── Timer ────────────────────────────────────────────────────────────────────
 function useTimer(startTime) {
@@ -139,7 +140,9 @@ export default function InterviewRoom() {
       ctx.setReportData(report);
 
       clearTimers();
-      navigate(`/report/${ctx.sessionId}`);
+      // replace: true — the live room is dead once the session ends; back
+      // button from the report should not be able to reopen it.
+      navigate(`/report/${ctx.sessionId}`, { replace: true });
     } catch (e) {
       clearTimers();
       console.error('End interview error:', e);
@@ -154,6 +157,11 @@ export default function InterviewRoom() {
   const handleEnd = useCallback(() => {
     triggerReportGeneration(false);
   }, [triggerReportGeneration]);
+
+  // Browser back/forward is trapped while a live interview is mounted —
+  // route it through the same "End Session?" confirm as the explicit
+  // button, instead of silently unmounting the room mid-session.
+  useBackNavigationGuard({ onBack: () => setShowConfirm(true) });
 
   // ── Poll for automatic completion (e.g. system.shutdown webhook) ──────────
   useEffect(() => {

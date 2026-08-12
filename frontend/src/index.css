@@ -229,6 +229,20 @@
   will-change: transform;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track,
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-float,
+  .gradient-text,
+  .scroll-reveal {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 @media print {
   /* Hide interactive/floating elements */
   nav, 

@@ -132,6 +132,13 @@ export default function SetupPage() {
   return (
     <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-[#F8F9FC] font-sans">
       <ToastContainer />
+
+      <button
+        onClick={() => navigate('/dashboard')}
+        className="fixed top-4 right-4 z-50 text-xs font-bold py-2 px-4 rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-1.5"
+      >
+        🏠 Dashboard
+      </button>
       
       {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────── */}
       <div className="hidden lg:flex lg:w-[42%] max-w-[550px] flex-col justify-between bg-gradient-to-br from-[#401C94] via-[#2E1566] to-[#1e0750] px-8 py-6 xl:px-12 xl:py-8 text-white relative overflow-hidden">

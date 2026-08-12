@@ -142,7 +142,7 @@ function StickyShowcase() {
   }, [hovering]);
 
   return (
-    <section className="max-w-6xl mx-auto mb-32 px-6">
+    <section id="how-it-works" className="max-w-6xl mx-auto mb-32 px-6 scroll-mt-28">
       <RevealSection className="text-center mb-12">
         <span className="inline-flex items-center gap-2 text-[var(--brand-primary)] bg-[var(--brand-light)] px-3 py-1 rounded-full text-xs font-bold mb-4">🔄 How It Works</span>
         <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-black mb-4">From resume to report <br/> in three steps</h2>
@@ -206,34 +206,18 @@ function StickyShowcase() {
 
 
 import Navbar from '../components/Navbar';
-import Logo from '../components/Logo';
+import Footer from '../components/Footer';
 
 // ─── Feature Card ─────────────────────────────────────────────────────────────
+// Plain CSS hover, not a JS mouse-tilt — the hero mockup below is the one
+// deliberate 3D-tilt moment on the page; scattering the same effect across
+// every card does nothing on touch devices and reads as busier, not premium.
 function FeatureCard({ title, desc, icon, colorClass = 'bg-purple-100 text-purple-600', delay = 0 }) {
-  const ref = useRef(null);
   const revealRef = useScrollReveal();
-
-  const handleMouseMove = useCallback((e) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 10;
-    const y = ((e.clientY - rect.top) / rect.height - 0.5) * -10;
-    el.style.transform = `perspective(800px) rotateY(${x}deg) rotateX(${y}deg) scale(1.02)`;
-    el.style.boxShadow = `${-x}px ${y}px 40px rgba(107,70,193,0.12)`;
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.transform = '';
-    el.style.boxShadow = '';
-  }, []);
 
   return (
     <div ref={revealRef} className="scroll-reveal" style={{ transitionDelay: `${delay}ms` }}>
-      <div ref={ref} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}
-        className="card-tilt bg-white border border-black/[0.03] rounded-3xl p-8 shadow-sm flex flex-col items-start h-full">
+      <div className="bg-white border border-black/[0.03] rounded-3xl p-8 shadow-sm flex flex-col items-start h-full transition-shadow duration-300 hover:shadow-[0_20px_50px_rgba(107,70,193,0.10)]">
         <div className={`h-12 w-12 rounded-xl mb-6 flex items-center justify-center text-xl ${colorClass}`}>{icon}</div>
         <h3 className="text-xl font-bold mb-3 leading-snug text-black">{title}</h3>
         <p className="text-slate-500 text-sm leading-relaxed">{desc}</p>
@@ -268,13 +252,13 @@ function InterviewMockup() {
       initial={{ opacity: 0, y: 40, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.9, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="max-w-5xl mx-auto mb-20 relative z-10"
+      className="max-w-6xl mx-auto relative z-10"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
       <div ref={ref}
         style={{ transition: 'transform 0.15s ease, box-shadow 0.15s ease', willChange: 'transform' }}
-        className="w-full bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col"
+        className="w-full bg-white rounded-3xl border border-slate-200 shadow-xl shadow-purple-900/[0.06] overflow-hidden flex flex-col"
       >
         {/* Top Bar */}
         <div className="h-14 border-b border-slate-100 flex items-center px-6 justify-between bg-slate-50/50 flex-shrink-0">
@@ -352,27 +336,159 @@ function InterviewMockup() {
           </div>
         </div>
       </div>
-
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#fafafa] to-transparent pointer-events-none" />
     </motion.div>
   );
 }
 
-// ─── Logo Marquee ─────────────────────────────────────────────────────────────
-const LOGOS = ['Google', 'Amazon', 'Microsoft', 'Meta', 'Stripe', 'Notion', 'Vercel', 'Figma', 'OpenAI', 'Atlassian'];
-
-function LogoMarquee() {
-  const items = [...LOGOS, ...LOGOS];
+// ─── Floating Icon Orb (hero decoration) ──────────────────────────────────────
+// Icon-only bubbles scattered around the concentric rings, representing
+// MockMate's own capabilities — not third-party brand logos. Showing real
+// tool logos here would wrongly imply integrations/partnerships that don't
+// exist, the same problem as a fake "trusted by" strip.
+function FloatingIconOrb({ className = '', icon, delay = 0, size = 'md' }) {
+  const dim = size === 'lg' ? 'h-14 w-14 text-2xl' : size === 'sm' ? 'h-10 w-10 text-base' : 'h-12 w-12 text-lg';
   return (
-    <div className="overflow-hidden">
-      <div className="marquee-track gap-16 items-center">
-        {items.map((name, i) => (
-          <span key={i}
-            className="font-bold text-base tracking-tight text-slate-400 hover:text-slate-600 transition-colors duration-300 flex-shrink-0 select-none cursor-default">
-            {name}
-          </span>
+    <motion.div
+      initial={{ opacity: 0, scale: 0.7 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.6, delay: 0.5 + delay, ease: [0.22, 1, 0.36, 1] }}
+      className={`hidden lg:flex absolute items-center justify-center rounded-2xl bg-white border border-slate-200/80 shadow-[0_8px_24px_rgba(15,15,25,0.08)] ${dim} ${className}`}
+      style={{ animation: 'float 6s ease-in-out infinite', animationDelay: `${delay}s` }}
+    >
+      {icon}
+    </motion.div>
+  );
+}
+
+// Concentric rings, centered on the headline cluster — pure CSS, no image.
+// No overflow-hidden here: clipping the largest rings against a hard box
+// edge left a visible flat "cut" line near the top of the hero. Rings are
+// faint 1px borders on a background that matches the page, so letting them
+// bleed past this box costs nothing visually.
+function ConcentricRings() {
+  const sizes = [260, 420, 580, 740];
+  return (
+    <div className="absolute inset-0 flex items-start justify-center pointer-events-none">
+      <div className="relative w-0 h-0" style={{ marginTop: '90px' }}>
+        {sizes.map((s) => (
+          <div key={s}
+            className="absolute rounded-full border border-slate-200/70"
+            style={{ width: s, height: s, left: -s / 2, top: -s / 2 }}
+          />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Hero Showcase ─────────────────────────────────────────────────────────
+// No card/border wrapper — the hero sits directly on the page background,
+// full width, so it isn't boxed in like a contained panel.
+function HeroShowcase({ navigate }) {
+  return (
+    <div className="relative w-full mx-auto mb-32">
+      <ConcentricRings />
+      {/* Soft glow behind headline */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_55%_45%_at_50%_15%,rgba(107,70,193,0.08),transparent)] pointer-events-none" />
+
+      <div className="relative pb-6">
+        {/* Floating capability icons, scattered around the rings */}
+        <FloatingIconOrb className="left-[6%] top-[10%]" icon="📄" delay={0} />
+        <FloatingIconOrb className="right-[8%] top-[6%]" icon="🎤" delay={0.3} size="lg" />
+        <FloatingIconOrb className="left-[2%] top-[42%]" icon="💻" delay={0.6} size="sm" />
+        <FloatingIconOrb className="right-[2%] top-[40%]" icon="📊" delay={0.9} />
+        <FloatingIconOrb className="left-[14%] top-[58%]" icon="🎯" delay={1.2} size="sm" />
+
+        {/* Announcement pill — real, not a fabricated user count */}
+        <motion.div
+          initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
+          onClick={() => navigate('/ats')}
+          className="mx-auto w-fit flex items-center gap-3 bg-white border border-slate-200 text-slate-500 text-xs font-semibold px-2 py-1 rounded-full mb-7 shadow-sm cursor-pointer hover:border-purple-200 hover:shadow-md transition-all relative z-10"
+        >
+          <span className="bg-[var(--brand-primary)] text-white px-3 py-0.5 rounded-full text-[10px] uppercase tracking-wider">New</span>
+          <span className="pr-2">ATS Resume Builder & Analyzer is live →</span>
+        </motion.div>
+
+        {/* Headline */}
+        <div className="text-center max-w-3xl mx-auto relative z-10">
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.1] mb-6 text-black">
+            <motion.span className="block"
+              initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}>
+              Perfect Your Resume &
+            </motion.span>
+            <motion.span className="block"
+              initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.32, ease: [0.22, 1, 0.36, 1] }}>
+              Ace Every Interview.
+            </motion.span>
+          </h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.44 }}
+            className="text-slate-500 text-base md:text-lg max-w-xl mx-auto mb-9 leading-relaxed"
+          >
+            AI resume scoring that doesn't inflate your score, a live AI interviewer that actually pushes back, and a real Monaco editor for DSA rounds.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.56 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4"
+          >
+            <motion.button
+              onClick={() => navigate('/setup')}
+              whileHover={{ scale: 1.04, boxShadow: '0 16px 40px rgba(107,70,193,0.30)' }}
+              whileTap={{ scale: 0.96 }}
+              className="btn-primary-solid btn-lift"
+            >
+              Start Free Practice
+            </motion.button>
+            <motion.button
+              onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.97 }}
+              className="btn-outline"
+            >
+              Watch How It Works
+            </motion.button>
+          </motion.div>
+        </div>
+
+        {/* Product visual */}
+        <div className="mt-16">
+          <InterviewMockup />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Prep Tracks ────────────────────────────────────────────────────────────
+// A "trusted by" style strip, but honest: role/track labels instead of
+// company logos — we don't have public customers to name yet, and a fake
+// "trusted by Google/Amazon" strip is worse than no trust strip at all.
+const PREP_TRACKS = [
+  { label: 'Backend', icon: '⚙️' },
+  { label: 'Frontend', icon: '🎨' },
+  { label: 'Full Stack', icon: '🔗' },
+  { label: 'Data Science', icon: '📊' },
+  { label: 'DevOps', icon: '🚀' },
+  { label: 'Product-style rounds', icon: '🧩' },
+  { label: 'Startup interviews', icon: '⚡' },
+  { label: 'DSA-heavy rounds', icon: '💻' },
+];
+
+function PrepTracks() {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+      {PREP_TRACKS.map(({ label, icon }) => (
+        <span key={label}
+          className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-600 text-sm font-bold transition-colors duration-200 cursor-default select-none">
+          <span className="text-base">{icon}</span>{label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -405,7 +521,7 @@ export default function LandingPage() {
   const heroOp = useTransform(pageScroll, [0, 0.25], [1, 0]);
 
   return (
-    <div ref={pageRef} className="relative min-h-screen pt-32 pb-20 px-6 overflow-x-hidden bg-[#fafafa]">
+    <div ref={pageRef} className="relative min-h-screen pt-28 pb-20 px-6 overflow-x-hidden bg-[#fafafa]">
       <Navbar />
 
       {/* Parallax background blobs */}
@@ -416,86 +532,18 @@ export default function LandingPage() {
           className="absolute top-1/2 -left-60 w-[500px] h-[500px] bg-indigo-200/15 rounded-full blur-[100px]" />
       </div>
 
-      {/* ── Hero (scroll-parallax) ── */}
-      <motion.header
-        style={{ y: heroY, opacity: heroOp }}
-        className="max-w-4xl mx-auto text-center mb-16 relative z-10"
-      >
-        <motion.div
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          onClick={() => navigate('/ats')}
-          className="inline-flex items-center gap-3 bg-white border border-slate-200 text-slate-500 text-xs font-semibold px-2 py-1 rounded-full mb-8 shadow-sm cursor-pointer hover:border-purple-200 hover:shadow-md transition-all"
-        >
-          <span className="bg-[var(--brand-primary)] text-white px-3 py-0.5 rounded-full text-[10px] uppercase tracking-wider">New</span>
-          <span className="pr-2">ATS Resume Builder & Analyzer is live →</span>
-        </motion.div>
-
-        <div className="hero-title mb-6 overflow-hidden">
-          <motion.span className="block"
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
-            Perfect Your Resume &
-          </motion.span>
-          <motion.span className="block"
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}>
-            Ace Every Interview.
-          </motion.span>
-        </div>
-
-        <motion.p
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="text-slate-500 text-lg max-w-2xl mx-auto mb-10 leading-relaxed"
-        >
-          Crush ATS filters with AI resume scoring, ace behavioral interviews with a live AI coach, and solve DSA problems in a real Monaco code editor — all in one platform.
-        </motion.p>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.55 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-6"
-        >
-          <motion.button
-            onClick={() => navigate('/setup')}
-            whileHover={{ scale: 1.04, boxShadow: '0 16px 40px rgba(107,70,193,0.30)' }}
-            whileTap={{ scale: 0.96 }}
-            className="btn-primary-solid btn-lift"
-          >
-            Start Free Practice
-          </motion.button>
-          <motion.button
-            onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-            whileHover={{ x: 4 }}
-            transition={{ type: 'spring', stiffness: 400 }}
-            className="flex items-center gap-2 text-black font-semibold hover:text-[var(--brand-primary)] transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs">▶</div>
-            <span>Watch how it works</span>
-          </motion.button>
-        </motion.div>
-      </motion.header>
-
-      {/* ── Interview Mockup ── */}
-      <InterviewMockup />
+      {/* ── Hero Showcase (boxed, dot-grid) ── */}
+      <motion.div style={{ y: heroY, opacity: heroOp }}>
+        <HeroShowcase navigate={navigate} />
+      </motion.div>
 
       {/* ── Thread Story ── */}
       {/* removed — now PageThread background */}
 
-      {/* ── Companies Marquee ── */}
-      <RevealSection className="max-w-5xl mx-auto mb-32 border-b border-slate-100 pb-12">
-        <div className="flex flex-col md:flex-row items-center gap-8">
-          <span className="text-sm font-bold text-slate-500 flex-shrink-0 max-w-[160px] text-center md:text-left">
-            Used by candidates targeting
-          </span>
-          <div className="flex-1 overflow-hidden relative">
-            <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#fafafa] to-transparent z-10" />
-            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#fafafa] to-transparent z-10" />
-            <LogoMarquee />
-          </div>
-        </div>
+      {/* ── Prep Tracks ── */}
+      <RevealSection className="max-w-4xl mx-auto mb-32 border-b border-slate-100 pb-16 text-center">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Built for candidates prepping across</p>
+        <PrepTracks />
       </RevealSection>
 
       {/* ── Sticky Showcase ── */}
@@ -654,7 +702,7 @@ export default function LandingPage() {
       </section>
 
       {/* ══ FEATURES ════════════════════════════════════════════════════════════ */}
-      <section id="features" className="max-w-6xl mx-auto mb-32">
+      <section id="features" className="max-w-6xl mx-auto mb-32 scroll-mt-28">
         <RevealSection className="text-center mb-16">
           <span className="inline-flex items-center gap-2 text-[var(--brand-primary)] bg-[var(--brand-light)] px-3 py-1 rounded-full text-xs font-bold mb-4">✨ Features</span>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-black mb-6">Built for serious <br/> interview preparation</h2>
@@ -684,38 +732,6 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
-
-      {/* ══ HOW IT WORKS ════════════════════════════════════════════════════════ */}
-      <section id="how-it-works" className="max-w-5xl mx-auto mb-32">
-        <RevealSection className="text-center mb-16">
-          <span className="inline-flex items-center gap-2 text-[var(--brand-primary)] bg-[var(--brand-light)] px-3 py-1 rounded-full text-xs font-bold mb-4">🔄 How It Works</span>
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-black mb-6">From resume to report <br/> in three steps</h2>
-          <p className="text-slate-500 max-w-xl mx-auto text-lg">No complicated setup. Just upload, practice, and improve.</p>
-        </RevealSection>
-        <div className="relative">
-          <div className="hidden md:block absolute top-16 left-[16.66%] right-[16.66%] h-px bg-gradient-to-r from-transparent via-purple-200 to-transparent" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            {[
-              { step: '01', icon: '📄', title: 'Scan & Optimize Resume', desc: 'Upload your resume and get an instant ATS score. Generate a fully optimized, keyword-rich resume using our AI.', color: 'bg-purple-100 text-purple-600' },
-              { step: '02', icon: '🎤', title: 'Practice Live Interview', desc: 'Face an AI interviewer that asks tailored questions based on your resume. We track emotion, speech, and confidence.', color: 'bg-indigo-100 text-indigo-600' },
-              { step: '03', icon: '📈', title: 'Review Performance', desc: 'Get a detailed report with overall scores, per-question feedback, and actionable coaching tips to improve.', color: 'bg-violet-100 text-violet-600' },
-            ].map((s, i) => (
-              <motion.div key={s.step}
-                initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }} transition={{ delay: i * 0.15, duration: 0.5 }}
-                className="flex flex-col items-center text-center">
-                <div className="relative mb-8">
-                  <div className={`h-16 w-16 rounded-2xl flex items-center justify-center text-2xl ${s.color} shadow-sm`}>{s.icon}</div>
-                  <span className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-black text-white text-[10px] font-black flex items-center justify-center">{s.step}</span>
-                </div>
-                <h3 className="text-xl font-bold mb-3 text-black">{s.title}</h3>
-                <p className="text-slate-500 text-sm leading-relaxed">{s.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
 
       {/* ══ TECHNICAL & DSA INTERVIEW ═══════════════════════════════════════════ */}
       <section id="technical-interview" className="max-w-6xl mx-auto mb-32 px-6">
@@ -810,170 +826,26 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ══ PRICING ═════════════════════════════════════════════════════════════ */}
-      <section id="pricing" className="max-w-5xl mx-auto mb-32">
-        <RevealSection className="text-center mb-16">
-          <span className="inline-flex items-center gap-2 text-[var(--brand-primary)] bg-[var(--brand-light)] px-3 py-1 rounded-full text-xs font-bold mb-4">💳 Pricing</span>
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-black mb-6">Simple, transparent pricing</h2>
-          <p className="text-slate-500 max-w-xl mx-auto text-lg">Start free. Upgrade when you're ready. No hidden fees.</p>
+      {/* ══ PRICING TEASER ══════════════════════════════════════════════════════ */}
+      <section className="max-w-4xl mx-auto mb-32">
+        <RevealSection>
+          <div className="bg-white border border-slate-100 rounded-[32px] p-10 md:p-14 text-center shadow-sm">
+            <span className="inline-flex items-center gap-2 text-[var(--brand-primary)] bg-[var(--brand-light)] px-3 py-1 rounded-full text-xs font-bold mb-6">💳 Pricing</span>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-black mb-4">Free to start. ₹499/mo for unlimited practice.</h2>
+            <p className="text-slate-500 max-w-lg mx-auto mb-8">No hidden fees, no credit card needed to try it. See the full breakdown and what's in each plan.</p>
+            <motion.button
+              onClick={() => navigate('/pricing')}
+              whileHover={{ scale: 1.04, boxShadow: '0 16px 40px rgba(107,70,193,0.30)' }}
+              whileTap={{ scale: 0.96 }}
+              className="btn-primary-solid btn-lift"
+            >
+              View Full Pricing →
+            </motion.button>
+          </div>
         </RevealSection>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            { name: 'Free', price: '₹0', period: 'forever', desc: 'Perfect to explore MockMate.', highlight: false, cta: 'Get Started Free', ctaPath: '/signup',
-              features: ['3 interview sessions / month', 'Resume parsing', 'Basic performance report', 'English only'] },
-            { name: 'Pro', price: '₹499', period: 'per month', desc: 'For candidates actively preparing.', highlight: true, cta: 'Start Pro', ctaPath: '/signup?plan=pro',
-              features: ['Unlimited sessions', 'All interview types & difficulties', 'Full emotion + speech analysis', 'Multi-language support', 'Per-question AI feedback', 'Filler word timeline'] },
-            { name: 'Team', price: '₹1,999', period: 'per month', desc: 'For colleges and coaching institutes.', highlight: false, cta: 'Contact Us', ctaPath: '/signup',
-              features: ['Up to 20 users', 'Everything in Pro', 'Admin dashboard', 'Bulk report exports', 'Priority support'] },
-          ].map((plan, i) => (
-            <motion.div key={plan.name}
-              initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }} transition={{ delay: i * 0.1, duration: 0.5 }}
-              whileHover={{ y: -4, boxShadow: plan.highlight ? '0 24px 60px rgba(107,70,193,0.20)' : '0 12px 40px rgba(0,0,0,0.06)' }}
-              className={`relative h-full rounded-3xl p-8 flex flex-col border transition-all duration-300 ${plan.highlight ? 'bg-[var(--brand-primary)] text-white border-purple-500 shadow-xl shadow-purple-900/20' : 'bg-white border-black/[0.04] shadow-sm'}`}>
-              {plan.highlight && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full">Most Popular</div>
-              )}
-              <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${plan.highlight ? 'text-purple-200' : 'text-slate-400'}`}>{plan.name}</p>
-              <div className="flex items-end gap-1 mb-2">
-                <span className={`text-5xl font-black tracking-tighter ${plan.highlight ? 'text-white' : 'text-black'}`}>{plan.price}</span>
-                <span className={`text-sm mb-2 ${plan.highlight ? 'text-purple-200' : 'text-slate-400'}`}>/ {plan.period}</span>
-              </div>
-              <p className={`text-sm mb-6 ${plan.highlight ? 'text-purple-100' : 'text-slate-500'}`}>{plan.desc}</p>
-              <ul className="space-y-3 mb-8 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-3 text-sm">
-                    <svg className={`w-4 h-4 mt-0.5 flex-shrink-0 ${plan.highlight ? 'text-purple-200' : 'text-purple-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
-                    </svg>
-                    <span className={plan.highlight ? 'text-purple-100' : 'text-slate-600'}>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <motion.button onClick={() => navigate(plan.ctaPath || '/signup')} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                className={`w-full py-3 rounded-full font-semibold text-sm transition-all ${plan.highlight ? 'bg-white text-[var(--brand-primary)] hover:bg-purple-50' : 'bg-black text-white hover:bg-zinc-800'}`}>
-                {plan.cta}
-              </motion.button>
-            </motion.div>
-          ))}
-        </div>
       </section>
 
-      {/* ══ FOOTER ══════════════════════════════════════════════════════════════ */}
-      <footer className="relative mt-32 overflow-hidden border-t border-slate-100 bg-[#fafafa]">
-
-        {/* Giant watermark brand name */}
-        <div className="pointer-events-none select-none absolute inset-0 flex items-end justify-center overflow-hidden">
-          <span
-            className="font-black text-[clamp(80px,18vw,220px)] leading-none tracking-tighter text-black/[0.04] pb-0 translate-y-[20%]"
-            aria-hidden="true"
-          >
-            MockMate
-          </span>
-        </div>
-
-        <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-12">
-          {/* Top grid */}
-          <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-16 mb-20">
-
-            {/* Left: brand info */}
-            <div className="flex flex-col gap-6">
-              {/* Logo */}
-              <div className="flex items-center">
-                <Logo size="lg" className="h-9 sm:h-10" />
-              </div>
-
-              {/* Address */}
-              <p className="text-slate-500 text-sm leading-relaxed">
-                AI-Powered Interview Coach<br />
-                Bangalore, India 560001
-              </p>
-
-              {/* Social icons */}
-              <div className="flex items-center gap-3">
-                {[
-                  { label: 'X / Twitter', icon: (
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                  )},
-                  { label: 'GitHub', icon: (
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-                  )},
-                  { label: 'LinkedIn', icon: (
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                  )},
-                  { label: 'YouTube', icon: (
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-                  )},
-                ].map(({ label, icon }) => (
-                  <a key={label} href="#" aria-label={label}
-                    className="h-8 w-8 rounded-lg border border-black/[0.06] bg-white flex items-center justify-center text-slate-400 hover:text-[var(--brand-primary)] hover:border-purple-200 hover:bg-purple-50 transition-all duration-200 shadow-sm">
-                    {icon}
-                  </a>
-                ))}
-              </div>
-
-              {/* Status pill */}
-              <div className="inline-flex items-center gap-2 bg-white border border-black/[0.05] rounded-full px-4 py-2 shadow-sm w-fit">
-                <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
-                <span className="text-xs font-semibold text-slate-600">All systems operational</span>
-              </div>
-            </div>
-
-            {/* Right: link columns */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-10">
-              {[
-                {
-                  heading: 'Product',
-                  links: [
-                    { label: 'AI Interviewer', href: '/setup' },
-                    { label: 'DSA Coding Interview', href: '/tech-interview/setup' },
-                    { label: 'ATS Resume Scanner', href: '/ats' },
-                    // Resume Studio only exists at /ats/studio/:reportId — it's
-                    // entered from an existing ATS report, never as a bare
-                    // route, so this points at the scanner (/ats) where that
-                    // flow actually starts instead of a route that doesn't exist.
-                    { label: 'Resume Studio', href: '/ats' },
-                    { label: 'ATS Comparison', href: '/ats/compare' },
-                    { label: 'Interview History', href: '/history' },
-                  ],
-                },
-                {
-                  heading: 'Resources',
-                  links: ['Documentation', 'Changelog', 'Blog', 'Interview Tips', 'FAQs', 'Status'],
-                },
-                {
-                  heading: 'Company',
-                  links: ['About', 'Careers', 'Press', 'Customers', 'Privacy', 'Terms'],
-                },
-                {
-                  heading: 'Support',
-                  links: ['Contact Us', 'Help Center', 'Community', 'Feedback', 'Report Bug'],
-                },
-              ].map(({ heading, links }) => (
-                <div key={heading}>
-                  <p className="text-xs font-black text-black uppercase tracking-widest mb-5">{heading}</p>
-                  <ul className="space-y-3">
-                    {links.map((link) => {
-                      const label = typeof link === 'object' ? link.label : link;
-                      const href = typeof link === 'object' ? link.href : '#';
-                      return (
-                        <li key={label}>
-                          <a href={href}
-                            onClick={href !== '#' ? (e) => { e.preventDefault(); navigate(href); } : undefined}
-                            className="text-sm text-slate-500 hover:text-[var(--brand-primary)] transition-colors duration-200 cursor-pointer">
-                            {label}
-                          </a>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

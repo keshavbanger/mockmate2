@@ -10,6 +10,7 @@ import CodeEditorPanel  from '../components/techinterview/CodeEditorPanel';
 import SQLEditorPanel   from '../components/techinterview/SQLEditorPanel';
 import WhiteboardPanel  from '../components/techinterview/WhiteboardPanel';
 import InterviewerOrb   from '../components/techinterview/InterviewerOrb';
+import useBackNavigationGuard from '../hooks/useBackNavigationGuard';
 
 export default function TechInterviewPage() {
   const { sessionId } = useParams();
@@ -421,11 +422,24 @@ export default function TechInterviewPage() {
   const handleEndInterview = async () => {
     try {
       const { data } = await endTechInterview(sessionId);
-      navigate(`/tech-interview/report/${data.sessionId || sessionId}`);
+      // replace: true — once the session is ended, the live room is dead;
+      // back button from the report should not be able to reopen it.
+      navigate(`/tech-interview/report/${data.sessionId || sessionId}`, { replace: true });
     } catch (e) {
-      navigate(`/tech-interview/report/${sessionId}`);
+      navigate(`/tech-interview/report/${sessionId}`, { replace: true });
     }
   };
+
+  const handleLeaveToDashboard = () => {
+    if (window.confirm('Leave this interview? Your progress will be lost — the interview will not be saved as completed.')) {
+      navigate('/dashboard', { replace: true });
+    }
+  };
+
+  // Browser back/forward is trapped while a live interview is mounted — the
+  // only way out is the explicit home button / end-interview flow, both of
+  // which route through the same confirm dialog.
+  useBackNavigationGuard({ onBack: handleLeaveToDashboard });
 
   const showEditor = editorMode !== null;
   const totalMin   = plan?.config?.durationMinutes || 45;
@@ -444,11 +458,7 @@ export default function TechInterviewPage() {
         <div style={styles.topLeft}>
           <button
             style={styles.homeBtn}
-            onClick={() => {
-              if (window.confirm('Leave this interview? Your progress will be lost — the interview will not be saved as completed.')) {
-                navigate('/dashboard');
-              }
-            }}
+            onClick={handleLeaveToDashboard}
             title="Leave interview and go to dashboard"
           >
             🏠

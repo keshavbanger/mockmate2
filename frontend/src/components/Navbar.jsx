@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 
+// type: 'anchor' scrolls to a landing-page section (navigating home first if
+// elsewhere); 'route' is a real standalone page.
 const NAV_LINKS = [
-  { label: 'Home',         href: '#'                    },
-  { label: 'Features',     href: '#features'            },
-  { label: 'How It Works', href: '#how-it-works'        },
-  { label: 'Pricing',      href: '#pricing'             },
-  { label: 'DSA / Tech',   href: '#technical-interview' },
+  { label: 'Product',   type: 'anchor', target: '#features'            },
+  { label: 'Why MockMate', type: 'route', target: '/why-mockmate'      },
+  { label: 'Pricing',   type: 'route',  target: '/pricing'             },
+  { label: 'Changelog', type: 'route',  target: '/changelog'           },
+  { label: 'Contact',   type: 'route',  target: '/contact'             },
 ];
 
 export default function Navbar() {
@@ -17,9 +19,34 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
   const dropdownRef = useRef(null);
   const navWrapperRef = useRef(null);
+
+  const isLinkActive = (link) =>
+    link.type === 'route'
+      ? location.pathname === link.target
+      : location.pathname === '/';
+
+  const handleNavClick = (link) => {
+    setMobileMenuOpen(false);
+    if (link.type === 'route') {
+      navigate(link.target);
+      return;
+    }
+    const id = link.target.slice(1);
+    if (location.pathname !== '/') {
+      navigate('/');
+      // Landing is eagerly loaded, but still needs a tick to mount before
+      // the section id exists in the DOM to scroll to.
+      requestAnimationFrame(() => {
+        setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 60);
+      });
+    } else {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -72,17 +99,29 @@ export default function Navbar() {
           <Logo size="sm" className="h-5 sm:h-6" />
         </div>
 
-        {/* Nav links */}
-        <div className="hidden md:flex items-center gap-8 text-[13.5px] font-semibold text-slate-500">
-          {NAV_LINKS.map(({ label, href }) => (
-            <a key={label} href={href}
-              className={`relative transition-colors hover:text-[#111] cursor-pointer ${label === 'Home' ? 'text-[var(--brand-primary)]' : ''}`}>
-              {label}
-              {label === 'Home' && (
-                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4/5 h-[2px] bg-[var(--brand-primary)] rounded-full" />
-              )}
-            </a>
-          ))}
+        {/* Nav links — segmented pill with a sliding active highlight */}
+        <div className="hidden md:flex items-center gap-1 text-[13px] font-semibold">
+          {NAV_LINKS.map((link) => {
+            const active = isLinkActive(link);
+            return (
+              <button
+                key={link.label}
+                onClick={() => handleNavClick(link)}
+                className={`relative px-3.5 py-1.5 rounded-full transition-colors cursor-pointer ${
+                  active ? 'text-[var(--brand-primary)]' : 'text-slate-500 hover:text-black'
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="navActivePill"
+                    className="absolute inset-0 bg-[var(--brand-light)] rounded-full -z-10"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  />
+                )}
+                {link.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Right CTAs */}
@@ -152,9 +191,12 @@ export default function Navbar() {
                   transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-black/10 overflow-hidden"
                 >
-                  {/* User Info Header */}
+                  {/* User Info Header — the single entry point into the
+                      account; Profile, Tech Interview, Practice, History and
+                      ATS all now live inside the Dashboard itself instead of
+                      being duplicated here. */}
                   <button
-                    onClick={() => { navigate('/profile'); setDropdownOpen(false); }}
+                    onClick={() => { navigate('/dashboard'); setDropdownOpen(false); }}
                     className="w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors"
                   >
                     <p className="text-xs font-bold text-slate-800 truncate">
@@ -163,22 +205,12 @@ export default function Navbar() {
                     <p className="text-[11px] text-slate-400 truncate mt-0.5">{user?.email}</p>
                   </button>
 
-                  {/* Menu Items */}
                   <div className="py-1.5">
-                    {[
-                      { icon: '👤', label: 'My Profile', action: () => { navigate('/profile'); setDropdownOpen(false); } },
-                      { icon: '🏠', label: 'Dashboard', action: () => { navigate('/dashboard'); setDropdownOpen(false); } },
-                      { icon: '🧑‍💻', label: 'Tech Interview', action: () => { navigate('/tech-interview/setup'); setDropdownOpen(false); } },
-                      { icon: '🎤', label: 'Practice Interview', action: () => { navigate('/setup'); setDropdownOpen(false); } },
-                      { icon: '📊', label: 'My History', action: () => { navigate('/history'); setDropdownOpen(false); } },
-                      { icon: '📄', label: 'ATS Resume Check', action: () => { navigate('/ats'); setDropdownOpen(false); } },
-                    ].map(({ icon, label, action }) => (
-                      <button key={label} onClick={action}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left">
-                        <span className="text-base">{icon}</span>
-                        {label}
-                      </button>
-                    ))}
+                    <button onClick={() => { navigate('/dashboard'); setDropdownOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left">
+                      <span className="text-base">🏠</span>
+                      Dashboard
+                    </button>
                   </div>
 
                   {/* Logout */}
@@ -231,13 +263,13 @@ export default function Navbar() {
             className="md:hidden pointer-events-auto absolute left-4 right-4 top-[calc(100%+4px)] bg-white rounded-2xl border border-slate-100 shadow-xl shadow-black/10 overflow-hidden"
           >
             <div className="py-2">
-              {NAV_LINKS.map(({ label, href }) => (
-                <a key={label} href={href} onClick={() => setMobileMenuOpen(false)}
-                  className={`block px-5 py-3 text-[14px] font-semibold transition-colors hover:bg-slate-50 ${
-                    label === 'Home' ? 'text-[var(--brand-primary)]' : 'text-slate-600'
+              {NAV_LINKS.map((link) => (
+                <button key={link.label} onClick={() => handleNavClick(link)}
+                  className={`block w-full text-left px-5 py-3 text-[14px] font-semibold transition-colors hover:bg-slate-50 ${
+                    isLinkActive(link) ? 'text-[var(--brand-primary)]' : 'text-slate-600'
                   }`}>
-                  {label}
-                </a>
+                  {link.label}
+                </button>
               ))}
             </div>
             {isAuthenticated ? (

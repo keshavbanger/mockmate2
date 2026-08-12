@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTechInterviewReport } from '../utils/api';
+import useBackNavigationGuard from '../hooks/useBackNavigationGuard';
 
 const HIRING_COLORS = {
   STRONG_HIRE:    { bg: '#ecfdf5', border: '#10B981', text: '#059669' },
@@ -38,6 +39,10 @@ export default function TechInterviewReportPage() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
 
+  // The interview behind this report is already over — back/forward should
+  // not be able to reopen a dead session; send it to the dashboard instead.
+  useBackNavigationGuard({ fallbackTo: '/dashboard' });
+
   useEffect(() => {
     getTechInterviewReport(sessionId)
       .then(({ data }) => setReport(data))
@@ -60,7 +65,10 @@ export default function TechInterviewReportPage() {
   if (error || !report) {
     return (
       <div style={{ ...styles.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#EF4444' }}>{error || 'Report not found'}</div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ color: '#EF4444', marginBottom: '20px' }}>{error || 'Report not found'}</div>
+          <button style={styles.backBtn} onClick={() => navigate('/dashboard')}>← Dashboard</button>
+        </div>
       </div>
     );
   }

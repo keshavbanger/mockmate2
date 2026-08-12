@@ -130,6 +130,7 @@ export default function TechInterviewSetupPage() {
   if (step === 'setup') {
     return (
       <div style={styles.page}>
+        <button style={styles.dashboardBtn} onClick={() => navigate('/dashboard')}>🏠 Dashboard</button>
         <div style={styles.container}>
           {/* Header */}
           <div style={styles.header}>
@@ -371,6 +372,7 @@ export default function TechInterviewSetupPage() {
 
     return (
       <div style={styles.page}>
+        <button style={styles.dashboardBtn} onClick={() => navigate('/dashboard')}>🏠 Dashboard</button>
         <div style={{ ...styles.container, maxWidth: '780px' }}>
           <div style={styles.header}>
             <span style={styles.badge}>Interview Plan Generated</span>
@@ -473,6 +475,21 @@ const styles = {
   container: {
     width: '100%',
     maxWidth: '900px',
+  },
+  dashboardBtn: {
+    position: 'fixed',
+    top: '16px',
+    right: '16px',
+    zIndex: 50,
+    background: '#ffffff',
+    border: '1px solid rgba(0,0,0,0.08)',
+    color: '#374151',
+    borderRadius: '999px',
+    padding: '8px 16px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 700,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
   },
   header: {
     textAlign: 'center',

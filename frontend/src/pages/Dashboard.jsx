@@ -73,16 +73,42 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const userName = user?.fullName || user?.full_name || user?.name || 'Alex';
-  const targetRole = user?.targetRole || user?.job_title || 'Full Stack Developer';
+  const userName = user?.fullName || user?.full_name || user?.name || 'there';
   const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'A';
-  
-  // Calculate job readiness score (defaults to 84 or calculated from metrics)
-  const calculateReadiness = () => {
-    if (summary.averageScore > 0) return Math.min(98, Math.round(summary.averageScore));
-    return 84;
-  };
-  const readinessScore = calculateReadiness();
+
+  const hasActivity = summary.interviewsCompleted > 0 || summary.atsResumesScanned > 0;
+  // No fallback default here — showing a flattering score before the user has
+  // done anything would be a fabricated number, not a real readiness signal.
+  const readinessScore = summary.averageScore > 0 ? Math.min(98, Math.round(summary.averageScore)) : 0;
+
+  // A real, honest checklist — each item's "done" state is derived from
+  // actual account data, not hardcoded. The DSA item has no distinct counter
+  // on the backend yet, so it's left permanently actionable rather than
+  // guessed at.
+  const checklist = [
+    { id: 'scan-resume', title: 'Scan your resume', tag: 'SETUP', tagColor: 'bg-indigo-50 text-indigo-600', icon: '📄', done: summary.atsResumesScanned > 0, path: '/ats' },
+    { id: 'first-interview', title: 'Complete your first mock interview', tag: 'PRACTICE', tagColor: 'bg-purple-50 text-purple-600', icon: '🎤', done: summary.interviewsCompleted > 0, path: '/setup' },
+    { id: 'dsa-round', title: 'Try a technical / DSA round', tag: 'TECHNICAL', tagColor: 'bg-emerald-50 text-emerald-600', icon: '💻', done: false, path: '/tech-interview/setup' },
+    { id: 'score-80', title: 'Reach a score of 80+', tag: 'GOAL', tagColor: 'bg-amber-50 text-amber-700', icon: '🎯', done: summary.averageScore >= 80, path: '/setup' },
+  ];
+  const todoItems = checklist.filter((c) => !c.done);
+
+  // Real completed activity — merges actual recent interviews + ATS scans
+  // (already fetched from /summary, previously left unused while the UI
+  // showed two hardcoded example rows instead).
+  const doneActivity = [
+    ...summary.recentInterviews.map((i) => ({
+      id: `interview-${i.id}`, title: i.role ? `${i.role} Interview` : 'Practice Interview',
+      tag: 'INTERVIEW', tagColor: 'bg-purple-50 text-purple-600', icon: '🎤',
+      date: i.date, score: i.score, path: `/report/${i.id}`,
+    })),
+    ...summary.recentAtsScans.map((r) => ({
+      id: `ats-${r.id}`, title: 'ATS Resume Scan',
+      tag: 'RESUME', tagColor: 'bg-indigo-50 text-indigo-600', icon: '📄',
+      date: r.date, score: r.score, path: `/ats/report/${r.id}`,
+    })),
+  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const doneTotalCount = summary.interviewsCompleted + summary.atsResumesScanned;
 
   // Chart Setup
   const chartLabels = summary.scoreTrend.length > 0 
@@ -178,6 +204,14 @@ export default function Dashboard() {
     { label: 'Analytics', icon: '📈', path: '/history' },
   ];
 
+  // Real, navigable categories — not fabricated "projects" the user never
+  // created. Standing in for the template's generic workspace section.
+  const prepTracks = [
+    { label: 'Behavioral Prep', dot: 'bg-purple-500', path: '/setup' },
+    { label: 'Technical Prep', dot: 'bg-emerald-500', path: '/tech-interview/setup' },
+    { label: 'All History', icon: '▦', path: '/history' },
+  ];
+
   return (
     <div className="min-h-screen bg-[#F6F8FC] text-slate-800 flex font-sans">
       
@@ -223,6 +257,23 @@ export default function Dashboard() {
               );
             })}
           </nav>
+
+          {/* Prep Tracks */}
+          <div className="mt-8">
+            <p className="px-4 text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Prep Tracks</p>
+            <nav className="space-y-1">
+              {prepTracks.map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => navigate(item.path)}
+                  className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left"
+                >
+                  {item.dot ? <span className={`h-2 w-2 rounded-full ${item.dot} flex-shrink-0`} /> : <span className="text-sm">{item.icon}</span>}
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
         </div>
 
         {/* Bottom Nav Options */}
@@ -309,12 +360,6 @@ export default function Dashboard() {
           {/* ── Header Row & Readiness Card ── */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div>
-              {/* Target Role Tag */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-100 text-[#6B46C1] text-xs font-bold mb-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#6B46C1]"></span>
-                {targetRole}
-              </div>
-              
               {/* User Welcome */}
               <div className="flex items-center gap-4 flex-wrap">
                 <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
@@ -323,14 +368,6 @@ export default function Dashboard() {
 
                 {/* Profile Controls */}
                 <div className="flex items-center gap-3">
-                  <button aria-label="Notifications" className="p-2 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors relative">
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-600"></span>
-                    🔔
-                  </button>
-                  <span className="px-3 py-1 rounded-full bg-purple-600 text-white text-[11px] font-extrabold uppercase tracking-wider">
-                    PRO MEMBER
-                  </span>
-
                   {/* Profile Dropdown */}
                   <div className="relative" ref={dropdownRef}>
                     <button 
@@ -368,12 +405,14 @@ export default function Dashboard() {
               </div>
 
               <p className="text-slate-500 text-sm mt-1 max-w-xl font-medium">
-                Your job readiness score is looking strong. Keep up the momentum!
+                {hasActivity
+                  ? `${doneTotalCount} session${doneTotalCount === 1 ? '' : 's'} completed. Keep up the momentum!`
+                  : "Let's get your first session done — scan a resume or start a mock interview."}
               </p>
             </div>
 
             {/* Readiness Card */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-sm flex items-center justify-between min-w-[280px] hover:shadow-md transition-shadow"
@@ -381,7 +420,7 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">Readiness</h3>
                 <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 text-xs font-bold">
-                  🔥 4 Day Streak
+                  {hasActivity ? `📈 ${todoItems.length} step${todoItems.length === 1 ? '' : 's'} left` : '🚀 Not started yet'}
                 </div>
               </div>
 
@@ -410,254 +449,100 @@ export default function Dashboard() {
             </motion.div>
           </div>
 
-          {/* ── Today's Action Plan ── */}
-          <motion.div 
+          {/* ── Tasks: real To Do / Done checklist, Linear-style ── */}
+          <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm"
+            className="bg-white border border-slate-200/90 rounded-3xl shadow-sm overflow-hidden"
           >
-            <div className="flex items-center gap-2 mb-6">
-              <span className="text-lg">🚀</span>
-              <h2 className="text-lg font-extrabold text-slate-900">Today's Action Plan</h2>
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✅</span>
+                <h2 className="text-lg font-extrabold text-slate-900">Your Tasks</h2>
+              </div>
+              <span className="text-xs font-bold text-slate-400">{doneTotalCount} completed</span>
             </div>
 
-            <div className="relative flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 md:gap-0">
-              
-              {/* Line Connector */}
-              <div className="hidden md:block absolute top-1/2 left-[15%] right-[15%] h-0.5 bg-slate-200 -z-0 -translate-y-4"></div>
-
-              {/* Step 1: Upload Resume */}
-              <div 
-                onClick={() => navigate('/ats')}
-                className="flex-1 flex flex-col items-center text-center cursor-pointer group z-10"
-              >
-                <div className="h-10 w-10 rounded-full bg-[#6B46C1] text-white flex items-center justify-center font-bold text-sm shadow-md mb-3 group-hover:scale-110 transition-transform">
-                  ✓
-                </div>
-                <h4 className="text-sm font-bold text-slate-900">Upload Resume</h4>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">Scanned & Analyzed</p>
+            {/* To Do */}
+            <div className="px-6 py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="h-4 w-4 rounded-full border-2 border-slate-300" />
+                <h3 className="text-sm font-extrabold text-slate-900">To Do</h3>
+                <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{todoItems.length}</span>
               </div>
+              {todoItems.length === 0 ? (
+                <p className="text-sm text-slate-400 font-medium py-3 pl-6">You're all caught up — nice work.</p>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {todoItems.map((item) => (
+                    <button key={item.id} onClick={() => navigate(item.path)}
+                      className="w-full flex items-center gap-3 py-3 text-left hover:bg-slate-50 rounded-xl px-2 -mx-2 transition-colors group"
+                    >
+                      <span className="h-4 w-4 rounded-full border-2 border-slate-300 group-hover:border-purple-400 flex-shrink-0" />
+                      <span className="text-lg flex-shrink-0">{item.icon}</span>
+                      <span className="text-sm font-semibold text-slate-800 flex-1">{item.title}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${item.tagColor}`}>{item.tag}</span>
+                      <span className="text-slate-300 group-hover:text-purple-400 group-hover:translate-x-0.5 transition-all flex-shrink-0">→</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-              {/* Step 2: AI Warm-up */}
-              <div 
-                onClick={() => navigate('/setup')}
-                className="flex-1 flex flex-col items-center text-center cursor-pointer group z-10"
-              >
-                <div className="w-full max-w-[220px] bg-white border-2 border-purple-600 rounded-2xl p-3 shadow-md group-hover:shadow-lg transition-shadow">
-                  <div className="h-8 w-8 rounded-full bg-purple-100 text-[#6B46C1] flex items-center justify-center font-bold text-xs mx-auto mb-1">
-                    ⌛
+            {/* Done — real completed interviews + resume scans */}
+            {doneActivity.length > 0 && (
+              <div className="px-6 py-4 border-t border-slate-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[9px]">✓</span>
+                  <h3 className="text-sm font-extrabold text-slate-900">Done</h3>
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{doneTotalCount}</span>
+                </div>
+                <div className="divide-y divide-slate-50">
+                  {doneActivity.slice(0, 6).map((item) => (
+                    <button key={item.id} onClick={() => navigate(item.path)}
+                      className="w-full flex items-center gap-3 py-3 text-left hover:bg-slate-50 rounded-xl px-2 -mx-2 transition-colors group"
+                    >
+                      <span className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[9px] flex-shrink-0">✓</span>
+                      <span className="text-lg flex-shrink-0">{item.icon}</span>
+                      <span className="text-sm font-semibold text-slate-500 flex-1 line-through decoration-slate-300">{item.title}</span>
+                      {typeof item.score === 'number' && (
+                        <span className="text-xs font-bold text-slate-400 flex-shrink-0">{item.score}</span>
+                      )}
+                      <span className="text-xs text-slate-400 font-medium w-20 text-right flex-shrink-0">
+                        {new Date(item.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {doneTotalCount > doneActivity.length && (
+                  <div className="pt-3 text-center">
+                    <button
+                      onClick={() => navigate('/history')}
+                      className="text-xs font-extrabold text-[#6B46C1] hover:text-[#5b3da6] transition-colors"
+                    >
+                      See all activity →
+                    </button>
                   </div>
-                  <h4 className="text-sm font-extrabold text-[#6B46C1]">AI Warm-up</h4>
-                  <p className="text-xs text-purple-600 font-semibold mt-0.5">In Progress (5m)</p>
-                </div>
+                )}
               </div>
-
-              {/* Step 3: Technical DSA */}
-              <div 
-                onClick={() => navigate('/tech-interview/setup')}
-                className="flex-1 flex flex-col items-center text-center cursor-pointer group z-10"
-              >
-                <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm mb-3 group-hover:bg-slate-200 transition-colors">
-                  🔒
-                </div>
-                <h4 className="text-sm font-bold text-slate-500">Technical DSA</h4>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">Pending</p>
-              </div>
-
-            </div>
+            )}
           </motion.div>
 
-          {/* ── 4 Core Feature Cards ── */}
-          <motion.div 
+          {/* ── Performance Score Trend ── */}
+          <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            transition={{ delay: 0.15 }}
+            className="bg-white border border-slate-200/90 rounded-3xl p-7 shadow-sm"
           >
-            {/* Card 1: AI Mock Interview */}
-            <div 
-              onClick={() => navigate('/setup')}
-              className="bg-white border-2 border-[#6B46C1]/30 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between group"
-            >
-              <div>
-                <div className="h-12 w-12 rounded-2xl bg-purple-100 text-[#6B46C1] flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
-                  📹
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-[#6B46C1] text-[10px] font-extrabold tracking-wider uppercase mb-3 border border-purple-100">
-                  ✨ REAL-TIME VOICE & AUDIO
-                </div>
-                <h3 className="text-xl font-extrabold text-slate-900 mb-2">AI Mock Interview</h3>
-                <p className="text-slate-500 text-xs leading-relaxed font-medium">
-                  Practice behavioral and technical questions with our realistic AI persona.
-                </p>
-              </div>
-              <div className="mt-6 font-extrabold text-sm text-[#6B46C1] flex items-center gap-1 group-hover:gap-2 transition-all">
-                Start Practice <span>→</span>
-              </div>
+            <div className="mb-6">
+              <h3 className="text-lg font-extrabold text-slate-900">Performance Score Trend</h3>
+              <p className="text-xs text-slate-400 font-medium">Tracking technical and soft-skill progression</p>
             </div>
-
-            {/* Card 2: Tech DSA & Code (Dark Theme Contrast) */}
-            <div 
-              onClick={() => navigate('/tech-interview/setup')}
-              className="bg-[#0F172A] border border-slate-800 rounded-3xl p-6 shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between group relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl" />
-              <div>
-                <div className="h-12 w-12 rounded-2xl bg-emerald-950 text-emerald-400 border border-emerald-800/50 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
-                  💻
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 text-[10px] font-extrabold tracking-wider uppercase mb-3 border border-emerald-800/50">
-                  ⚡ NATIVE RUNNER (JAVA, PYTHON, JS, C++)
-                </div>
-                <h3 className="text-xl font-extrabold text-white mb-2">Tech DSA & Code</h3>
-                <p className="text-slate-400 text-xs leading-relaxed font-medium">
-                  Solve algorithm challenges in a real-time collaborative sandbox environment.
-                </p>
-              </div>
-              <div className="mt-6 font-extrabold text-sm text-emerald-400 flex items-center gap-1 group-hover:gap-2 transition-all">
-                Solve Challenge <span>→</span>
-              </div>
-            </div>
-
-            {/* Card 3: ATS Scanner (Dashed Border) */}
-            <div 
-              onClick={() => navigate('/ats')}
-              className="bg-white border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between group"
-            >
-              <div>
-                <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
-                  📥
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-extrabold tracking-wider uppercase mb-3 border border-indigo-100">
-                  🎯 SENIOR RECRUITER BENCHMARK
-                </div>
-                <h3 className="text-xl font-extrabold text-slate-900 mb-2">ATS Scanner</h3>
-                <p className="text-slate-500 text-xs leading-relaxed font-medium">
-                  Drop your PDF here to analyze keyword match against target job descriptions.
-                </p>
-              </div>
-              <div className="mt-6 font-extrabold text-sm text-indigo-600 flex items-center gap-1 group-hover:gap-2 transition-all">
-                Scan Resume <span>→</span>
-              </div>
-            </div>
-
-            {/* Card 4: Resume Studio */}
-            <div 
-              onClick={() => navigate('/ats')}
-              className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between group"
-            >
-              <div>
-                <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
-                  📝
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-extrabold tracking-wider uppercase mb-3 border border-emerald-100">
-                  📄 1-CLICK LATEX & PDF EXPORT
-                </div>
-                <h3 className="text-xl font-extrabold text-slate-900 mb-2">Resume Studio</h3>
-                <p className="text-slate-500 text-xs leading-relaxed font-medium">
-                  Craft a tailored resume using AI suggestions and premium templates.
-                </p>
-              </div>
-              <div className="mt-6 font-extrabold text-sm text-emerald-600 flex items-center gap-1 group-hover:gap-2 transition-all">
-                Edit & Export <span>→</span>
-              </div>
+            <div className="h-[260px] w-full">
+              <Line data={chartData} options={chartOptions} />
             </div>
           </motion.div>
-
-          {/* ── Bottom Section: Analytics & Activity ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Left: Performance Score Trend Line Chart */}
-            <motion.div 
-              initial={{ opacity: 0, x: -15 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="lg:col-span-2 bg-white border border-slate-200/90 rounded-3xl p-7 shadow-sm flex flex-col justify-between"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-extrabold text-slate-900">Performance Score Trend</h3>
-                  <p className="text-xs text-slate-400 font-medium">Tracking technical and soft-skill progression</p>
-                </div>
-                <select className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-600 focus:outline-none">
-                  <option>Last 30 Days</option>
-                  <option>Last 60 Days</option>
-                  <option>All Time</option>
-                </select>
-              </div>
-
-              <div className="h-[260px] w-full">
-                <Line data={chartData} options={chartOptions} />
-              </div>
-            </motion.div>
-
-            {/* Right: Recent Activity Reports Feed */}
-            <motion.div 
-              initial={{ opacity: 0, x: 15 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white border border-slate-200/90 rounded-3xl p-7 shadow-sm flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-extrabold text-slate-900">Recent Activity Reports</h3>
-                  <span className="text-xs text-slate-400 font-bold">Latest</span>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Item 1: ATS Scan */}
-                  <div 
-                    onClick={() => navigate('/ats')}
-                    className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-purple-200 hover:bg-purple-50/50 cursor-pointer transition-all flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-bold">
-                        📄
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#6B46C1] transition-colors">
-                          ATS Resume Scan
-                        </h4>
-                        <p className="text-xs text-slate-400 font-medium">85% Match (Yesterday)</p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-purple-600 group-hover:translate-x-1 transition-transform">→</span>
-                  </div>
-
-                  {/* Item 2: Java Technical Interview */}
-                  <div 
-                    onClick={() => navigate('/history')}
-                    className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-purple-200 hover:bg-purple-50/50 cursor-pointer transition-all flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg font-bold">
-                        💻
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#6B46C1] transition-colors">
-                          Java Technical Interview
-                        </h4>
-                        <p className="text-xs text-slate-400 font-medium">88/100 (3 days ago)</p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-purple-600 group-hover:translate-x-1 transition-transform">→</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* See All Activity Link */}
-              <div className="pt-6 border-t border-slate-100 mt-6 text-center">
-                <button 
-                  onClick={() => navigate('/history')}
-                  className="text-xs font-extrabold text-[#6B46C1] hover:text-[#5b3da6] transition-colors inline-flex items-center gap-1"
-                >
-                  See all activity <span>›</span>
-                </button>
-              </div>
-
-            </motion.div>
-
-          </div>
 
         </main>
       </div>

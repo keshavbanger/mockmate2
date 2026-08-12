@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useInterview } from '../context/InterviewContext.jsx';
 import { reportData as mockData } from '../data/mockReportData.js';
 import { getSession } from '../utils/api.js';
+import useBackNavigationGuard from '../hooks/useBackNavigationGuard';
 
 // Styles
 import '../styles/report.css';
@@ -36,6 +37,10 @@ export default function ReportPage() {
   
   const { sessionId: routeSessionId } = useParams();
   const activeSessionId = routeSessionId || ctx.sessionId;
+
+  // The interview behind this report is already over — back/forward should
+  // not be able to reopen a dead session; send it to the dashboard instead.
+  useBackNavigationGuard({ fallbackTo: '/dashboard' });
 
   // Use real data if available
   const data = ctx.reportData;
