@@ -300,9 +300,12 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       const response = await api.post('/api/auth/send-otp', { email, purpose });
+      if (response.data && response.data.success === false) {
+        throw new Error(response.data.message || 'Failed to send verification code');
+      }
       return response.data;
     } catch (err) {
-      const message = err.response?.data?.message || err.message || 'Failed to send verification code';
+      const message = err.response?.data?.message || err.response?.data?.detail || err.message || 'Failed to send verification code';
       setError(message);
       throw new Error(message);
     }
@@ -313,9 +316,12 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       const response = await api.post('/api/auth/verify-otp', { email, otpCode, purpose });
+      if (response.data && response.data.success === false) {
+        throw new Error(response.data.message || 'Invalid verification code');
+      }
       return response.data;
     } catch (err) {
-      const message = err.response?.data?.message || err.message || 'Invalid or expired verification code';
+      const message = err.response?.data?.message || err.response?.data?.detail || err.message || 'Invalid or expired verification code';
       setError(message);
       throw new Error(message);
     }

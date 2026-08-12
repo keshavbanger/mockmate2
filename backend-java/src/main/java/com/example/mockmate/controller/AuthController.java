@@ -13,6 +13,7 @@ import com.example.mockmate.service.AuthService;
 import com.example.mockmate.service.OtpService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
     private final AuthService authService;
@@ -31,9 +33,17 @@ public class AuthController {
         try {
             return ResponseEntity.ok(otpService.sendOtp(request));
         } catch (IllegalArgumentException e) {
+            log.warn("Validation error in sendOtp: {}", e.getMessage());
             return ResponseEntity.badRequest().body(OtpResponse.builder()
                     .success(false)
                     .message(e.getMessage())
+                    .email(request.getEmail())
+                    .build());
+        } catch (Exception e) {
+            log.error("Unhandled exception in sendOtp: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(OtpResponse.builder()
+                    .success(false)
+                    .message("Internal server error sending code: " + e.getMessage())
                     .email(request.getEmail())
                     .build());
         }
@@ -44,9 +54,17 @@ public class AuthController {
         try {
             return ResponseEntity.ok(otpService.verifyOtp(request));
         } catch (IllegalArgumentException e) {
+            log.warn("Validation error in verifyOtp: {}", e.getMessage());
             return ResponseEntity.badRequest().body(OtpResponse.builder()
                     .success(false)
                     .message(e.getMessage())
+                    .email(request.getEmail())
+                    .build());
+        } catch (Exception e) {
+            log.error("Unhandled exception in verifyOtp: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(OtpResponse.builder()
+                    .success(false)
+                    .message("Internal server error verifying code: " + e.getMessage())
                     .email(request.getEmail())
                     .build());
         }
