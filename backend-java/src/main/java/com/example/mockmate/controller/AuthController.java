@@ -1,12 +1,16 @@
 package com.example.mockmate.controller;
 
+import com.example.mockmate.dto.request.SendOtpRequest;
 import com.example.mockmate.dto.request.TokenVerificationRequest;
 import com.example.mockmate.dto.request.UserLoginRequest;
 import com.example.mockmate.dto.request.UserSignupRequest;
+import com.example.mockmate.dto.request.VerifyOtpRequest;
+import com.example.mockmate.dto.response.OtpResponse;
 import com.example.mockmate.dto.response.TokenResponse;
 import com.example.mockmate.dto.response.UserResponse;
 import com.example.mockmate.model.User;
 import com.example.mockmate.service.AuthService;
+import com.example.mockmate.service.OtpService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,6 +24,33 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final OtpService otpService;
+
+    @PostMapping("/send-otp")
+    public ResponseEntity<OtpResponse> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+        try {
+            return ResponseEntity.ok(otpService.sendOtp(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(OtpResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .email(request.getEmail())
+                    .build());
+        }
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<OtpResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        try {
+            return ResponseEntity.ok(otpService.verifyOtp(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(OtpResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .email(request.getEmail())
+                    .build());
+        }
+    }
 
     @PostMapping("/verify")
     public ResponseEntity<TokenResponse> verify(@Valid @RequestBody TokenVerificationRequest request) {

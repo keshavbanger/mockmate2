@@ -14,6 +14,7 @@ import SignupPage from './pages/SignupPage.jsx';
 // them or not — shipped in one ~900KB (239KB gzip) chunk loaded on first
 // paint, including for a visitor who only ever sees the landing page.
 const Dashboard               = lazy(() => import('./pages/Dashboard.jsx'));
+const ProfilePage             = lazy(() => import('./pages/ProfilePage.jsx'));
 const SetupPage               = lazy(() => import('./pages/SetupPage.jsx'));
 const InterviewRoom           = lazy(() => import('./pages/InterviewRoom.jsx'));
 const ReportPage              = lazy(() => import('./pages/ReportPage.jsx'));
@@ -49,6 +50,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />

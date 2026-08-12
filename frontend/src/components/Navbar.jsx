@@ -153,16 +153,20 @@ export default function Navbar() {
                   className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-black/10 overflow-hidden"
                 >
                   {/* User Info Header */}
-                  <div className="px-4 py-3 border-b border-slate-50">
+                  <button
+                    onClick={() => { navigate('/profile'); setDropdownOpen(false); }}
+                    className="w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                  >
                     <p className="text-xs font-bold text-slate-800 truncate">
                       {user?.fullName || user?.full_name || user?.name || 'User'}
                     </p>
                     <p className="text-[11px] text-slate-400 truncate mt-0.5">{user?.email}</p>
-                  </div>
+                  </button>
 
                   {/* Menu Items */}
                   <div className="py-1.5">
                     {[
+                      { icon: '👤', label: 'My Profile', action: () => { navigate('/profile'); setDropdownOpen(false); } },
                       { icon: '🏠', label: 'Dashboard', action: () => { navigate('/dashboard'); setDropdownOpen(false); } },
                       { icon: '🧑‍💻', label: 'Tech Interview', action: () => { navigate('/tech-interview/setup'); setDropdownOpen(false); } },
                       { icon: '🎤', label: 'Practice Interview', action: () => { navigate('/setup'); setDropdownOpen(false); } },

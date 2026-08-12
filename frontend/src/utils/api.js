@@ -80,6 +80,9 @@ export const getDashboardSummary = (userId) =>
     headers: { Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('mockmate_token')}` }
   });
 
+// ---------- Profile ----------
+export const getUserProfile = () => api.get('/dashboard/profile');
+
 // ============================================================
 // ATS Resume Checker
 // ============================================================

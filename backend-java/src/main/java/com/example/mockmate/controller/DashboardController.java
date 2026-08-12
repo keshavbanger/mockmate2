@@ -89,7 +89,67 @@ public class DashboardController {
         summary.put("recentInterviews", recentInterviews);
         summary.put("recentAtsScans", recentAtsScans);
         summary.put("scoreTrend", scoreTrend);
-        
+
         return ResponseEntity.ok(summary);
+    }
+
+    // ── GET /profile — full account view: profile info + complete session/
+    // resume history (unlike /summary, which caps lists at 5 for the
+    // dashboard's quick-glance widgets). Backs the dedicated Profile page.
+    @GetMapping("/profile")
+    public ResponseEntity<?> getProfile(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String userId = user.getId();
+
+        List<InterviewSummaryDTO> interviews = interviewHistoryService.getInterviewHistory(userId);
+        List<AtsAnalysis> atsReports = atsAnalysisRepository.findByUserIdOrderByCreatedAtDesc(userId);
+
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("id", user.getId());
+        profile.put("fullName", user.getFullName());
+        profile.put("email", user.getEmail());
+        profile.put("avatarUrl", user.getAvatarUrl());
+        profile.put("memberSince", user.getCreatedAt() != null ? user.getCreatedAt().toString() : null);
+
+        List<Map<String, Object>> interviewList = interviews.stream()
+                .map(i -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", i.getId());
+                    map.put("date", i.getCreatedAt().toString());
+                    map.put("role", i.getRole());
+                    map.put("company", i.getCompany());
+                    map.put("interviewType", i.getInterviewType());
+                    map.put("score", i.getOverallScore() != null ? i.getOverallScore() : 0);
+                    map.put("fillerWordCount", i.getFillerWordCount());
+                    map.put("averageWpm", i.getAverageWpm());
+                    return map;
+                })
+                .collect(Collectors.toList());
+
+        List<Map<String, Object>> resumeList = atsReports.stream()
+                .map(r -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("reportId", r.getReportId());
+                    map.put("date", r.getCreatedAt().toString());
+                    map.put("fileName", r.getResumeFileName());
+                    map.put("score", r.getFinalScore());
+                    map.put("verdict", r.getVerdict());
+                    return map;
+                })
+                .collect(Collectors.toList());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("profile", profile);
+        body.put("interviews", interviewList);
+        body.put("resumes", resumeList);
+        // "Last session" — whichever of the two histories is most recent,
+        // since a user's last activity could be either an interview or a
+        // resume scan.
+        body.put("lastInterview", interviewList.isEmpty() ? null : interviewList.get(0));
+        body.put("lastResume", resumeList.isEmpty() ? null : resumeList.get(0));
+
+        return ResponseEntity.ok(body);
     }
 }

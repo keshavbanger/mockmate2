@@ -295,6 +295,32 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Send OTP Email Verification
+  const sendOtp = async (email, purpose = 'SIGNUP') => {
+    try {
+      setError(null);
+      const response = await api.post('/api/auth/send-otp', { email, purpose });
+      return response.data;
+    } catch (err) {
+      const message = err.response?.data?.message || err.message || 'Failed to send verification code';
+      setError(message);
+      throw new Error(message);
+    }
+  };
+
+  // Verify OTP Email Code
+  const verifyOtp = async (email, otpCode, purpose = 'SIGNUP') => {
+    try {
+      setError(null);
+      const response = await api.post('/api/auth/verify-otp', { email, otpCode, purpose });
+      return response.data;
+    } catch (err) {
+      const message = err.response?.data?.message || err.message || 'Invalid or expired verification code';
+      setError(message);
+      throw new Error(message);
+    }
+  };
+
   // Legacy Login Fallback
   const login = async (email, password) => {
     try {
@@ -344,6 +370,8 @@ export const AuthProvider = ({ children }) => {
         signupWithEmail,
         loginWithEmail,
         loginWithGoogle,
+        sendOtp,
+        verifyOtp,
         logout,
         isAuthenticated: !!user,
         api,
