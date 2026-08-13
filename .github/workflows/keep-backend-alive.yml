@@ -25,4 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping backend health endpoint
-        run: curl -sf -o /dev/null -w "Backend responded: %{http_code}\n" https://mockmate-backend-io2l.onrender.com/health
+        # Block scalar (|), not a plain unquoted string — a plain YAML
+        # scalar containing ": " (colon + space) mid-line, as in "responded:
+        # %{http_code}" below, is invalid: YAML reads it as a nested mapping
+        # key. That's what was actually breaking this workflow's parse on
+        # every single run since it was first added — this job has never
+        # once executed.
+        run: |
+          curl -sf -o /dev/null -w "Backend responded: %{http_code}\n" https://mockmate-backend-io2l.onrender.com/health
