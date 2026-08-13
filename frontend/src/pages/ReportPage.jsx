@@ -106,10 +106,10 @@ export default function ReportPage() {
             </p>
           </div>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/dashboard')}
             className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl text-sm transition-colors shadow-lg"
           >
-            Start New Interview
+            Go to Dashboard
           </button>
         </div>
       </div>
@@ -126,7 +126,7 @@ export default function ReportPage() {
       <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-8 py-4 flex items-center justify-between no-print shadow-sm">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/dashboard')}
             className="text-slate-900 font-black text-sm uppercase tracking-tight hover:text-purple-600 transition-colors"
           >
             MockMate AI

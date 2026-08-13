@@ -269,6 +269,7 @@ export default function ResumeStudioPage() {
       <header className="studio-header">
         <div className="studio-header-left">
           <button className="studio-back" onClick={() => navigate(-1)}>← Report</button>
+          <button className="studio-back" onClick={() => navigate('/dashboard')} style={{ background: '#3b82f6', color: '#fff', borderColor: '#2563eb' }}>🏠 Dashboard</button>
           <span className="studio-title">Resume Studio</span>
           <span className="studio-name">{resume.name}</span>
         </div>

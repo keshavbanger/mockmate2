@@ -113,16 +113,20 @@ export default function ATSReportPage() {
       <div className="sticky top-0 z-50 flex justify-center pt-5 px-4 pointer-events-none print:hidden">
         <nav className="w-full max-w-6xl pointer-events-auto floating-nav relative flex items-center justify-between shadow-[0_8px_30px_rgba(0,0,0,0.06)] bg-white/95 backdrop-blur-xl py-3 px-5 rounded-2xl">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/')} className="flex items-center gap-2">
+            <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white text-sm font-bold">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
               </div>
               <span className="font-bold tracking-tight text-xl text-black">MockMate</span>
             </button>
             <div className="w-px h-6 bg-slate-200 hidden sm:block" />
-            <button onClick={() => navigate(-1)} className="hidden sm:flex text-sm font-semibold text-slate-500 hover:text-black items-center gap-1 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            <button onClick={() => navigate(-1)} className="hidden sm:flex text-xs font-semibold text-slate-500 hover:text-black items-center gap-1 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
               Back
+            </button>
+            <button onClick={() => navigate('/dashboard')} className="flex text-xs font-bold text-[#6B46C1] bg-[#F3E8FF] hover:bg-purple-200 px-3 py-1.5 rounded-full items-center gap-1.5 transition-colors shadow-sm">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 00-1 1m-6 0h6" /></svg>
+              Dashboard
             </button>
           </div>
 
