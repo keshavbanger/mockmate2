@@ -1,16 +1,73 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useInterview } from '../context/InterviewContext.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { createSession, parseResume, generateQuestions, startInterview } from '../utils/api.js';
+import Navbar from '../components/Navbar.jsx';
+import Footer from '../components/Footer.jsx';
+import LoginModal from '../components/LoginModal.jsx';
+
+const TABS = ['Role Based', 'Company Based', 'JD Based'];
+
+const ROLE_CATEGORIES = ['All', 'Tech', 'Management', 'Intern', 'Engineering', 'Finance', 'Analyst', 'Healthcare'];
+const COMPANY_CATEGORIES = ['All', 'FAANG', 'MNC', 'E-Commerce', 'Startup', 'Finance', 'Consulting'];
+
+const ROLES_DATA = [
+  { id: 'fullstack_developer', title: 'Full Stack Developer', cat: 'Engineering', icon: '💻', desc: 'Frontend + Backend APIs' },
+  { id: 'data_scientist', title: 'Data Scientist', cat: 'Analyst', icon: '📊', desc: 'Machine Learning & Python' },
+  { id: 'product_manager', title: 'Product Manager', cat: 'Management', icon: '🚀', desc: 'Roadmap & product sense' },
+  { id: 'frontend_engineer', title: 'Frontend Engineer', cat: 'Engineering', icon: '🎨', desc: 'React, UI & Web Performance' },
+  { id: 'cybersecurity_analyst', title: 'Cybersecurity Analyst', cat: 'Tech', icon: '🛡️', desc: 'Threat detection & security' },
+  { id: 'devops_engineer', title: 'DevOps Engineer', cat: 'Tech', icon: '⚙️', desc: 'Kubernetes, AWS & CI/CD' },
+  { id: 'financial_analyst', title: 'Financial Analyst', cat: 'Finance', icon: '💰', desc: 'Modeling & valuation' },
+  { id: 'hr_specialist', title: 'HR Specialist', cat: 'Management', icon: '👥', desc: 'Talent & culture fit' },
+  { id: 'qa_engineer', title: 'QA Automation Engineer', cat: 'Tech', icon: '🧪', desc: 'Selenium, Cypress & testing' },
+  { id: 'business_analyst', title: 'Business Analyst', cat: 'Analyst', icon: '📊', desc: 'Requirements & SQL' },
+  { id: 'ux_designer', title: 'UX/UI Designer', cat: 'Tech', icon: '✏️', desc: 'Figma, research & wireframes' },
+  { id: 'cloud_engineer', title: 'Cloud Architect', cat: 'Tech', icon: '☁️', desc: 'AWS, Azure & Cloud Infra' },
+];
+
+const COMPANIES_DATA = [
+  { id: 'google', title: 'Google', cat: 'FAANG', icon: '🔍', desc: 'Algorithms & System Design' },
+  { id: 'amazon', title: 'Amazon', cat: 'FAANG', icon: '📦', desc: '14 Leadership Principles' },
+  { id: 'microsoft', title: 'Microsoft', cat: 'FAANG', icon: '🪟', desc: 'Growth Mindset & System CS' },
+  { id: 'flipkart', title: 'Flipkart', cat: 'E-Commerce', icon: '🛒', desc: 'High Scale E-Commerce' },
+  { id: 'accenture', title: 'Accenture', cat: 'MNC', icon: '🌐', desc: 'Consulting & Enterprise Tech' },
+  { id: 'aditya_birla', title: 'Aditya Birla Group', cat: 'MNC', icon: '🏢', desc: 'Leadership & Business Strategy' },
+  { id: 'adobe', title: 'Adobe', cat: 'MNC', icon: '🅰️', desc: 'Creative Tech & System Logic' },
+  { id: 'stripe', title: 'Stripe', cat: 'Startup', icon: '💳', desc: 'Fintech APIs & Code Quality' },
+  { id: 'netflix', title: 'Netflix', cat: 'FAANG', icon: '🎬', desc: 'Freedom & Responsibility' },
+  { id: 'meta', title: 'Meta', cat: 'FAANG', icon: '♾️', desc: 'Fast Execution & Scale' },
+  { id: 'apple', title: 'Apple', cat: 'FAANG', icon: '🍎', desc: 'Pixel Perfection & Craft' },
+  { id: 'goldman_sachs', title: 'Goldman Sachs', cat: 'Finance', icon: '🏦', desc: 'Financial Tech & Logic' },
+];
 
 const INTERVIEW_TYPES = ['Technical', 'Behavioral', 'HR', 'Mixed'];
-const DIFFICULTIES    = ['Junior', 'Mid Level', 'Senior'];
-const LANGUAGES       = ['English', 'Hindi', 'Hinglish'];
+const DIFFICULTIES = ['Junior', 'Mid Level', 'Senior'];
+const LANGUAGES = ['English', 'Hindi', 'Hinglish'];
 
-// ─── Spinner ──────────────────────────────────────────────────────────────────
+const ROUNDS = [
+  { id: 'warmup',    label: 'Warm Up',      sub: 'NON TECHNICAL' },
+  { id: 'role',      label: 'Role Related',  sub: 'TECHNICAL'     },
+  { id: 'behavioral',label: 'Behavioral',    sub: 'HR'            },
+];
+
+const DURATIONS = [
+  { value: 5,  label: '5 mins',  premium: false },
+  { value: 15, label: '15 mins', premium: true  },
+  { value: 30, label: '30 mins', premium: true  },
+];
+
+const INTERVIEWERS = [
+  { id: 'payal', name: 'Payal', lang: 'IN English', avatar: 'https://i.pravatar.cc/100?img=47' },
+  { id: 'emma',  name: 'Emma',  lang: 'US English', avatar: 'https://i.pravatar.cc/100?img=5'  },
+  { id: 'john',  name: 'John',  lang: 'US English', avatar: 'https://i.pravatar.cc/100?img=12' },
+  { id: 'kapil', name: 'Kapil', lang: 'IN English', avatar: 'https://i.pravatar.cc/100?img=68' },
+];
+
 function Spinner({ size = 'md' }) {
   const sz = size === 'sm' ? 'h-4 w-4' : 'h-6 w-6';
   return (
@@ -21,27 +78,65 @@ function Spinner({ size = 'md' }) {
   );
 }
 
-// ─── SetupPage ────────────────────────────────────────────────────────────────
 export default function SetupPage() {
   const navigate = useNavigate();
   const ctx = useInterview();
   const { addToast, ToastContainer } = useToast();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
-  const [uploading,  setUploading]  = useState(false);
-  const [starting,   setStarting]   = useState(false);
-  const [uploadDone, setUploadDone] = useState(false);
-  const [fileName,   setFileName]   = useState('');
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('Role Based');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Selected selection
+  const [selectedRole, setSelectedRole] = useState(ROLES_DATA[0]);
+  const [selectedCompany, setSelectedCompany] = useState(COMPANIES_DATA[0]);
+
+  // Config state
+  const [type, setType] = useState('Technical');
+  const [difficulty, setDifficulty] = useState('Mid Level');
+  const [language, setLanguage] = useState('English');
+  const [jobDescription, setJobDescription] = useState('');
+  const [noAvatar, setNoAvatar] = useState(false);
+
+  // Step 3 state
+  const [selectedRound,      setSelectedRound]      = useState('warmup');
+  const [selectedDuration,   setSelectedDuration]   = useState(5);
+  const [selectedInterviewer,setSelectedInterviewer] = useState('kapil');
+  const [enableAudio,        setEnableAudio]        = useState(true);
+  const [enableVideo,        setEnableVideo]        = useState(true);
+  const [termsAgreed,        setTermsAgreed]        = useState(false);
+  const [selectionDone,      setSelectionDone]      = useState(false);
+
+  // Resume upload state (initialized if context already has resume data)
+  const [uploading, setUploading] = useState(false);
+  const [uploadDone, setUploadDone] = useState(() => Boolean(ctx.resumeData));
+  const [fileName, setFileName] = useState('');
+
+  // Starting loading state
+  const [starting, setStarting] = useState(false);
   const [loadingText, setLoadingText] = useState('');
 
-  const [type,           setType]           = useState('Technical');
-  const [difficulty,     setDifficulty]     = useState('Mid Level');
-  const [language,       setLanguage]       = useState('English');
-  const [jobDescription, setJobDescription] = useState('');
-  const [companyId,      setCompanyId]      = useState('general');
-  const [noAvatar,       setNoAvatar]       = useState(false);
+  // Filtered Roles
+  const filteredRoles = useMemo(() => {
+    return ROLES_DATA.filter(r => {
+      const matchCat = selectedCategory === 'All' || r.cat === selectedCategory;
+      const matchQuery = !searchQuery.trim() || r.title.toLowerCase().includes(searchQuery.toLowerCase()) || r.desc.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchQuery;
+    });
+  }, [selectedCategory, searchQuery]);
 
-  // ── Dropzone ─────────────────────────────────────────────────────────────
+  // Filtered Companies
+  const filteredCompanies = useMemo(() => {
+    return COMPANIES_DATA.filter(c => {
+      const matchCat = selectedCategory === 'All' || c.cat === selectedCategory;
+      const matchQuery = !searchQuery.trim() || c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.desc.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchQuery;
+    });
+  }, [selectedCategory, searchQuery]);
+
+  // Dropzone Handler
   const onDrop = useCallback(async (accepted) => {
     const file = accepted[0];
     if (!file) return;
@@ -63,17 +158,15 @@ export default function SetupPage() {
       const { data } = await parseResume(file, sid);
       ctx.setResumeData(data.resume_data);
       setUploadDone(true);
+      addToast('Resume uploaded and parsed successfully!', 'success');
     } catch (e) {
       const detail = e?.response?.data?.detail ?? 'Resume upload failed. Please try again.';
       addToast(detail, 'error');
       setUploadDone(false);
-      if (e?.response?.status === 404) {
-        ctx.setSessionId(null);
-      }
     } finally {
       setUploading(false);
     }
-  }, [ctx]);
+  }, [ctx, user, addToast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -82,551 +175,860 @@ export default function SetupPage() {
     multiple: false,
   });
 
-  // ── Start Interview ───────────────────────────────────────────────────────
-  const handleStart = async () => {
-    if (!ctx.resumeData || !ctx.sessionId) return;
-    setStarting(true);
+  // Mark selection done to reveal Step 3
+  const handleContinueToStep3 = () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+    if (activeTab === 'JD Based' && !jobDescription.trim()) {
+      addToast('Please paste a Job Description first.', 'warning');
+      return;
+    }
+    if (!uploadDone && !ctx.resumeData) {
+      addToast('Please upload your resume first.', 'warning');
+      return;
+    }
+    setSelectionDone(true);
+    setTimeout(() => {
+      document.getElementById('step3-section')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
 
+  // Start Interview Logic
+  const handleStart = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+    if (!uploadDone && !ctx.resumeData) {
+      addToast('Please upload your resume first to personalize the AI interview session.', 'warning');
+      return;
+    }
+    if (!termsAgreed) {
+      addToast('Please agree to the terms and conditions to proceed.', 'warning');
+      return;
+    }
+
+    setStarting(true);
     try {
-      setLoadingText('Generating interview questions…');
-      // Fix 'Mid Level' back to 'Mid' if needed for backend compatibility
+      let sid = ctx.sessionId;
+      if (!sid) {
+        setLoadingText('Initializing session…');
+        const { data } = await createSession(user ? { user_id: user.id } : {});
+        sid = data.session_id;
+        ctx.setSessionId(sid);
+      }
+
+      setLoadingText('Generating AI interview questions…');
       const diffStr = difficulty === 'Mid Level' ? 'Mid' : difficulty;
       ctx.setInterviewConfig({ type, difficulty: diffStr, language, noAvatar });
-      const qRes = await generateQuestions({
-        session_id:     ctx.sessionId,
+
+      let compId = 'general';
+      if (activeTab === 'Company Based' && selectedCompany) {
+        compId = selectedCompany.id;
+      }
+
+      const payload = {
+        session_id: sid,
         interview_type: type,
         difficulty: diffStr,
         language,
-        company_id: companyId,
+        company_id: compId,
         ...(jobDescription.trim() ? { job_description: jobDescription.trim() } : {}),
-      });
+        round: selectedRound,
+        duration_minutes: selectedDuration,
+        interviewer: selectedInterviewer,
+      };
+
+      const qRes = await generateQuestions(payload);
       if (noAvatar) {
         ctx.setQuestions(["Please introduce yourself and share a brief overview of your background."]);
       } else {
         ctx.setQuestions(qRes.data.questions);
       }
 
-      setLoadingText('Setting up your interview room…');
-      const iRes = await startInterview(ctx.sessionId);
+      setLoadingText('Setting up AI Avatar Room…');
+      const iRes = await startInterview(sid);
       ctx.setConversation({
         conversationUrl: iRes.data.conversation_url,
-        conversationId:  iRes.data.conversation_id,
+        conversationId: iRes.data.conversation_id,
       });
       ctx.setStartTime(Date.now());
       ctx.setStatus('active');
 
       navigate('/interview');
     } catch (e) {
-      const detail = e?.response?.data?.detail ?? 'Could not start the interview. Please try again.';
+      const detail = e?.response?.data?.detail ?? 'Could not start interview. Please try again.';
       addToast(detail, 'error', 6000);
       setStarting(false);
-      if (e?.response?.status === 404) {
-        ctx.setSessionId(null);
-        setUploadDone(false);
-      }
     }
   };
 
   const rd = ctx.resumeData;
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-[#F8F9FC] font-sans">
+    <div className="min-h-screen bg-[#F5F3FF] font-sans text-slate-800">
       <ToastContainer />
 
-      <button
-        onClick={() => navigate('/dashboard')}
-        className="fixed top-4 right-4 z-50 text-xs font-bold py-2 px-4 rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-1.5"
-      >
-        🏠 Dashboard
-      </button>
-      
-      {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────── */}
-      <div className="hidden lg:flex lg:w-[42%] max-w-[550px] flex-col justify-between bg-gradient-to-br from-[#401C94] via-[#2E1566] to-[#1e0750] px-8 py-6 xl:px-12 xl:py-8 text-white relative overflow-hidden">
-        
-        {/* Decorative background elements */}
-        <div className="absolute top-[15%] right-[15%] w-1 h-1 bg-white rounded-full blur-[0.5px] shadow-[0_0_15px_rgba(255,255,255,1)]"></div>
-        <div className="absolute top-[35%] right-[8%] w-1.5 h-1.5 bg-white/80 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
-        <div className="absolute top-[80%] left-[8%] w-1 h-1 bg-white/60 rounded-full shadow-[0_0_12px_rgba(255,255,255,0.8)]"></div>
-        <div className="absolute bottom-[8%] right-[40%] w-1 h-1 bg-white/50 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+      <Navbar />
 
-        {/* Concentric Rings & Sparkle Hub */}
-        <div className="absolute bottom-[18%] right-[8%] w-12 h-12 bg-white/5 backdrop-blur-sm rounded-full flex items-center justify-center z-0">
-          <svg className="w-6 h-6 text-white opacity-90" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2L13.5 9L21 10.5L13.5 12L12 19L10.5 12L3 10.5L10.5 9L12 2Z" />
-          </svg>
-        </div>
-        <svg className="absolute bottom-[-10%] right-[-15%] w-[550px] h-[550px] opacity-[0.06] pointer-events-none" viewBox="0 0 500 500" fill="none">
-           <circle cx="350" cy="350" r="100" stroke="white" strokeWidth="1" />
-           <circle cx="350" cy="350" r="170" stroke="white" strokeWidth="1" />
-           <circle cx="350" cy="350" r="240" stroke="white" strokeWidth="1" />
-           <circle cx="350" cy="350" r="310" stroke="white" strokeWidth="1" />
-        </svg>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-32 pb-16">
+      <div>
 
-        <div className="relative z-10 h-full flex flex-col justify-between min-h-0 py-2 xl:py-4">
-          <div className="shrink-0">
-            {/* Logo */}
-            <div className="flex items-center gap-3 mb-5 xl:mb-6">
-              <div className="h-10 w-10 bg-white rounded-[12px] flex items-center justify-center text-[#2E1566] shadow-sm shrink-0">
-                <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z"/>
-                </svg>
-              </div>
-              <span className="font-bold text-[22px] tracking-tight">MockMate AI</span>
-            </div>
-
-            {/* Tag */}
-            <div className="inline-flex items-center gap-2 bg-white/10 rounded-full px-4 py-1.5 mb-4 xl:mb-5 border border-white/10 w-fit shrink-0">
-              <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
-                 <path d="M12 2L13.5 9L21 10.5L13.5 12L12 19L10.5 12L3 10.5L10.5 9L12 2Z" />
-              </svg>
-              <span className="text-[9px] font-extrabold uppercase tracking-widest text-white/90">Intelligent Prep</span>
-            </div>
-
-            {/* Heading */}
-            <h1 className="text-[36px] xl:text-[42px] 2xl:text-[46px] font-extrabold tracking-tight leading-[1.05] mb-4 shrink-0">
-              Master Your<br/>Dream Role<br/>with AI-Powered<br/>Mock Interviews
-            </h1>
-
-            <p className="text-white/80 text-[13px] xl:text-[15px] leading-relaxed max-w-[340px] mb-6 font-medium shrink-0">
-              Upload your resume and get real-time, tailored feedback from our advanced AI interviewer.
-            </p>
-
-            {/* Icon Features */}
-            <div className="flex gap-6 xl:gap-8 text-[10px] xl:text-[11px] font-medium text-white/90 shrink-0">
-              <div className="flex flex-col gap-2">
-                <div className="h-9 w-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                </div>
-                <p>Secure<br/>& Private</p>
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="h-9 w-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                </div>
-                <p>Encrypted<br/>Data</p>
-              </div>
-              <div className="flex flex-col gap-2">
-                <div className="h-9 w-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                     <path d="M12 2L13.5 9L21 10.5L13.5 12L12 19L10.5 12L3 10.5L10.5 9L12 2Z" />
-                  </svg>
-                </div>
-                <p>AI-Powered<br/>Feedback</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Cards Container */}
-          <div className="flex flex-col gap-3 xl:gap-4 relative mt-4 w-full max-w-[380px] shrink-0">
-            {/* Card 1: Interview Readiness */}
-            <div className="bg-[#462885]/40 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-xl relative overflow-hidden flex flex-col justify-center">
-              <p className="text-white/80 text-[11px] font-semibold mb-2">Interview Readiness</p>
-              <div className="flex justify-between items-end">
-                <div className="w-[45%]">
-                  <div className="flex items-end gap-2 mb-2">
-                    <span className="text-[32px] font-extrabold leading-none tracking-tight">92%</span>
-                    <span className="text-[#34D399] text-[10px] font-bold mb-1 flex items-center">▲ 12%</span>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="w-full h-[5px] bg-white/20 rounded-full overflow-hidden">
-                    <div className="w-[92%] h-full bg-gradient-to-r from-purple-400 to-white rounded-full"></div>
-                  </div>
-                </div>
-                {/* Line Chart */}
-                <div className="w-[100px] h-10 relative">
-                  <svg className="absolute bottom-0 right-0 w-full h-full opacity-80" viewBox="0 0 100 30" fill="none" preserveAspectRatio="none">
-                    <path d="M0 25 C 15 25, 20 15, 30 20 C 40 25, 45 10, 55 15 C 65 20, 75 10, 85 5 C 90 2, 95 2, 100 2" stroke="#A78BFA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <circle cx="100" cy="2" r="3.5" fill="white"/>
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2: AI Bot Message */}
-            <div className="bg-[#462885]/40 backdrop-blur-md border border-white/10 rounded-xl p-3 shadow-xl ml-8 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0 shadow-inner">
-                {/* Robot Icon */}
-                <svg className="w-5 h-5 text-[#2E1566]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7v3a2 2 0 01-2 2h-1v1a2 2 0 01-2 2H9a2 2 0 01-2-2v-1H6a2 2 0 01-2-2v-3a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zM9 11a2 2 0 100 4 2 2 0 000-4zm6 0a2 2 0 100 4 2 2 0 000-4z"/></svg>
-              </div>
-              <p className="text-white/90 text-[11px] font-medium leading-relaxed pr-2">
-                Hi! I'll analyze your resume and create a personalized interview just for you.
-              </p>
-            </div>
-
-            {/* Card 3: Success Message */}
-            <div className="bg-[#462885]/40 backdrop-blur-md border border-white/10 rounded-xl p-3 shadow-xl ml-12 w-[85%] flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#34D399] flex items-center justify-center shrink-0 shadow-lg shadow-[#34D399]/30">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-              </div>
-              <div>
-                <p className="text-white text-[11px] font-bold">Resume analyzed successfully</p>
-                <p className="text-white/70 text-[10px] font-medium mt-0.5">Skills, experience & role mapped</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── RIGHT CONTENT ────────────────────────────────────────────────── */}
-      <div className="flex-1 h-screen overflow-y-auto bg-white flex flex-col relative">
-        <div className="w-full max-w-[850px] p-6 lg:p-12 m-auto">
-          
-          {/* ── COMPANY SELECTOR ─────────────────────────────────────── */}
-          <div className="mb-8 animate-fade-up">
-            <div className="flex items-center gap-2 mb-4">
-              <svg className="w-4 h-4 text-[#5235A2]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-              <h2 className="text-[13px] font-extrabold text-[#1A1A1A] uppercase tracking-wider">Select Company <span className="text-[#9CA3AF] font-semibold normal-case tracking-normal ml-1">(optional)</span></h2>
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-              {[
-                { id: 'general',   name: 'General',   desc: 'Balanced interview',       icon: '🎯', color: 'from-slate-400 to-slate-500' },
-                { id: 'google',    name: 'Google',    desc: 'Algo & system design',     icon: '🔍', color: 'from-blue-400 to-green-400' },
-                { id: 'amazon',    name: 'Amazon',    desc: 'Leadership Principles',    icon: '📦', color: 'from-orange-400 to-amber-400' },
-                { id: 'microsoft', name: 'Microsoft', desc: 'Growth mindset',           icon: '🪟', color: 'from-sky-400 to-blue-500' },
-                { id: 'flipkart', name: 'Flipkart',  desc: 'Product & e-commerce',     icon: '🛒', color: 'from-yellow-400 to-orange-400' },
-                { id: 'startup',   name: 'Startup',   desc: 'Ownership & speed',        icon: '🚀', color: 'from-purple-400 to-pink-400' },
-              ].map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setCompanyId(c.id)}
-                  className={`relative flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl border-[2px] text-center transition-all duration-200 group hover:-translate-y-0.5 ${
-                    companyId === c.id
-                      ? 'border-[#5235A2] bg-[#FAF8FF] shadow-[0_0_0_3px_rgba(82,53,162,0.12)]'
-                      : 'border-[#E5E7EB] bg-white hover:border-[#D1C4F9] hover:bg-slate-50'
-                  }`}
-                >
-                  {companyId === c.id && (
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#5235A2] rounded-full flex items-center justify-center">
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-                    </span>
-                  )}
-                  <span className="text-2xl leading-none">{c.icon}</span>
-                  <span className={`text-[11px] font-extrabold tracking-tight ${companyId === c.id ? 'text-[#5235A2]' : 'text-[#1A1A1A]'}`}>{c.name}</span>
-                  <span className="text-[9px] text-slate-400 font-medium leading-tight">{c.desc}</span>
-                </button>
-              ))}
-            </div>
-            {companyId !== 'general' && (
-              <p className="mt-2.5 text-[11px] font-semibold text-[#5235A2] flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-                {companyId.charAt(0).toUpperCase() + companyId.slice(1)}-style interview activated — questions will follow that company's specific patterns
-              </p>
-            )}
-          </div>
-
-          {/* Stepper Header */}
-          <div className="flex items-center mb-8 gap-4 px-2">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-[#5235A2] text-white flex items-center justify-center font-bold shadow-md shrink-0 text-sm">1</div>
-              <h2 className="text-[15px] font-extrabold text-[#1A1A1A] whitespace-nowrap">Your Professional Profile</h2>
-            </div>
-            
-            <div className="hidden md:block h-[1px] bg-[#E5E7EB] flex-1 min-w-[20px] mx-2"></div>
-            
-            <div className={`flex items-center gap-3 transition-all duration-300 ${uploadDone ? 'opacity-100' : 'opacity-30'}`}>
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold shrink-0 text-sm ${uploadDone ? 'bg-[#5235A2] text-white shadow-md' : 'border-[1.5px] border-[#E5E7EB] text-[#B0B4C3] bg-white'}`}>2</div>
-              <h2 className={`text-[15px] font-extrabold whitespace-nowrap ${uploadDone ? 'text-[#1A1A1A]' : 'text-[#B0B4C3]'}`}>Tailor Your Session</h2>
-            </div>
-          </div>
-
-          {/* Step 1: Dropzone or Parsed Resume */}
-          <div className="mb-6 animate-fade-up">
-            {!uploadDone ? (
-              <div
-                {...getRootProps()}
-                className={`relative border-[1.5px] border-dashed rounded-[32px] p-6 lg:p-10 text-center cursor-pointer
-                            transition-all duration-300 flex flex-col md:flex-row items-center justify-center gap-8
-                            ${isDragActive
-                              ? 'border-[#5235A2] bg-[#5235A2]/5'
-                              : 'border-[#D9C9F9] bg-[#FAF8FF] hover:bg-[#F3EFFF] hover:border-[#C4ADF4]'
-                            }`}
+        {/* ── TAB BAR ──────────────────────────────────────────────── */}
+        <div className="bg-white/90 backdrop-blur-xl shadow-lg shadow-purple-900/5 border border-purple-100 rounded-full p-1.5 flex items-center justify-center gap-2 max-w-lg mx-auto mb-8">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(tab); setSelectedCategory('All'); setSelectionDone(false); }}
+                className={`flex-1 py-2.5 rounded-full text-xs sm:text-sm font-extrabold transition-all duration-200 cursor-pointer text-center ${
+                  isActive
+                    ? 'bg-[#6B46C1] text-white shadow-md shadow-purple-900/20'
+                    : 'text-slate-600 hover:text-black hover:bg-purple-50/60'
+                }`}
               >
-                <input {...getInputProps()} />
-                
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-4 py-8 w-full">
-                    <Spinner size="md" />
-                    <p className="text-[#5235A2] font-semibold">Parsing and analyzing resume…</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Left Upload Text */}
-                    <div className="flex flex-col items-center text-center">
-                      <div className="h-14 w-14 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)] rounded-full flex items-center justify-center mb-4 text-[#5235A2]">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                      </div>
-                      <h3 className="text-[#1A1A1A] font-extrabold text-lg mb-1">Drop your resume here</h3>
-                      <p className="text-[#5235A2] font-bold text-[14px] mb-2">or click to browse</p>
-                      <p className="text-[#9CA3AF] text-[12px] font-semibold">Support for PDF, DOCX (Max 5MB)</p>
-                    </div>
+                {tab}
+              </button>
+            );
+          })}
+        </div>
 
-                    {/* Right Preview Graphic */}
-                    <div className="hidden md:block bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-[#F3F4F6] p-5 w-[260px]">
-                      <div className="flex items-start justify-between mb-4">
-                         <div className="flex gap-3 items-center">
-                            <div className="h-10 w-10 rounded-2xl bg-[#F5F1FF] text-[#5235A2] flex items-center justify-center">
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            </div>
-                            <div className="text-left">
-                               <p className="text-[12px] font-extrabold text-[#1A1A1A] mb-0.5">Your Resume.pdf</p>
-                               <p className="text-[10px] text-[#9CA3AF] font-semibold">2.4 MB</p>
-                            </div>
-                         </div>
-                         <span className="bg-[#5235A2] text-white text-[8px] font-bold px-2 py-1 rounded-[6px] tracking-wide uppercase">PDF</span>
-                      </div>
-                      <div className="space-y-2 mb-4">
-                         <div className="h-2 bg-[#F3F4F6] rounded-full w-full"></div>
-                         <div className="h-2 bg-[#F3F4F6] rounded-full w-5/6"></div>
-                         <div className="h-2 bg-[#F3F4F6] rounded-full w-4/6"></div>
-                      </div>
-                      <div className="flex items-center gap-2 text-[12px] font-bold text-[#5235A2] bg-[#FAF8FF] py-2 rounded-xl justify-center">
-                         <svg className="w-4 h-4 text-[#5235A2]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-                         Ready to analyze
-                      </div>
-                    </div>
-                  </>
-                )}
+        {/* ── HERO SECTION ─────────────────────────────────────────── */}
+        <div className="text-center max-w-3xl mx-auto mb-8">
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-100/70 border border-purple-200 text-[#6B46C1] text-[11px] font-extrabold tracking-wider uppercase mb-4 shadow-sm">
+            <span className="text-amber-500">⚡</span>
+            {activeTab === 'Role Based' && '3000+ ROLES AVAILABLE'}
+            {activeTab === 'Company Based' && '1000+ COMPANIES AVAILABLE'}
+            {activeTab === 'JD Based' && 'JOB DESCRIPTION TAILORED'}
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-4">
+            {activeTab === 'Role Based' && (
+              <>Role-Specific<br /><span className="text-[#6B46C1]">AI Mock Interviews</span></>
+            )}
+            {activeTab === 'Company Based' && (
+              <>Company-Specific<br /><span className="text-[#6B46C1]">AI Mock Interviews</span></>
+            )}
+            {activeTab === 'JD Based' && (
+              <>JD-Tailored<br /><span className="text-[#6B46C1]">AI Mock Interviews</span></>
+            )}
+          </h1>
+
+          <p className="text-slate-600 text-sm sm:text-base font-medium leading-relaxed max-w-2xl mx-auto mb-6">
+            {activeTab === 'Role Based' && 'Practice role-specific interviews with real-world questions. Improve domain knowledge, articulation and communication with instant feedback report.'}
+            {activeTab === 'Company Based' && 'Train with real interview questions asked at top tech giants and MNCs. Upload your resume for realistic company-specific interview prep.'}
+            {activeTab === 'JD Based' && 'Paste any target Job Description and upload your resume. AI will extract required skills, probe experience gaps, and generate 3× targeted questions.'}
+          </p>
+
+
+        </div>
+
+        {/* ── STEP 1: RESUME UPLOAD ─────────────────────────────────── */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-100 shadow-xl w-full mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold flex items-center justify-center text-sm shadow-md">
+                1
               </div>
-            ) : (
-              // Parsed Resume Profile (Shown when upload is done)
-              <div className="p-6 bg-slate-50/80 rounded-3xl border border-slate-200 animate-fade-up relative">
-                <button onClick={() => setUploadDone(false)} className="absolute top-6 right-6 text-xs font-bold text-[#5235A2] bg-white border border-slate-200 shadow-sm px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
-                  Replace File
-                </button>
-                <div className="flex items-center gap-5">
-                  <div className="h-14 w-14 rounded-full bg-[#5235A2] text-white flex items-center justify-center font-bold text-xl shadow-md flex-shrink-0">
-                    {rd?.name?.[0]?.toUpperCase() ?? '?'}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-lg text-slate-800 leading-tight">{rd?.name}</p>
-                    <p className="text-sm text-slate-500 mt-1 font-medium">{rd?.email} · {rd?.total_experience_years}y exp</p>
-                  </div>
-                </div>
-                {rd?.skills?.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-5 pt-5 border-t border-slate-200/60">
-                    {rd.skills.slice(0, 15).map(skill => (
-                      <span key={skill} className="bg-white border border-slate-200 text-slate-600 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider shadow-sm">
-                        {skill}
-                      </span>
-                    ))}
-                    {rd.skills.length > 15 && (
-                      <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">
-                        +{rd.skills.length - 15} more
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
+              <h2 className="text-base font-extrabold text-slate-900">Your Professional Resume</h2>
+            </div>
+            {uploadDone && (
+              <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                ✓ Resume Parsed & Linked
+              </span>
             )}
           </div>
 
-          {/* Step 2: Form */}
-          <div className={`transition-all duration-500 ${uploadDone ? 'opacity-100 translate-y-0' : 'opacity-40 pointer-events-none translate-y-2'}`}>
-            
-            <div className={`hidden md:flex items-center gap-4 mb-1 transition-all duration-300 ${uploadDone ? 'opacity-100' : 'opacity-60'}`}>
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shrink-0 ${uploadDone ? 'bg-[#5235A2] text-white' : 'bg-[#B0B4C3] text-white'}`}>2</div>
-              <h2 className={`text-xl font-extrabold ${uploadDone ? 'text-[#1A1A1A]' : 'text-[#9CA3AF]'}`}>Tailor Your Session</h2>
-            </div>
-            <p className={`text-[14px] font-semibold mb-5 md:ml-12 transition-all duration-300 ${uploadDone ? 'text-[#9CA3AF]' : 'text-[#B0B4C3]'}`}>
-              Help us customize the interview to match your goals.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-              {/* Type */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                  Target Industry/Role
-                </label>
-                <div className="relative">
-                  <select 
-                    value={type} 
-                    onChange={e => setType(e.target.value)}
-                    className="w-full bg-white border border-[#E5E7EB] rounded-xl px-4 py-3.5 text-[15px] font-semibold text-[#1A1A1A] focus:ring-2 focus:ring-[#5235A2] outline-none appearance-none cursor-pointer shadow-sm hover:border-[#D1D5DB] transition-colors"
-                  >
-                    {INTERVIEW_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[#9CA3AF]">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                  </div>
+          {!uploadDone ? (
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+                isDragActive ? 'border-[#6B46C1] bg-purple-50' : 'border-purple-200 bg-purple-50/30 hover:bg-purple-50 hover:border-purple-300'
+              }`}
+            >
+              <input {...getInputProps()} />
+              {uploading ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <Spinner />
+                  <p className="text-xs font-bold text-[#6B46C1]">Parsing and analyzing resume PDF…</p>
                 </div>
-              </div>
-
-              {/* Difficulty */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                  Experience Level
-                </label>
-                <div className="relative">
-                  <select 
-                    value={difficulty} 
-                    onChange={e => setDifficulty(e.target.value)}
-                    className="w-full bg-white border border-[#E5E7EB] rounded-xl px-4 py-3.5 text-[15px] font-semibold text-[#1A1A1A] focus:ring-2 focus:ring-[#5235A2] outline-none appearance-none cursor-pointer shadow-sm hover:border-[#D1D5DB] transition-colors"
-                  >
-                    {DIFFICULTIES.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[#9CA3AF]">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Language */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                  Interview Language
-                </label>
-                <div className="relative">
-                  <select 
-                    value={language} 
-                    onChange={e => setLanguage(e.target.value)}
-                    className="w-full bg-white border border-[#E5E7EB] rounded-xl px-4 py-3.5 text-[15px] font-semibold text-[#1A1A1A] focus:ring-2 focus:ring-[#5235A2] outline-none appearance-none cursor-pointer shadow-sm hover:border-[#D1D5DB] transition-colors"
-                  >
-                    {LANGUAGES.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[#9CA3AF]">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* JD Input */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                  Paste Job Description
-                  <span className="ml-1 text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">optional but recommended</span>
-                </label>
-                <span className={`text-[10px] font-semibold ${jobDescription.length > 4500 ? 'text-red-500' : 'text-slate-400'}`}>
-                  {jobDescription.length} / 5000
-                </span>
-              </div>
-              <textarea
-                value={jobDescription}
-                onChange={e => setJobDescription(e.target.value.slice(0, 5000))}
-                rows={6}
-                placeholder="Paste the full job description here..."
-                className="w-full bg-white border border-[#E5E7EB] rounded-xl px-4 py-3 text-[13px] font-medium text-[#1A1A1A] focus:ring-2 focus:ring-[#5235A2] outline-none resize-none shadow-sm hover:border-[#D1D5DB] transition-colors placeholder:text-slate-300"
-              />
-              {jobDescription.trim() ? (
-                <p className="mt-1.5 text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-                  JD detected — questions will be 3× more targeted to this role
-                </p>
               ) : (
-                <p className="mt-1.5 text-[11px] text-slate-400 font-medium">
-                  💡 Adding a JD makes questions 3× more targeted to the specific role
-                </p>
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-3xl">📥</span>
+                  <p className="text-sm font-extrabold text-slate-800">Drop your resume PDF here</p>
+                  <p className="text-xs text-[#6B46C1] font-bold">or click to browse PDF file</p>
+                  <p className="text-[11px] text-slate-400 font-medium mt-1">Upload PDF (Max 5MB) so AI can tailor questions to your background</p>
+                </div>
               )}
             </div>
-
-            {/* AI Avatar Toggle */}
-            <div className="mb-6 bg-slate-50 border border-[#E5E7EB] rounded-2xl p-4 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-white rounded-xl shadow-sm text-[#5235A2] flex items-center justify-center border border-black/[0.03] shrink-0">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
+          ) : (
+            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-[#6B46C1] text-white font-bold flex items-center justify-center text-lg shadow-md shrink-0">
+                  {rd?.name?.[0]?.toUpperCase() ?? '?'}
                 </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold text-[#1A1A1A]">Focus Mode (No AI Avatar)</p>
-                  <p className="text-xs text-slate-400 font-semibold leading-relaxed">
-                    Disable the video feed of the AI avatar. Perfect for focus sessions using voice/audio-only.
+                <div>
+                  <h4 className="font-extrabold text-slate-900 text-sm">{rd?.name ?? 'Candidate Profile'}</h4>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {rd?.email} · {rd?.total_experience_years ?? 0}y experience
                   </p>
+                  {rd?.skills?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {rd.skills.slice(0, 8).map(skill => (
+                        <span key={skill} className="bg-white border border-purple-200 text-purple-800 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
+                          {skill}
+                        </span>
+                      ))}
+                      {rd.skills.length > 8 && (
+                        <span className="text-[9px] text-slate-400 font-bold px-1 py-0.5">
+                          +{rd.skills.length - 8} more
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <button
-                type="button"
-                onClick={() => setNoAvatar(prev => !prev)}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  noAvatar ? 'bg-[#5235A2]' : 'bg-slate-200'
-                }`}
+                onClick={() => setUploadDone(false)}
+                className="text-xs font-bold text-[#6B46C1] bg-white border border-purple-200 px-3.5 py-2 rounded-xl hover:bg-purple-50 transition-colors shrink-0"
               >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    noAvatar ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
+                Replace Resume
               </button>
             </div>
+          )}
+        </div>
 
-            {/* Info Box */}
-            <div className="bg-purple-50 rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-4 mb-6 border border-purple-100">
-              <div className="h-10 w-10 bg-white rounded-xl shadow-sm text-[#5235A2] flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-bold text-slate-800 mb-2">AI will personalize your session with:</p>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-600 font-semibold">
-                  <span className="flex items-center gap-1.5"><svg className="w-3.5 h-3.5 text-[#5235A2]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>Role-specific questions</span>
-                  <span className="flex items-center gap-1.5"><svg className="w-3.5 h-3.5 text-[#5235A2]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>Skill-based challenges</span>
-                  <span className="flex items-center gap-1.5"><svg className="w-3.5 h-3.5 text-[#5235A2]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>Real-world scenarios</span>
-                </div>
-              </div>
+        {/* ── STEP 2: MODE SPECIFIC SELECTION & CONFIGURATION ────────────────── */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-100 shadow-xl w-full mb-12">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold flex items-center justify-center text-sm shadow-md">
+              2
             </div>
+            <h2 className="text-base font-extrabold text-slate-900">
+              {activeTab === 'Role Based' && 'Select Target Role & Settings'}
+              {activeTab === 'Company Based' && 'Select Target Company & Settings'}
+              {activeTab === 'JD Based' && 'Paste Job Description & Settings'}
+            </h2>
+          </div>
 
-            <button
-              onClick={handleStart}
-              disabled={!uploadDone || starting}
-              className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-xl font-bold text-lg text-white transition-all duration-300 shadow-lg ${
-                (!uploadDone || starting) 
-                  ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                  : 'bg-[#5235A2] hover:bg-[#432A85] shadow-[#5235A2]/30 hover:-translate-y-0.5'
-              }`}
-            >
-              {starting ? (
-                <>
-                  <Spinner size="md" />
-                  <span>{loadingText}</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
-                  <span>Begin Interview Session &rarr;</span>
-                </>
-              )}
+          <AnimatePresence mode="wait">
+            {/* TAB 1: ROLE BASED */}
+            {activeTab === 'Role Based' && (
+              <motion.div
+                key="role-based"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.15 }}
+              >
+                {/* Search & Category Chips */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search from 3000+ roles (e.g. Full Stack, Data Scientist)"
+                    className="w-full sm:w-80 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#6B46C1]"
+                  />
+                  <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                    {ROLE_CATEGORIES.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          selectedCategory === cat
+                            ? 'bg-[#6B46C1] text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-purple-50'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Role Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 mb-6 max-h-72 overflow-y-auto pr-1">
+                  {filteredRoles.map(role => {
+                    const isSelected = selectedRole?.id === role.id;
+                    return (
+                      <button
+                        key={role.id}
+                        onClick={() => setSelectedRole(role)}
+                        className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                          isSelected
+                            ? 'border-2 border-[#6B46C1] bg-purple-50/50 shadow-md'
+                            : 'border-slate-200/80 hover:border-purple-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="text-2xl">{role.icon}</span>
+                        <div>
+                          <h4 className="font-extrabold text-xs text-slate-900 mb-0.5">{role.title}</h4>
+                          <p className="text-[10px] text-slate-500 font-medium">{role.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+
+            {/* TAB 2: COMPANY BASED */}
+            {activeTab === 'Company Based' && (
+              <motion.div
+                key="company-based"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.15 }}
+              >
+                {/* Search & Category Chips */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search target company (e.g. Google, Amazon)"
+                    className="w-full sm:w-72 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#6B46C1]"
+                  />
+                  <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                    {COMPANY_CATEGORIES.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          selectedCategory === cat
+                            ? 'bg-[#6B46C1] text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-purple-50'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Company Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 mb-6 max-h-72 overflow-y-auto pr-1">
+                  {filteredCompanies.map(comp => {
+                    const isSelected = selectedCompany?.id === comp.id;
+                    return (
+                      <button
+                        key={comp.id}
+                        onClick={() => setSelectedCompany(comp)}
+                        className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                          isSelected
+                            ? 'border-2 border-[#6B46C1] bg-purple-50/50 shadow-md'
+                            : 'border-slate-200/80 hover:border-purple-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="text-2xl">{comp.icon}</span>
+                        <div>
+                          <h4 className="font-extrabold text-xs text-slate-900 mb-0.5">{comp.title}</h4>
+                          <p className="text-[10px] text-slate-500 font-medium">{comp.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+
+            {/* TAB 3: JD BASED */}
+            {activeTab === 'JD Based' && (
+              <motion.div
+                key="jd-based"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.15 }}
+                className="mb-6"
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Paste Job Description</label>
+                  <span className={`text-xs font-semibold ${jobDescription.length > 4500 ? 'text-red-500' : 'text-slate-400'}`}>
+                    {jobDescription.length} / 5000
+                  </span>
+                </div>
+                <textarea
+                  value={jobDescription}
+                  onChange={e => setJobDescription(e.target.value.slice(0, 5000))}
+                  rows={5}
+                  placeholder="Paste target Job Description requisition text here..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-[#6B46C1] resize-none"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Continue Button → reveals Step 3 */}
+          <div className="mt-5 flex justify-end">
+            <button onClick={handleContinueToStep3}
+              className="px-8 py-3 bg-[#6B46C1] hover:bg-[#5b3da6] text-white font-extrabold text-sm rounded-2xl shadow-lg hover:shadow-purple-900/30 hover:scale-[1.02] transition-all cursor-pointer flex items-center gap-2">
+              Continue <span>→</span>
             </button>
-            <p className="text-center text-xs text-slate-400 mt-4 flex items-center justify-center gap-1.5 font-medium">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg> 
-              Your data is secure and deleted after your session
-            </p>
           </div>
         </div>
-        
-        {/* Footer / Trust Badges */}
-        <div className="w-full max-w-4xl mx-auto mt-4 mb-8 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500 font-medium px-4 gap-4">
-           <div className="flex items-center gap-3">
-              <div className="flex -space-x-2">
-                <div className="w-6 h-6 rounded-full bg-slate-200 border-2 border-[#F8F9FC] overflow-hidden"><img src="https://i.pravatar.cc/100?img=1" alt=""/></div>
-                <div className="w-6 h-6 rounded-full bg-slate-200 border-2 border-[#F8F9FC] overflow-hidden"><img src="https://i.pravatar.cc/100?img=2" alt=""/></div>
-                <div className="w-6 h-6 rounded-full bg-slate-200 border-2 border-[#F8F9FC] overflow-hidden"><img src="https://i.pravatar.cc/100?img=3" alt=""/></div>
-                <div className="w-6 h-6 rounded-full bg-slate-200 border-2 border-[#F8F9FC] overflow-hidden"><img src="https://i.pravatar.cc/100?img=4" alt=""/></div>
+
+        {/* ── How it Works Section ── */}
+        <section className="pt-24 pb-16">
+          {/* Header */}
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-3">
+              How it <span className="text-[#6B46C1]">Works</span>
+            </h2>
+            <p className="text-slate-500 text-sm sm:text-base font-medium leading-relaxed">
+              From picking your role to getting your report, your AI Interview is ready in under a minute.
+            </p>
+          </div>
+
+          {/* Step 1 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-24">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-2 lg:order-1 space-y-4"
+            >
+              <div className="inline-flex items-center gap-3">
+                <span className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold text-xs flex items-center justify-center shadow-md">
+                  1
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B46C1]">
+                  STEP 01
+                </span>
               </div>
-              <span>Trusted by 10,000+ learners</span>
-              <div className="flex text-amber-400 gap-0.5">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Choose your Role
+              </h3>
+              <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md">
+                Search from 3000+ roles or browse by category. Pick the exact role you are preparing for, from software engineer to sales executive.
+              </p>
+              <div className="pt-2">
+                <span className="inline-block bg-purple-50 text-[#6B46C1] font-bold text-xs px-4 py-2 rounded-full border border-purple-100 shadow-sm">
+                  3000+ Roles Available
+                </span>
               </div>
-              <span className="ml-1">4.9/5</span>
-           </div>
-           <div className="flex items-center gap-4">
-              <span>Used for placements at:</span>
-              <span className="font-bold text-slate-700 text-sm tracking-tight">Google</span>
-              <span className="font-bold text-slate-700 tracking-tight">amazon</span>
-              <span className="font-bold text-slate-700 tracking-tight">Microsoft</span>
-              <span className="font-bold text-slate-700 tracking-tight">ZOHO</span>
-           </div>
-        </div>
+            </motion.div>
+
+            {/* Mock Card 1 */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-1 lg:order-2 bg-gradient-to-br from-purple-50/60 to-white p-5 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5"
+            >
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
+                <input
+                  type="text"
+                  readOnly
+                  value="Search from 3000+ roles (e.g. Full Stack, Data Scientist)"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-slate-500 outline-none"
+                />
+                <div className="flex gap-1 overflow-x-auto pb-1 text-[10px] font-bold">
+                  {['All', 'Tech', 'Management', 'Intern', 'Engineering', 'Finance', 'Analyst', 'Healthcare'].map((cat, idx) => (
+                    <span key={cat} className={`px-2.5 py-1 rounded-full whitespace-nowrap ${idx === 0 ? 'bg-[#6B46C1] text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1 text-left">
+                  {[
+                    { icon: '💻', title: 'Full Stack Developer', sub: 'Frontend + Backend APIs' },
+                    { icon: '📊', title: 'Data Scientist', sub: 'Machine Learning & Python' },
+                    { icon: '🚀', title: 'Product Manager', sub: 'Roadmap & product sense' },
+                    { icon: '🎨', title: 'Frontend Engineer', sub: 'React, UI & Web Performance' },
+                    { icon: '🛡️', title: 'Cybersecurity Analyst', sub: 'Threat detection & security' },
+                    { icon: '⚙️', title: 'DevOps Engineer', sub: 'Kubernetes, AWS & CI/CD' },
+                    { icon: '💰', title: 'Financial Analyst', sub: 'Modeling & valuation' },
+                    { icon: '👥', title: 'HR Specialist', sub: 'Talent & culture fit' },
+                    { icon: '🧪', title: 'QA Automation Engineer', sub: 'Selenium, Cypress & testing' },
+                    { icon: '📊', title: 'Business Analyst', sub: 'Requirements & SQL' },
+                    { icon: '✏️', title: 'UX/UI Designer', sub: 'Figma, research & wireframes' },
+                    { icon: '☁️', title: 'Cloud Architect', sub: 'AWS, Azure & Cloud Infra' },
+                  ].map(r => (
+                    <div key={r.title} className="p-2 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-purple-50/50 transition-colors">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-xs">{r.icon}</span>
+                        <span className="text-[10px] font-bold text-slate-800 truncate">{r.title}</span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-medium truncate">{r.sub}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Step 2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-24">
+            {/* Mock Card 2 */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-1 bg-gradient-to-br from-purple-50/60 to-white p-5 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5"
+            >
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                  <span className="text-sm">💻</span>
+                  <span className="font-extrabold text-xs text-slate-800">Full Stack Developer</span>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-700 mb-1.5">Select Round *</p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {['Warm-up', 'Role-Specific', 'Behavioral'].map((rnd, i) => (
+                      <div key={rnd} className={`p-2 rounded-xl text-center border text-[10px] font-bold ${i === 1 ? 'bg-[#6B46C1] text-white border-[#6B46C1]' : 'bg-white text-slate-600 border-slate-200'}`}>
+                        {rnd}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-700 mb-1.5">Interview Duration *</p>
+                  <div className="flex gap-1.5">
+                    {['15 mins', '30 mins ⭐', '45 mins'].map((dur, i) => (
+                      <span key={dur} className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${i === 0 ? 'bg-purple-50 text-[#6B46C1] border-purple-200' : 'bg-white text-slate-600 border-slate-200'}`}>
+                        {dur}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end pt-1">
+                  <span className="px-4 py-1.5 bg-[#6B46C1] text-white font-bold text-xs rounded-xl shadow-sm">
+                    Continue →
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-2 space-y-4"
+            >
+              <div className="inline-flex items-center gap-3">
+                <span className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold text-xs flex items-center justify-center shadow-md">
+                  2
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B46C1]">
+                  STEP 02
+                </span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Set Round & Difficulty
+              </h3>
+              <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md">
+                Choose the type of interview round, warm up, role related, behavioral, or coding, and set your difficulty level to match where you are in your prep.
+              </p>
+              <div className="pt-2">
+                <span className="inline-block bg-purple-50 text-[#6B46C1] font-bold text-xs px-4 py-2 rounded-full border border-purple-100 shadow-sm">
+                  4 round types
+                </span>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-24">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-2 lg:order-1 space-y-4"
+            >
+              <div className="inline-flex items-center gap-3">
+                <span className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold text-xs flex items-center justify-center shadow-md">
+                  3
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B46C1]">
+                  STEP 03
+                </span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Practice with AI
+              </h3>
+              <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md">
+                Face a realistic AI Interview in a live video session. It asks real questions, listens carefully, and adapts follow-ups based on your answers.
+              </p>
+              <div className="pt-2">
+                <span className="inline-block bg-purple-50 text-[#6B46C1] font-bold text-xs px-4 py-2 rounded-full border border-purple-100 shadow-sm">
+                  AI Video Interview
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Mock Card 3 */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-1 lg:order-2 bg-gradient-to-br from-purple-50/60 to-white p-5 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5"
+            >
+              <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden h-48 flex flex-col justify-between">
+                <div className="flex items-center justify-between z-10">
+                  <span className="text-[10px] font-extrabold bg-red-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" /> LIVE SESSION
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400">Q 2 / 5</span>
+                </div>
+                <div className="flex items-center justify-center gap-3 my-auto z-10">
+                  <div className="h-12 w-12 rounded-full bg-[#6B46C1] flex items-center justify-center text-xl shadow-lg border-2 border-purple-400">
+                    🎙️
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">AI Technical Interviewer</p>
+                    <p className="text-[10px] text-purple-300 font-medium">"Could you explain your approach to handling state in React?"</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-800 pt-2 z-10">
+                  <span className="text-[10px] text-slate-400 font-medium">Audio & Video Active</span>
+                  <span className="text-[10px] bg-purple-600 text-white font-bold px-2.5 py-0.5 rounded-full">Listening…</span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Step 4 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            {/* Mock Card 4 */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-1 bg-gradient-to-br from-purple-50/60 to-white p-5 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5"
+            >
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="text-xs font-bold text-slate-900">Performance Report</span>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">Completed</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-purple-50 p-2 rounded-xl">
+                    <p className="text-[9px] text-slate-500 font-bold">Overall</p>
+                    <p className="text-sm font-black text-[#6B46C1]">8.6/10</p>
+                  </div>
+                  <div className="bg-purple-50 p-2 rounded-xl">
+                    <p className="text-[9px] text-slate-500 font-bold">Confidence</p>
+                    <p className="text-sm font-black text-[#6B46C1]">9.0/10</p>
+                  </div>
+                  <div className="bg-purple-50 p-2 rounded-xl">
+                    <p className="text-[9px] text-slate-500 font-bold">Clarity</p>
+                    <p className="text-sm font-black text-[#6B46C1]">8.4/10</p>
+                  </div>
+                </div>
+                <div className="border border-slate-100 rounded-xl p-2.5 bg-slate-50/50 text-[10px] space-y-1">
+                  <p className="font-bold text-slate-800">Key Strengths:</p>
+                  <p className="text-slate-600">Great articulation of architecture trade-offs. Minimal filler words used.</p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-2 space-y-4"
+            >
+              <div className="inline-flex items-center gap-3">
+                <span className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold text-xs flex items-center justify-center shadow-md">
+                  4
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B46C1]">
+                  STEP 04
+                </span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Get Instant Feedback
+              </h3>
+              <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md">
+                Receive a detailed report immediately after your session. The report evaluates your confidence, structure and relevance and provides clear tips for improvement.
+              </p>
+              <div className="pt-2">
+                <span className="inline-block bg-purple-50 text-[#6B46C1] font-bold text-xs px-4 py-2 rounded-full border border-purple-100 shadow-sm">
+                  Instant AI report
+                </span>
+              </div>
+            </motion.div>
+          </div>
+        </section>
       </div>
+
+      </div>
+      {!selectionDone && <Footer />}
+
+      {/* ── STEP 3: INTERVIEW DETAILS (appears after Continue) ────────────── */}
+      <AnimatePresence>
+        {selectionDone && (
+          <motion.div
+            id="step3-section"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-6xl mx-auto px-4 sm:px-6 mb-32"
+          >
+            <div className="bg-white rounded-3xl p-6 border border-purple-100 shadow-xl">
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold flex items-center justify-center text-sm shadow-md">3</div>
+                <h2 className="text-base font-extrabold text-slate-900">Interview Details</h2>
+              </div>
+
+              {/* Context chip */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 mb-6 flex items-center gap-3">
+                <span className="text-xl">{activeTab === 'Company Based' ? selectedCompany?.icon : selectedRole?.icon}</span>
+                <span className="font-extrabold text-sm text-slate-800">
+                  {activeTab === 'Company Based' ? selectedCompany?.title : activeTab === 'Role Based' ? selectedRole?.title : 'JD-Based Interview'}
+                </span>
+              </div>
+
+              {/* SELECT ROUND */}
+              <div className="mb-6">
+                <p className="text-xs font-extrabold text-slate-800 mb-3">Select Round <span className="text-red-500">*</span></p>
+                <div className="flex gap-3 flex-wrap">
+                  {ROUNDS.map(r => (
+                    <button key={r.id} onClick={() => setSelectedRound(r.id)}
+                      className={`px-5 py-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                        selectedRound === r.id
+                          ? 'border-[#6B46C1] bg-[#6B46C1] text-white shadow-md'
+                          : 'border-slate-200 bg-white hover:border-purple-300 text-slate-800'
+                      }`}>
+                      <p className="font-extrabold text-sm">{r.label}</p>
+                      <p className={`text-[10px] font-bold tracking-wider uppercase mt-0.5 ${
+                        selectedRound === r.id ? 'text-purple-200' : 'text-slate-400'}`}>{r.sub}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* INTERVIEW DURATION */}
+              <div className="mb-6">
+                <p className="text-xs font-extrabold text-slate-800 mb-3">Interview Duration <span className="text-red-500">*</span></p>
+                <div className="flex gap-3 flex-wrap">
+                  {DURATIONS.map(d => (
+                    <button key={d.value} onClick={() => setSelectedDuration(d.value)}
+                      className={`px-5 py-2.5 rounded-2xl border-2 font-extrabold text-sm transition-all cursor-pointer flex items-center gap-1.5 ${
+                        selectedDuration === d.value
+                          ? 'border-[#6B46C1] bg-purple-50 text-[#6B46C1]'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-purple-200'
+                      }`}>
+                      {d.label}
+                      {d.premium && <span className="text-amber-400">⭐</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SENIORITY / TRACK / LANGUAGE / FOCUS MODE */}
+              <div className="mb-6">
+                <p className="text-xs font-extrabold text-slate-800 mb-3">Interview Configuration <span className="text-red-500">*</span></p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Seniority</label>
+                    <select value={difficulty} onChange={e => setDifficulty(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#6B46C1]">
+                      {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Track</label>
+                    <select value={type} onChange={e => setType(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#6B46C1]">
+                      {INTERVIEW_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Language</label>
+                    <select value={language} onChange={e => setLanguage(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#6B46C1]">
+                      {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">Focus Mode</p>
+                      <p className="text-[10px] text-slate-500">Audio-only (No Avatar)</p>
+                    </div>
+                    <button type="button" onClick={() => setNoAvatar(p => !p)}
+                      className={`relative inline-flex h-6 w-11 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                        noAvatar ? 'bg-[#6B46C1]' : 'bg-slate-300'}`}>
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                        noAvatar ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* PRACTICE SETTINGS */}
+              <div className="mb-6">
+                <p className="text-xs font-extrabold text-slate-800 mb-3">Practice Settings <span className="text-red-500">*</span></p>
+                <div className="flex items-center gap-5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={enableAudio} onChange={e => setEnableAudio(e.target.checked)}
+                      className="w-4 h-4 accent-[#6B46C1] cursor-pointer" />
+                    <span className="text-sm font-bold text-slate-700">Audio</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={enableVideo} onChange={e => setEnableVideo(e.target.checked)}
+                      className="w-4 h-4 accent-[#6B46C1] cursor-pointer" />
+                    <span className="text-sm font-bold text-slate-700">Video</span>
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium mt-1.5">Note: Video will be deleted after 30 mins.</p>
+              </div>
+
+              {/* TERMS */}
+              <div className="mb-6">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" checked={termsAgreed} onChange={e => setTermsAgreed(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 accent-[#6B46C1] cursor-pointer" />
+                  <span className="text-sm text-slate-600 font-medium">
+                    I agree with the <span className="text-[#6B46C1] font-bold underline cursor-pointer">terms and conditions</span>.
+                  </span>
+                </label>
+              </div>
+
+              {/* START BUTTON */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100">
+                <button onClick={() => setSelectionDone(false)}
+                  className="text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer">
+                  ← Back
+                </button>
+                <button onClick={handleStart} disabled={starting || !termsAgreed}
+                  className={`w-full sm:w-auto px-10 py-3.5 rounded-2xl font-extrabold text-sm text-white flex items-center justify-center gap-2 transition-all ${
+                    starting || !termsAgreed
+                      ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                      : 'bg-gradient-to-r from-[#6B46C1] to-[#5b3da6] shadow-lg hover:shadow-purple-900/30 hover:scale-[1.02] cursor-pointer'
+                  }`}>
+                  {starting ? (<><Spinner size="sm" /><span>{loadingText}</span></>) : (<><span>Start Practice</span><span className="text-base">→</span></>)}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Login Required Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Log In to Start Interview"
+        message="Please sign in or create a free account to generate your AI interview questions and start practicing."
+      />
     </div>
   );
 }
+

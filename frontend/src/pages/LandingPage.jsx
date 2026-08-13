@@ -388,8 +388,8 @@ function HeroShowcase({ navigate }) {
   return (
     <div className="relative w-full mx-auto mb-32">
       <ConcentricRings />
-      {/* Soft glow behind headline */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_55%_45%_at_50%_15%,rgba(107,70,193,0.08),transparent)] pointer-events-none" />
+      {/* Soft glow behind headline - extends seamlessly above hero and fades out smoothly to prevent sharp top edges */}
+      <div className="absolute -top-32 inset-x-0 bottom-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_35%,rgba(107,70,193,0.08)_0%,rgba(107,70,193,0.03)_50%,transparent_100%)] pointer-events-none" />
 
       <div className="relative pb-6">
         {/* Floating capability icons, scattered around the rings */}

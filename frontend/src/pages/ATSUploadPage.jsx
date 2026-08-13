@@ -2,6 +2,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate }           from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { analyzeATS, compareResumes } from '../utils/api.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import Navbar from '../components/Navbar.jsx';
+import Footer from '../components/Footer.jsx';
+import LoginModal from '../components/LoginModal.jsx';
 
 const STEPS = [
   'Extracting resume text…',
@@ -71,6 +75,9 @@ function Dropzone({ label, file, onFile, onError, id }) {
 
 export default function ATSUploadPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Single mode
   const [file,   setFile]   = useState(null);
@@ -104,6 +111,10 @@ export default function ATSUploadPage() {
   };
 
   const handleAnalyze = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
     if (loading) return; // guards against a double-click landing before disabled= takes effect
     if (!compare && !file)   return setError('Please upload your resume.');
     if (compare && (!fileA || !fileB)) return setError('Please upload both resumes for comparison.');
@@ -132,53 +143,7 @@ export default function ATSUploadPage() {
   return (
     <div className="min-h-screen bg-[#fafafa] font-[Outfit,Inter,sans-serif] overflow-x-hidden">
 
-      {/* ── Floating Navbar ── */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-5 px-4 pointer-events-none">
-        <motion.nav
-          initial={{ y: -60, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-4xl pointer-events-auto floating-nav relative flex items-center justify-between shadow-sm bg-white/95 backdrop-blur-xl py-3 px-5 rounded-2xl"
-        >
-          {/* Left: Logo & Back */}
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-[var(--brand-primary)] flex items-center justify-center text-white text-sm font-bold">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-              </div>
-              <span className="font-bold tracking-tight text-xl text-black">MockMate</span>
-            </button>
-            <div className="w-px h-6 bg-slate-200 hidden sm:block" />
-            <button onClick={() => navigate(-1)} className="hidden sm:flex text-xs font-semibold text-slate-500 hover:text-black items-center gap-1 transition-colors">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-              Back
-            </button>
-            <button onClick={() => navigate('/dashboard')} className="flex text-xs font-bold text-[#6B46C1] bg-[#F3E8FF] hover:bg-purple-200 px-3 py-1.5 rounded-full items-center gap-1.5 transition-colors shadow-sm">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 00-1 1m-6 0h6" /></svg>
-              Dashboard
-            </button>
-          </div>
-
-          {/* Center: Title */}
-          <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex">
-            <span className="text-[11px] font-black uppercase tracking-[0.25em] text-slate-400">
-              ATS Score Checker
-            </span>
-          </div>
-
-          {/* Right: Actions */}
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/setup')}
-              className="text-xs py-2.5 px-4 rounded-full border-[1.5px] border-[var(--brand-primary)] text-[var(--brand-primary)] hover:bg-[var(--brand-light)] transition-colors font-bold whitespace-nowrap">
-              Practice Interview
-            </button>
-            <button onClick={() => navigate('/setup')}
-              className="text-xs py-2.5 px-5 rounded-full bg-[#111827] hover:bg-black text-white font-bold transition-colors shadow-sm disabled:opacity-60 whitespace-nowrap">
-              Start Practicing
-            </button>
-          </div>
-        </motion.nav>
-      </div>
+      <Navbar />
 
       {/* ── Background blobs ── */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
@@ -187,7 +152,7 @@ export default function ATSUploadPage() {
       </div>
 
       {/* ── Hero ── */}
-      <div className="pt-36 pb-12 px-6 text-center max-w-3xl mx-auto">
+      <div className="pt-32 pb-8 px-6 text-center max-w-3xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
           className="inline-flex items-center gap-2 bg-[var(--brand-light)] text-[var(--brand-primary)] px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6"
@@ -197,15 +162,15 @@ export default function ATSUploadPage() {
 
         <motion.h1
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="text-5xl md:text-6xl font-extrabold tracking-tight text-[#111] leading-[1.15] mb-5"
+          className="text-4xl md:text-5xl font-extrabold tracking-tight text-[#111] leading-[1.15] mb-4"
         >
           Scan Your Resume Against<br />
-          <span className="gradient-text">Any Job</span>
+          <span className="gradient-text">Any Job Description</span>
         </motion.h1>
 
         <motion.p
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.22 }}
-          className="text-slate-500 text-lg leading-relaxed max-w-xl mx-auto"
+          className="text-slate-500 text-base leading-relaxed max-w-xl mx-auto"
         >
           Upload your resume and paste the job description. Our AI will score your match,
           identify keyword gaps, and suggest targeted improvements.
@@ -213,7 +178,7 @@ export default function ATSUploadPage() {
       </div>
 
       {/* ── Upload Card ── */}
-      <div className="max-w-2xl mx-auto px-6 space-y-5 pb-28">
+      <div className="max-w-5xl mx-auto px-6 space-y-5 pb-20">
 
         {/* Mode toggle */}
         <motion.div
@@ -368,7 +333,246 @@ export default function ATSUploadPage() {
         <p className="text-center text-xs text-slate-400 font-medium">
           Powered by <span className="font-bold text-slate-500">Groq llama-3.3-70b</span> · Results in ~10 seconds
         </p>
+
+        {/* ── How it Works Section ── */}
+        <section className="pt-24 pb-12">
+          {/* Header */}
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-3">
+              How it <span className="text-[#6B46C1]">Works</span>
+            </h2>
+            <p className="text-slate-500 text-sm sm:text-base font-medium leading-relaxed">
+              From uploading your resume to receiving improvement insights, your AI resume analysis is ready in minutes.
+            </p>
+          </div>
+
+          {/* Step 1 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-24">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-2 lg:order-1 space-y-4"
+            >
+              <div className="inline-flex items-center gap-3">
+                <span className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold text-xs flex items-center justify-center shadow-md">
+                  1
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B46C1]">
+                  STEP 01
+                </span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Upload Your Resume
+              </h3>
+              <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md">
+                Upload the resume you want to analyze to review your skills, experience, formatting and overall structure and understand how well your resume is prepared.
+              </p>
+              <div className="pt-2">
+                <span className="inline-block bg-purple-50 text-[#6B46C1] font-bold text-xs px-4 py-2 rounded-full border border-purple-100 shadow-sm">
+                  Resume Upload
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Mock Card 1 */}
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-1 lg:order-2 bg-gradient-to-br from-purple-50/60 to-white p-6 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5"
+            >
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">Upload Resume</h4>
+                    <p className="text-[10px] text-slate-400 font-medium">Upload your existing resume PDF and let AI extract and analyze it instantly.</p>
+                  </div>
+                </div>
+                <div className="border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-xl p-6 text-center">
+                  <p className="text-[11px] font-bold text-[#6B46C1]">Drag & drop your resume here or click to upload</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">ENTER YOUR DESIRED ROLE</label>
+                  <div className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-400 font-medium">
+                    e.g. Product Manager / Digital Marketing Manager
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="h-5 w-5 rounded-md bg-purple-100 text-[#6B46C1] flex items-center justify-center text-[10px] font-bold">📄</span>
+                    <span className="text-[10px] font-bold text-slate-700">Add Job Description</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full">Optional</span>
+                    <span className="text-[10px] bg-[#6B46C1] text-white font-bold px-3 py-1 rounded-lg shadow-sm">🔍 ANALYZE</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Step 2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-24">
+            {/* Mock Card 2 */}
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-1 bg-gradient-to-br from-purple-50/60 to-white p-6 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5"
+            >
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">Upload Resume</h4>
+                    <p className="text-[10px] text-slate-400 font-medium">Upload your existing resume PDF and let AI extract and analyze it instantly.</p>
+                  </div>
+                </div>
+                <div className="border border-emerald-300 bg-emerald-50/50 rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="h-5 w-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
+                    <span className="text-xs font-bold text-emerald-800">marketing_executive_CV_template_sample.pdf</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-600 font-bold">Parsed</span>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">ENTER YOUR DESIRED ROLE</label>
+                  <div className="w-full bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-bold shadow-sm">
+                    Marketing Manager
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="h-5 w-5 rounded-md bg-purple-100 text-[#6B46C1] flex items-center justify-center text-[10px] font-bold">📝</span>
+                    <span className="text-[10px] font-bold text-slate-700">Add Job Description</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] bg-purple-100 text-[#6B46C1] font-bold px-2 py-0.5 rounded-full">Optimize</span>
+                    <span className="text-[10px] bg-[#6B46C1] text-white font-bold px-3 py-1 rounded-lg shadow-sm">🔍 ANALYZE</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-2 space-y-4"
+            >
+              <div className="inline-flex items-center gap-3">
+                <span className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold text-xs flex items-center justify-center shadow-md">
+                  2
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B46C1]">
+                  STEP 02
+                </span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Add Role and Job Description
+              </h3>
+              <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md">
+                Enter the role you are applying for and paste or upload the job description. This allows the analysis to evaluate how well your resume aligns with the position and its requirements.
+              </p>
+              <div className="pt-2">
+                <span className="inline-block bg-purple-50 text-[#6B46C1] font-bold text-xs px-4 py-2 rounded-full border border-purple-100 shadow-sm">
+                  Role & JD Input
+                </span>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-2 lg:order-1 space-y-4"
+            >
+              <div className="inline-flex items-center gap-3">
+                <span className="h-8 w-8 rounded-full bg-[#6B46C1] text-white font-extrabold text-xs flex items-center justify-center shadow-md">
+                  3
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B46C1]">
+                  STEP 03
+                </span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                Get Resume Improvement Insights
+              </h3>
+              <p className="text-slate-600 text-sm font-medium leading-relaxed max-w-md">
+                Receive a detailed resume report that highlights how your skills and experience match the role, checks keyword relevance and ATS compatibility, and provides suggestions to improve your resume.
+              </p>
+              <div className="pt-2">
+                <span className="inline-block bg-purple-50 text-[#6B46C1] font-bold text-xs px-4 py-2 rounded-full border border-purple-100 shadow-sm">
+                  Resume Insights
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Mock Card 3 */}
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="order-1 lg:order-2 bg-gradient-to-br from-purple-50/60 to-white p-6 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5"
+            >
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900">Analysis Report</span>
+                    <span className="text-[9px] bg-purple-100 text-[#6B46C1] font-bold px-2 py-0.5 rounded-full">Realtime AI</span>
+                  </div>
+                  <span className="text-[10px] text-purple-600 font-bold border border-purple-200 px-2 py-0.5 rounded-lg">↺ Analyze again</span>
+                </div>
+                <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-[#6B46C1] text-white font-extrabold flex items-center justify-center text-sm shadow-md">
+                      70
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Overall Match Score</p>
+                      <p className="text-[10px] text-purple-700 font-medium">Strong match with room for targeted optimization</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-1">
+                  <div className="border border-slate-100 rounded-lg p-2.5 bg-slate-50/50 flex items-start gap-2">
+                    <span className="text-xs">✅</span>
+                    <div className="text-[10px]">
+                      <span className="font-bold text-slate-800">Formatting & Structure: </span>
+                      <span className="text-slate-600">Clean single-column layout passes all major parser filters.</span>
+                    </div>
+                  </div>
+                  <div className="border border-slate-100 rounded-lg p-2.5 bg-slate-50/50 flex items-start gap-2">
+                    <span className="text-xs">🎯</span>
+                    <div className="text-[10px]">
+                      <span className="font-bold text-slate-800">Keyword Alignment: </span>
+                      <span className="text-slate-600">Matched 14/18 core role competencies from job description.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
       </div>
+      <Footer />
+
+      {/* Login Required Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Log In to Analyze Resume"
+        message="Please sign in or create a free account to run hard-truth ATS resume scoring and get recruiter insights."
+      />
     </div>
   );
 }

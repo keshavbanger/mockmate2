@@ -1,6 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateInterviewPlan, startTechInterview } from '../utils/api';
+import { useAuth } from '../context/AuthContext.jsx';
+import Navbar from '../components/Navbar.jsx';
+import Footer from '../components/Footer.jsx';
+import LoginModal from '../components/LoginModal.jsx';
 
 const ROLE_LEVELS = [
   { value: 'INTERN',  label: 'Intern' },
@@ -36,7 +40,10 @@ const LANGUAGES = [
 
 export default function TechInterviewSetupPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const resumeRef = useRef(null);
+
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Core Form State (3 Essential Fields primary, optional advanced)
   const [resume, setResume]           = useState(null);
@@ -72,6 +79,10 @@ export default function TechInterviewSetupPage() {
 
   // Generate Plan Preview
   const handleGeneratePlan = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -99,6 +110,10 @@ export default function TechInterviewSetupPage() {
 
   // Start Interview Session
   const handleStart = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
     setStep('starting');
     setLoading(true);
     try {
@@ -130,7 +145,7 @@ export default function TechInterviewSetupPage() {
   if (step === 'setup') {
     return (
       <div style={styles.page}>
-        <button style={styles.dashboardBtn} onClick={() => navigate('/dashboard')}>🏠 Dashboard</button>
+        <Navbar />
         <div style={styles.container}>
           {/* Header */}
           <div style={styles.header}>
@@ -359,7 +374,15 @@ export default function TechInterviewSetupPage() {
               {loading ? '⏳ Generating Custom Interview Plan...' : 'Generate Interview Plan ✨'}
             </button>
           </div>
+          {/* Login Required Modal */}
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => setShowLoginModal(false)}
+            title="Log In for Technical Interview"
+            message="Please sign in or create a free account to generate your AI coding plan and start your live DSA sandbox session."
+          />
         </div>
+        <Footer />
       </div>
     );
   }
@@ -372,8 +395,8 @@ export default function TechInterviewSetupPage() {
 
     return (
       <div style={styles.page}>
-        <button style={styles.dashboardBtn} onClick={() => navigate('/dashboard')}>🏠 Dashboard</button>
-        <div style={{ ...styles.container, maxWidth: '780px' }}>
+        <Navbar />
+        <div style={{ ...styles.container, maxWidth: '1150px' }}>
           <div style={styles.header}>
             <span style={styles.badge}>Interview Plan Generated</span>
             <h1 style={styles.title}>Your Personalized Roadmap</h1>
@@ -454,7 +477,15 @@ export default function TechInterviewSetupPage() {
               {loading ? '🚀 Initializing Engine...' : 'Begin Technical Interview Session 🎙️'}
             </button>
           </div>
+          {/* Login Required Modal */}
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => setShowLoginModal(false)}
+            title="Log In for Technical Interview"
+            message="Please sign in or create a free account to generate your AI coding plan and start your live DSA sandbox session."
+          />
         </div>
+        <Footer />
       </div>
     );
   }
@@ -467,29 +498,18 @@ const styles = {
     minHeight: '100vh',
     background: '#fafafa',
     color: '#111827',
-    padding: '40px 20px',
+    paddingTop: '128px',
+    paddingBottom: '60px',
+    paddingLeft: '20px',
+    paddingRight: '20px',
     fontFamily: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif",
     display: 'flex',
-    justifyContent: 'center',
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   container: {
     width: '100%',
-    maxWidth: '900px',
-  },
-  dashboardBtn: {
-    position: 'fixed',
-    top: '16px',
-    right: '16px',
-    zIndex: 50,
-    background: '#ffffff',
-    border: '1px solid rgba(0,0,0,0.08)',
-    color: '#374151',
-    borderRadius: '999px',
-    padding: '8px 16px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 700,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    maxWidth: '1150px',
   },
   header: {
     textAlign: 'center',

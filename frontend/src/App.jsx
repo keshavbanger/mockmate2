@@ -79,14 +79,12 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/setup"
-        element={
-          <ProtectedRoute>
-            <SetupPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* ── Feature Setup Pages (Publicly Exploreable) ── */}
+      <Route path="/setup" element={<SetupPage />} />
+      <Route path="/ats" element={<ATSUploadPage />} />
+      <Route path="/tech-interview/setup" element={<TechInterviewSetupPage />} />
+
+      {/* ── Protected Core Interview Sessions & Reports ── */}
       <Route
         path="/interview"
         element={
@@ -112,15 +110,7 @@ export default function App() {
         }
       />
 
-      {/* ── Protected ATS Resume Checker ── */}
-      <Route
-        path="/ats"
-        element={
-          <ProtectedRoute>
-            <ATSUploadPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* ── Protected ATS Reports & Studio ── */}
       <Route
         path="/ats/report/:reportId"
         element={
@@ -146,15 +136,7 @@ export default function App() {
         }
       />
 
-      {/* ── Technical Interview Flow ── */}
-      <Route
-        path="/tech-interview/setup"
-        element={
-          <ProtectedRoute>
-            <TechInterviewSetupPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* ── Protected Technical Interview Sessions & Reports ── */}
       <Route
         path="/tech-interview/:sessionId"
         element={
