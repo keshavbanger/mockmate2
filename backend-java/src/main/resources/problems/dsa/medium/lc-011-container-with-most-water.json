@@ -1,0 +1,47 @@
+{
+  "id": "lc-011",
+  "leetcodeId": 11,
+  "leetcodeUrl": "https://leetcode.com/problems/container-with-most-water/",
+  "title": "Container With Most Water",
+  "difficulty": "MEDIUM",
+  "topics": ["array", "two-pointer", "greedy"],
+  "companies": ["Amazon", "Bloomberg", "Adobe", "Goldman Sachs"],
+  "frequency": "HIGH",
+  "neetcodeListNumber": 13,
+  "description": "You are given an integer array height of length n. There are n vertical lines drawn such that the two endpoints of line i are (i, 0) and (i, height[i]). Find two lines that, together with the x-axis, form a container that holds the most water. Return the maximum amount of water it can store.",
+  "examples": [
+    {"input": "height = [1,8,6,2,5,4,8,3,7]", "output": "49", "explanation": "Lines at index 1 (height 8) and index 8 (height 7): min(8,7) * (8-1) = 7*7 = 49."},
+    {"input": "height = [1,1]", "output": "1", "explanation": "min(1,1) * (1-0) = 1."}
+  ],
+  "constraints": ["2 <= height.length <= 10^5", "0 <= height[i] <= 10^4"],
+  "hints": ["Start with the widest container (two outer pointers). Moving the taller line inward can only shrink the width without helping the height — always move the shorter line inward instead."],
+  "starterCode": {
+    "java": "class Solution {\n    public int maxArea(int[] height) {\n        // Your solution here\n        return 0;\n    }\n}",
+    "python": "class Solution:\n    def maxArea(self, height):\n        pass",
+    "cpp": "class Solution {\npublic:\n    int maxArea(vector<int>& height) {\n        // Your solution here\n        return 0;\n    }\n};",
+    "javascript": "var maxArea = function(height) {\n    // Your solution here\n};",
+    "go": "func maxArea(height []int) int {\n    // Your solution here\n    return 0\n}"
+  },
+  "testCases": [
+    {"input": "[1,8,6,2,5,4,8,3,7]", "expectedOutput": "49", "isHidden": false, "description": "Normal case"},
+    {"input": "[1,1]", "expectedOutput": "1", "isHidden": false, "description": "Minimum size input"},
+    {"input": "[4,3,2,1,4]", "expectedOutput": "16", "isHidden": true, "description": "Best answer uses the two outermost lines"}
+  ],
+  "optimalSolution": {
+    "approach": "Two pointers starting at both ends. At each step compute the area, then move whichever pointer points at the shorter line inward — that's the only move that could possibly increase the area.",
+    "timeComplexity": "O(n)",
+    "spaceComplexity": "O(1)",
+    "code": {
+      "java": "class Solution {\n    public int maxArea(int[] height) {\n        int lo = 0, hi = height.length - 1, best = 0;\n        while (lo < hi) {\n            int area = Math.min(height[lo], height[hi]) * (hi - lo);\n            best = Math.max(best, area);\n            if (height[lo] < height[hi]) lo++;\n            else hi--;\n        }\n        return best;\n    }\n}",
+      "python": "class Solution:\n    def maxArea(self, height):\n        lo, hi, best = 0, len(height) - 1, 0\n        while lo < hi:\n            best = max(best, min(height[lo], height[hi]) * (hi - lo))\n            if height[lo] < height[hi]:\n                lo += 1\n            else:\n                hi -= 1\n        return best"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(n^2)", "spaceComplexity": "O(1)", "acceptable": false},
+  "followUpQuestions": [
+    "Why is it always safe to move the shorter line's pointer, never the taller one?",
+    "Could this container ever be improved by moving both pointers inward at once?",
+    "How is this different from Trapping Rain Water, which looks superficially similar?"
+  ],
+  "interviewerNotes": "The greedy justification (\"why move the shorter pointer\") is the real test — a candidate who gets the right code by pattern-matching 'two pointer' without being able to justify the greedy step hasn't fully understood it.",
+  "roleRelevance": {"backend": "MEDIUM", "frontend": "LOW", "fullstack": "MEDIUM", "dataScience": "MEDIUM", "devops": "LOW"}
+}

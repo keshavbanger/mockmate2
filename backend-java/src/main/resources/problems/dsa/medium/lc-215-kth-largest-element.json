@@ -1,0 +1,48 @@
+{
+  "id": "lc-215",
+  "leetcodeId": 215,
+  "leetcodeUrl": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
+  "title": "Kth Largest Element in an Array",
+  "difficulty": "MEDIUM",
+  "topics": ["array", "heap", "quickselect", "divide-and-conquer"],
+  "companies": ["Amazon", "Facebook", "Microsoft", "Google"],
+  "frequency": "VERY_HIGH",
+  "neetcodeListNumber": 45,
+  "description": "Given an integer array nums and an integer k, return the kth largest element in the array. Note that it is the kth largest element in sorted order, not the kth distinct element. You must solve it in O(n log n) time or better.",
+  "examples": [
+    {"input": "nums = [3,2,1,5,6,4], k = 2", "output": "5", "explanation": "Sorted descending: 6,5,4,3,2,1 — the 2nd largest is 5."},
+    {"input": "nums = [3,2,3,1,2,4,5,5,6], k = 4", "output": "4", "explanation": "Sorted descending: 6,5,5,4,3,3,2,2,1 — the 4th largest is 4."}
+  ],
+  "constraints": ["1 <= k <= nums.length <= 10^5", "-10^4 <= nums[i] <= 10^4"],
+  "hints": ["A min-heap of size k lets you track the k largest elements seen so far — the top of the heap is always the kth largest.", "Quickselect (partition like quicksort but recurse into only one side) gets you O(n) average time."],
+  "starterCode": {
+    "java": "class Solution {\n    public int findKthLargest(int[] nums, int k) {\n        // Your solution here\n        return 0;\n    }\n}",
+    "python": "class Solution:\n    def findKthLargest(self, nums, k):\n        pass",
+    "cpp": "class Solution {\npublic:\n    int findKthLargest(vector<int>& nums, int k) {\n        // Your solution here\n        return 0;\n    }\n};",
+    "javascript": "var findKthLargest = function(nums, k) {\n    // Your solution here\n};",
+    "go": "func findKthLargest(nums []int, k int) int {\n    // Your solution here\n    return 0\n}"
+  },
+  "testCases": [
+    {"input": "[3,2,1,5,6,4]\n2", "expectedOutput": "5", "isHidden": false, "description": "Normal case"},
+    {"input": "[3,2,3,1,2,4,5,5,6]\n4", "expectedOutput": "4", "isHidden": false, "description": "With duplicates"},
+    {"input": "[1]\n1", "expectedOutput": "1", "isHidden": true, "description": "Single element"},
+    {"input": "[7,6,5,4,3,2,1]\n1", "expectedOutput": "7", "isHidden": true, "description": "k=1 is just the max"}
+  ],
+  "optimalSolution": {
+    "approach": "Maintain a min-heap of size k while scanning nums. Once the heap exceeds size k, pop the smallest — whatever remains at the top after the full scan is the kth largest.",
+    "timeComplexity": "O(n log k)",
+    "spaceComplexity": "O(k)",
+    "code": {
+      "java": "class Solution {\n    public int findKthLargest(int[] nums, int k) {\n        PriorityQueue<Integer> minHeap = new PriorityQueue<>();\n        for (int n : nums) {\n            minHeap.offer(n);\n            if (minHeap.size() > k) minHeap.poll();\n        }\n        return minHeap.peek();\n    }\n}",
+      "python": "import heapq\nclass Solution:\n    def findKthLargest(self, nums, k):\n        heap = []\n        for n in nums:\n            heapq.heappush(heap, n)\n            if len(heap) > k:\n                heapq.heappop(heap)\n        return heap[0]"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(n log n)", "spaceComplexity": "O(1)", "acceptable": true},
+  "followUpQuestions": [
+    "How would quickselect improve average-case time to O(n)?",
+    "What's the worst-case time complexity of quickselect, and how do you avoid hitting it?",
+    "How would your approach change if k was close to n vs. close to 1?"
+  ],
+  "interviewerNotes": "Good signal on whether a candidate reaches for a heap vs. just sorting. Strong candidates bring up quickselect unprompted; that's worth a follow-up on its worst case and mitigation (random pivot).",
+  "roleRelevance": {"backend": "HIGH", "frontend": "LOW", "fullstack": "MEDIUM", "dataScience": "HIGH", "devops": "LOW"}
+}

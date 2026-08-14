@@ -71,6 +71,21 @@ public class TechnicalInterviewController {
             String resumeText = "";
             if (resume != null && !resume.isEmpty()) {
                 resumeText = resumeTextExtractor.extract(resume);
+                // ResumeTextExtractor swallows every failure and returns "" —
+                // by design, so a bad file never 500s — but that means a
+                // scanned/image-only PDF, a corrupt upload, or an unsupported
+                // format previously produced a plan generated with ZERO
+                // resume context and no indication to the candidate that
+                // anything went wrong. The interview then looked "broken"
+                // (fully generic questions) with no visible cause. Fail loudly
+                // instead: this is a real, actionable failure the candidate
+                // can fix by re-exporting/re-uploading, not a silent default.
+                if (resumeText.isBlank() || resumeText.length() < 30) {
+                    log.warn("Resume extraction produced {} chars for file '{}' — treating as a failed extraction.",
+                            resumeText.length(), resume.getOriginalFilename());
+                    return ResponseEntity.badRequest().body(Map.of("error",
+                            "Couldn't read any text from that resume file. If it's a scanned image or a PDF exported from a design tool, try exporting a text-based PDF or DOCX instead."));
+                }
             }
 
             String effectiveLevel = (roleLevel != null && !roleLevel.isBlank()) ? roleLevel : "SDE_1";

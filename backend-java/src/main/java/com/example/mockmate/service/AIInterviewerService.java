@@ -87,10 +87,11 @@ DSA RULES:
 - Focus verbal questions on complexity + approach
 - Give ONE hint maximum per problem
 
-PERSONALIZATION — GROUND QUESTIONS IN THIS SPECIFIC CANDIDATE:
-- The context includes candidateProfile (technologies/projects/experience detected from their resume), a resumeExcerpt, and a jdExcerpt. USE THEM.
-- For theory, project-deep-dive, or system-design questions, reference the candidate's actual projects/technologies by name (e.g. "You mentioned building X with Y — how did you handle Z there?") instead of generic textbook questions unrelated to their background.
+PERSONALIZATION — GROUND QUESTIONS IN THIS SPECIFIC CANDIDATE (MANDATORY, NOT OPTIONAL):
+- The context includes candidateProfile (technologies/projects/experience detected from their resume), a resumeExcerpt, and a jdExcerpt whenever the candidate provided a resume. If these are non-empty, you MUST use them — a generic textbook question when specific resume/JD content is sitting right there in context is a failure, not a neutral choice.
+- For theory, project-deep-dive, or system-design questions, name the candidate's actual projects/technologies from candidateProfile/resumeExcerpt (e.g. "You mentioned building X with Y — how did you handle Z there?") instead of a generic textbook question unrelated to their background. At minimum, your FIRST theory/technical question after the introduction round MUST reference something specific from their resume or JD by name.
 - Weight topic choice and difficulty toward what the jdExcerpt actually requires for this role.
+- If candidateProfile/resumeExcerpt/jdExcerpt are ALL empty or missing, no resume was provided for this session — in that case only, generic role-appropriate questions are expected and fine.
 
 ANTI-REPETITION RULES:
 - currentRound.topicsCovered lists topics already assessed in THIS round. Do not re-ask a topic already in topicsCovered unless it's a genuine escalation/follow-up that goes deeper than before — prefer picking your next question from topicsRemaining.
@@ -282,16 +283,30 @@ Keep it under 4 sentences. Set action to NEXT_QUESTION. nextQuestion should be "
         if (trivialStreak >= 2) {
             log.info("Trivial-answer streak ({}) for session {} — candidate didn't engage with the concrete probe either; forcing a deterministic transition with a guaranteed real next question.",
                     trivialStreak, session.getSessionId());
-            return buildForcedTransition(context, trivialStreak);
+            return buildForcedTransition(context, trivialStreak, session);
         }
 
         String contextJson  = toJson(context);
 
         String dsaDirective = "";
         boolean isDsaRound = context.getCurrentRound() != null && "DSA".equalsIgnoreCase(context.getCurrentRound().getRoundType());
+        InterviewRound.DSAProblemRef nextDsaProblem = isDsaRound ? findNextDsaProblem(session) : null;
         if (isDsaRound) {
             String problemTitle = (context.getCurrentDSA() != null && context.getCurrentDSA().getProblemTitle() != null)
                     ? context.getCurrentDSA().getProblemTitle() : "the active DSA coding problem";
+            // Previously this only ever told the model about the ONE active
+            // problem, with no way for it to know a second/third problem was
+            // even planned for this round — so once it judged the discussion
+            // "done" (all tests passing, or nothing more to probe), its only
+            // available move was action=NEXT_ROUND, which skipped every
+            // remaining planned DSA problem outright. Telling it the next
+            // problem's title (when one exists) gives it a real alternative;
+            // the deterministic override below in processAnswer/
+            // buildForcedTransition is the actual guarantee, since LLM
+            // compliance with a prompt instruction isn't one.
+            String nextProblemNote = nextDsaProblem != null
+                    ? "\n5. Once you're satisfied with the candidate's solution/discussion of THIS problem (solved, or you've probed enough), set action to \"OPEN_CODE_EDITOR\" with editorConfig.problemId=\"" + nextDsaProblem.getProblemId() + "\" to move to the next planned problem, \"" + nextDsaProblem.getTitle() + "\" — do NOT use NEXT_ROUND yet, there is another DSA problem queued.\n"
+                    : "\n5. This is the LAST DSA problem planned for this round. Once you're satisfied with the candidate's solution/discussion, action may be \"NEXT_ROUND\".\n";
             dsaDirective = """
 
 CRITICAL DSA ROUND DIRECTIVES:
@@ -299,7 +314,7 @@ CRITICAL DSA ROUND DIRECTIVES:
 2. Your question MUST focus exclusively on this specific DSA coding problem (its algorithm, time/space complexity, edge cases, or code correctness).
 3. DO NOT ask unrelated conceptual theory questions (such as JPA, Hibernate, or multi-threaded concurrency) in this DSA round.
 4. NEVER reveal full working code implementations or write code blocks in your response. Give 1-sentence hints only.
-""".formatted(problemTitle);
+%s""".formatted(problemTitle, nextProblemNote);
         }
 
         String probeDirective = "";
@@ -349,6 +364,66 @@ Return valid JSON only.
                 }
             }
         }
+
+        // Deterministic guarantee that a DSA round with 2+ planned problems
+        // actually gets to the later ones. The dsaDirective above ASKS the
+        // model to open the next problem instead of leaving the round, but a
+        // prompt instruction is not a guarantee — if the model still returns
+        // NEXT_ROUND (or any non-OPEN_CODE_EDITOR action) while another DSA
+        // problem is queued, override it here rather than let the round end
+        // with problems 2..N never shown. This was the actual cause of DSA
+        // rounds always looking like "the same one problem, endlessly
+        // re-quizzed" regardless of how many problems the plan specified.
+        if (isDsaRound && nextDsaProblem != null && response != null && !response.isSystemError()
+                && "NEXT_ROUND".equals(response.getAction())) {
+            log.info("DSA round for session {} tried to exit via NEXT_ROUND with problem '{}' still queued — redirecting to it instead.",
+                    session.getSessionId(), nextDsaProblem.getTitle());
+            response = buildNextDsaProblemResponse(nextDsaProblem);
+        }
+
+        return response;
+    }
+
+    // ── Helper: Next DSA Problem In Round ──────────────────────
+    // Returns the DSA problem after the round's currentDsaIndex, or null if
+    // the active problem is the last one planned for this round.
+    private InterviewRound.DSAProblemRef findNextDsaProblem(TechInterviewSession session) {
+        if (session == null || session.getPlan() == null || session.getPlan().getInterviewPlan() == null) return null;
+        List<InterviewRound> rounds = session.getPlan().getInterviewPlan().getRounds();
+        int ri = session.getCurrentRoundIndex();
+        if (rounds == null || ri < 0 || ri >= rounds.size()) return null;
+        InterviewRound round = rounds.get(ri);
+        if (round.getDsaProblems() == null || round.getDsaProblems().isEmpty()) return null;
+        int nextIdx = round.getCurrentDsaIndex() + 1;
+        return nextIdx < round.getDsaProblems().size() ? round.getDsaProblems().get(nextIdx) : null;
+    }
+
+    private AIInterviewerResponse buildNextDsaProblemResponse(InterviewRound.DSAProblemRef nextProblem) {
+        AIInterviewerResponse response = new AIInterviewerResponse();
+        String title = nextProblem.getTitle() != null ? nextProblem.getTitle() : "the next problem";
+        response.setResponseText("Good, that covers this one. Let's move on to the next coding problem — **" + title
+                + "**. It's loaded in the editor on your right; take a look and walk me through your approach when you're ready.");
+        response.setAction("OPEN_CODE_EDITOR");
+        response.setNextQuestion("Please implement your solution for " + title + " in the code editor.");
+        response.setTopicBeingAssessed("DSA - " + title);
+
+        AIInterviewerResponse.EditorConfig ec = new AIInterviewerResponse.EditorConfig();
+        ec.setType("CODE");
+        ec.setProblemId(nextProblem.getProblemId());
+        ec.setLoadProblem(true);
+        response.setEditorConfig(ec);
+
+        AIInterviewerResponse.RoundProgress rp = new AIInterviewerResponse.RoundProgress();
+        rp.setShouldContinueRound(true);
+        rp.setRoundCompletionPercent(50);
+        response.setRoundProgress(rp);
+
+        AIInterviewerResponse.AnswerEvaluation eval = new AIInterviewerResponse.AnswerEvaluation();
+        eval.setScore(0);
+        eval.setQuality("ADEQUATE");
+        eval.setTopicAssessed("DSA - " + title);
+        eval.setInternalNote("Transitioned to next planned DSA problem in round.");
+        response.setCurrentAnswerEvaluation(eval);
 
         return response;
     }
@@ -583,7 +658,7 @@ Return valid JSON only.
     // dead-end response with no real question, unlike the old version that
     // just overrode the text with "Alright, let's move on." and nothing
     // else, which could — and did — repeat itself into a stall loop.
-    private AIInterviewerResponse buildForcedTransition(TurnContext context, int trivialStreak) {
+    private AIInterviewerResponse buildForcedTransition(TurnContext context, int trivialStreak, TechInterviewSession session) {
         AIInterviewerResponse response = new AIInterviewerResponse();
         AIInterviewerResponse.AnswerEvaluation eval = new AIInterviewerResponse.AnswerEvaluation();
         eval.setScore(15);
@@ -608,6 +683,14 @@ Return valid JSON only.
             // the candidate has disengaged 3+ times running even while
             // unsolved — don't wait on a code submission indefinitely.
             if (dsaSolved || trivialStreak >= 3) {
+                // Same guarantee as processAnswer's post-LLM override, for
+                // this fully-deterministic exit path too — otherwise a
+                // candidate who disengages on problem 1 would skip problems
+                // 2..N exactly as if they'd solved them.
+                InterviewRound.DSAProblemRef nextProblem = findNextDsaProblem(session);
+                if (nextProblem != null) {
+                    return buildNextDsaProblemResponse(nextProblem);
+                }
                 response.setResponseText(dsaSolved
                         ? "Alright, that's fine — your solution has already been recorded. Let's step away from this problem and move to the next part of the interview."
                         : "Alright, let's move on — we can revisit this problem later if time allows.");
@@ -679,16 +762,26 @@ Return valid JSON only.
                 || text.toLowerCase().contains("too short")
                 || text.toLowerCase().contains("more detailed response");
 
-        // Check duplicate response against previous turn
+        // Check duplicate response against recent turns — previously only
+        // the IMMEDIATELY PREVIOUS turn was checked, so a question that
+        // recurred two or more turns later (past the "immediately previous"
+        // check, but often still within the LLM's own 5-exchange context
+        // window) sailed through undetected. Widened to the last 8 turns;
+        // still an exact normalized-text match (not fuzzy), so this doesn't
+        // add any new false-positive risk over the single-turn version.
         boolean isDuplicate = false;
         if (session != null && session.getTurns() != null && !session.getTurns().isEmpty()) {
-            TechInterviewSession.InterviewTurn lastTurn = session.getTurns().get(session.getTurns().size() - 1);
-            String lastText = lastTurn.getAiResponse();
-            if (lastText != null && !lastText.isBlank()) {
-                String normCurrent = normalizeForComparison(text);
-                String normLast = normalizeForComparison(lastText);
-                if (!normCurrent.isEmpty() && normCurrent.equals(normLast)) {
-                    isDuplicate = true;
+            String normCurrent = normalizeForComparison(text);
+            List<TechInterviewSession.InterviewTurn> turns = session.getTurns();
+            int start = Math.max(0, turns.size() - 8);
+            if (!normCurrent.isEmpty()) {
+                for (int i = turns.size() - 1; i >= start; i--) {
+                    String priorText = turns.get(i).getAiResponse();
+                    if (priorText == null || priorText.isBlank()) continue;
+                    if (normCurrent.equals(normalizeForComparison(priorText))) {
+                        isDuplicate = true;
+                        break;
+                    }
                 }
             }
         }

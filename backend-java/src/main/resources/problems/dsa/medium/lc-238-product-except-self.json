@@ -1,0 +1,47 @@
+{
+  "id": "lc-238",
+  "leetcodeId": 238,
+  "leetcodeUrl": "https://leetcode.com/problems/product-of-array-except-self/",
+  "title": "Product of Array Except Self",
+  "difficulty": "MEDIUM",
+  "topics": ["array", "prefix-sum"],
+  "companies": ["Amazon", "Facebook", "Microsoft", "Apple"],
+  "frequency": "VERY_HIGH",
+  "neetcodeListNumber": 17,
+  "description": "Given an integer array nums, return an array answer such that answer[i] is equal to the product of all the elements of nums except nums[i]. You must write an algorithm that runs in O(n) time without using the division operation.",
+  "examples": [
+    {"input": "nums = [1,2,3,4]", "output": "[24,12,8,6]", "explanation": "answer[0] = 2*3*4 = 24, answer[1] = 1*3*4 = 12, etc."},
+    {"input": "nums = [-1,1,0,-3,3]", "output": "[0,0,9,0,0]", "explanation": "The single 0 forces every other position's product to include it."}
+  ],
+  "constraints": ["2 <= nums.length <= 10^5", "-30 <= nums[i] <= 30", "The product of any prefix or suffix fits in a 32-bit integer"],
+  "hints": ["answer[i] = (product of everything left of i) * (product of everything right of i). Compute both passes separately without division."],
+  "starterCode": {
+    "java": "class Solution {\n    public int[] productExceptSelf(int[] nums) {\n        // Your solution here\n        return new int[0];\n    }\n}",
+    "python": "class Solution:\n    def productExceptSelf(self, nums):\n        pass",
+    "cpp": "class Solution {\npublic:\n    vector<int> productExceptSelf(vector<int>& nums) {\n        // Your solution here\n        return {};\n    }\n};",
+    "javascript": "var productExceptSelf = function(nums) {\n    // Your solution here\n};",
+    "go": "func productExceptSelf(nums []int) []int {\n    // Your solution here\n    return nil\n}"
+  },
+  "testCases": [
+    {"input": "[1,2,3,4]", "expectedOutput": "[24,12,8,6]", "isHidden": false, "description": "Normal case"},
+    {"input": "[-1,1,0,-3,3]", "expectedOutput": "[0,0,9,0,0]", "isHidden": false, "description": "Contains a zero"},
+    {"input": "[2,3]", "expectedOutput": "[3,2]", "isHidden": true, "description": "Two elements"}
+  ],
+  "optimalSolution": {
+    "approach": "Two passes with no extra space beyond the output array: left-to-right accumulating prefix products into the result, then right-to-left multiplying in the suffix product on the fly.",
+    "timeComplexity": "O(n)",
+    "spaceComplexity": "O(1) extra (excluding the output array)",
+    "code": {
+      "java": "class Solution {\n    public int[] productExceptSelf(int[] nums) {\n        int n = nums.length;\n        int[] res = new int[n];\n        res[0] = 1;\n        for (int i = 1; i < n; i++) res[i] = res[i-1] * nums[i-1];\n        int right = 1;\n        for (int i = n - 1; i >= 0; i--) {\n            res[i] *= right;\n            right *= nums[i];\n        }\n        return res;\n    }\n}",
+      "python": "class Solution:\n    def productExceptSelf(self, nums):\n        n = len(nums)\n        res = [1] * n\n        for i in range(1, n):\n            res[i] = res[i-1] * nums[i-1]\n        right = 1\n        for i in range(n - 1, -1, -1):\n            res[i] *= right\n            right *= nums[i]\n        return res"
+    }
+  },
+  "bruteForce": {"timeComplexity": "O(n^2)", "spaceComplexity": "O(1)", "acceptable": false},
+  "followUpQuestions": [
+    "Why can't you just take the total product and divide by nums[i]?",
+    "What happens to that division approach when there's a zero in the array — and what if there are two zeros?",
+    "Can you do this with O(1) extra space if the output array doesn't count against the space budget?"
+  ],
+  "interviewerNotes": "The 'no division' constraint is the whole point — a candidate who reaches for total-product-divided-by-nums[i] first is fine, but should recognize on their own (or with one nudge) why it breaks on zeros.",
+  "roleRelevance": {"backend": "HIGH", "frontend": "MEDIUM", "fullstack": "MEDIUM", "dataScience": "MEDIUM", "devops": "LOW"}
+}

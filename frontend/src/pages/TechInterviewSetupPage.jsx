@@ -83,6 +83,16 @@ export default function TechInterviewSetupPage() {
       setShowLoginModal(true);
       return;
     }
+    // Resume upload used to be silently optional — skipping it meant the
+    // backend generated the whole interview (theory questions, candidate
+    // profile, everything) with an empty resumeText, so nothing was ever
+    // actually personalized even though the personalization prompt/plumbing
+    // was working correctly. The page promises "Tailored specifically to
+    // your resume" — enforce that instead of degrading silently.
+    if (!resume) {
+      setError('Please upload your resume first — without it, every question defaults to generic and nothing is tailored to your actual background.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -179,8 +189,8 @@ export default function TechInterviewSetupPage() {
               <div style={styles.cardHeader}>
                 <span style={styles.stepNum}>1</span>
                 <div>
-                  <h3 style={styles.cardTitle}>Upload Resume</h3>
-                  <p style={styles.cardSub}>Parse projects & tech stack for customized questions</p>
+                  <h3 style={styles.cardTitle}>Upload Resume <span style={{ color: '#EF4444' }}>*</span></h3>
+                  <p style={styles.cardSub}>Required — parses your projects & tech stack so questions are actually about you, not generic</p>
                 </div>
               </div>
 
