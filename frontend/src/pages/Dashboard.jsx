@@ -200,7 +200,7 @@ export default function Dashboard() {
     { label: 'AI Mock Interview', icon: '📹', path: '/setup' },
     { label: 'Code Sandbox', icon: '💻', path: '/tech-interview/setup' },
     { label: 'ATS Scanner', icon: '🔍', path: '/ats' },
-    { label: 'Resume Studio', icon: '📄', path: '/ats' },
+    { label: 'Resume Builder', icon: '📄', path: '/resume-builder' },
     { label: 'Analytics', icon: '📈', path: '/history' },
   ];
 

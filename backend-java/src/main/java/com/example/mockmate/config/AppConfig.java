@@ -16,6 +16,11 @@ public class AppConfig {
         ObjectMapper mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
         mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        // LLM-returned JSON (resume parsing, ATS scoring, etc.) occasionally
+        // includes a stray key the target DTO doesn't declare. Without this,
+        // Jackson's default is to fail the whole deserialization over one
+        // unexpected field instead of just ignoring it.
+        mapper.disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         return mapper;
     }
 

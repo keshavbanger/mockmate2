@@ -39,21 +39,46 @@ public class ResumeParserService {
         }
     }
 
+    // Asks for the full resume structure in one pass — both the flat summary
+    // fields (kept exactly as-is; QuestionGeneratorService/InterviewController/
+    // QuestionController/ResumeController all read these for the mock-interview
+    // flow) and the nested fields the Resume Builder's import needs. Before
+    // this, only the flat fields existed, so importing a resume into the
+    // Builder silently threw away every project, work-experience bullet,
+    // certification, achievement, and most contact info — only name, email,
+    // a flat skills list, and a 2-sentence summary survived.
     private static final String EXTRACTION_PROMPT = """
-            Extract information from the following resume text and return ONLY valid JSON with these exact keys:
-            - name (string): full name of the candidate
-            - email (string): email address, empty string if not found
-            - skills (array of strings): technical and soft skills listed
-            - totalExperienceYears (number): estimated total years of professional experience, 0 if fresher
-            - jobTitles (array of strings): all job/role titles found
-            - companies (array of strings): all company/organization names found
-            - education (array of strings): degrees and institutions, each as one string e.g. "B.Tech CS — NIT Trichy (2023)"
-            - summary (string): exactly 2 sentences summarising the candidate's profile
-            
+            Extract every section of the following resume and return ONLY valid JSON with this exact shape.
+            Use empty string "", empty array [], or false where information isn't present — never omit a key.
+
+            {
+              "name": string — full name,
+              "email": string,
+              "phone": string,
+              "location": string — city/state or address line,
+              "linkedin": string — LinkedIn URL or handle if present,
+              "github": string — GitHub URL or handle if present,
+              "portfolio": string — personal website/portfolio URL if present,
+              "professionalTitle": string — the candidate's headline/title if the resume has one (e.g. "Senior Backend Engineer"), else "",
+              "summary": string — exactly 2-3 sentences summarising the candidate's profile,
+              "skills": array of strings — every individual skill, flattened, no categories,
+              "skillDetails": array of { "skill": string, "category": string } — same skills, but grouped under whatever category headings the resume itself uses (e.g. "Languages", "Frameworks", "Databases", "Tools"); if the resume has no categories, use a sensible category per skill,
+              "totalExperienceYears": number — estimated total years of professional experience, 0 if fresher,
+              "jobTitles": array of strings — every job/role title found (include leadership/club roles too),
+              "companies": array of strings — every company/organization name found,
+              "education": array of strings — each degree as one line, e.g. "B.Tech CS — NIT Trichy (2023)",
+              "educationDetails": array of { "institution": string, "degree": string, "fieldOfStudy": string, "location": string, "startDate": string, "endDate": string, "gpa": string },
+              "experience": array of { "jobTitle": string, "company": string, "location": string, "startDate": string, "endDate": string, "isCurrent": boolean, "bullets": array of strings — each responsibility/achievement as its own bullet, verbatim or lightly cleaned up },
+              "projects": array of { "name": string, "description": string, "technologies": string — comma-separated, "bullets": array of strings — one per described capability/outcome },
+              "certifications": array of { "name": string, "issuingOrganization": string, "issueDate": string },
+              "achievements": array of { "title": string, "description": string, "date": string } — awards, rankings, hackathon wins, competitions, notable recognitions
+            }
+
             Important:
+            - Capture co-curricular/leadership roles (club lead, committee member, etc.) as entries in "experience" if they read like a role with responsibilities, not just a one-line mention.
+            - Do not invent information that isn't in the resume text.
             - Return ONLY the raw JSON object. No markdown fences, no explanation, no extra text.
-            - If a field cannot be determined, use an empty string or empty array as appropriate.
-            
+
             Resume Text:
             \"\"\"
             %s
@@ -80,8 +105,11 @@ public class ResumeParserService {
     public ResumeParsedResponse parseResumeWithGemini(byte[] pdfBytes) throws Exception {
         String rawText = extractTextFromPdf(pdfBytes);
         
-        // Truncate to ~12 000 chars
-        String truncatedText = rawText.length() > 12000 ? rawText.substring(0, 12000) : rawText;
+        // Truncate to ~18 000 chars — raised from 12 000 now that the prompt
+        // asks for full section detail (bullets, dates, projects) rather than
+        // just a flat summary, so denser multi-page resumes need more room
+        // before hitting the cutoff.
+        String truncatedText = rawText.length() > 18000 ? rawText.substring(0, 18000) : rawText;
         String prompt = EXTRACTION_PROMPT.replace("%s", truncatedText);
 
         return callGeminiApi(prompt);
@@ -91,7 +119,11 @@ public class ResumeParserService {
         Map<String, Object> requestBody = Map.of(
             "model", "llama-3.1-8b-instant",
             "temperature", 0.2,
-            "max_tokens", 2048,
+            // Raised from 2048 — the schema now includes full experience/
+            // project/education entries with bullet arrays, not just a flat
+            // summary, and 2048 was tight enough to risk truncating (and
+            // therefore invalidating) the JSON for a dense multi-page resume.
+            "max_tokens", 4096,
             "messages", List.of(
                 Map.of("role", "system", "content", "You are an ATS parser. Return ONLY valid JSON with no markdown formatting."),
                 Map.of("role", "user",   "content", prompt)

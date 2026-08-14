@@ -26,6 +26,13 @@ const FEATURE_LINKS = [
     path: '/ats',
     badge: '100 Pt'
   },
+  {
+    title: 'Resume Builder',
+    desc: 'Build, design & customize ATS-friendly resumes',
+    icon: '📄',
+    path: '/resume-builder',
+    badge: 'Studio'
+  },
 ];
 
 const NAV_LINKS = [
@@ -248,8 +255,6 @@ export default function Navbar() {
             </svg>
           </button>
 
-
-
           {isAuthenticated ? (
             /* User Avatar + Dropdown */
             <div className="relative" ref={dropdownRef}>
@@ -296,6 +301,11 @@ export default function Navbar() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left">
                       <span className="text-base">🏠</span>
                       Dashboard
+                    </button>
+                    <button onClick={() => { navigate('/resume-builder'); setDropdownOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left">
+                      <span className="text-base">📄</span>
+                      Resume Builder
                     </button>
                   </div>
 
@@ -389,4 +399,3 @@ export default function Navbar() {
     </motion.div>
   );
 }
-

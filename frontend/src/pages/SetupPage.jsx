@@ -268,10 +268,16 @@ export default function SetupPage() {
   const rd = ctx.resumeData;
 
   return (
-    <div className="min-h-screen bg-[#F5F3FF] font-sans text-slate-800">
+    <div className="min-h-screen bg-[#fafafa] font-[Outfit,Inter,sans-serif] text-slate-900 overflow-x-hidden">
       <ToastContainer />
 
       <Navbar />
+
+      {/* ── Background Blobs ── */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-purple-200/20 rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 -left-60 w-[400px] h-[400px] bg-indigo-200/15 rounded-full blur-[100px]" />
+      </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-32 pb-16">
       <div>
@@ -298,31 +304,30 @@ export default function SetupPage() {
 
         {/* ── HERO SECTION ─────────────────────────────────────────── */}
         <div className="text-center max-w-3xl mx-auto mb-8">
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-100/70 border border-purple-200 text-[#6B46C1] text-[11px] font-extrabold tracking-wider uppercase mb-4 shadow-sm">
+          <div className="inline-flex items-center gap-2 bg-purple-100/70 text-[#6B46C1] px-4 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-widest mb-6 border border-purple-200 shadow-sm">
             <span className="text-amber-500">⚡</span>
             {activeTab === 'Role Based' && '3000+ ROLES AVAILABLE'}
             {activeTab === 'Company Based' && '1000+ COMPANIES AVAILABLE'}
             {activeTab === 'JD Based' && 'JOB DESCRIPTION TAILORED'}
           </div>
 
-          <h1 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight leading-tight mb-4">
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-[#111] leading-[1.15] mb-4">
             {activeTab === 'Role Based' && (
-              <>Role-Specific<br /><span className="text-[#6B46C1]">AI Mock Interviews</span></>
+              <>Role-Specific<br /><span className="bg-gradient-to-r from-[#6B46C1] via-[#8B5CF6] to-[#A855F7] bg-clip-text text-transparent">AI Mock Interviews</span></>
             )}
             {activeTab === 'Company Based' && (
-              <>Company-Specific<br /><span className="text-[#6B46C1]">AI Mock Interviews</span></>
+              <>Company-Specific<br /><span className="bg-gradient-to-r from-[#6B46C1] via-[#8B5CF6] to-[#A855F7] bg-clip-text text-transparent">AI Mock Interviews</span></>
             )}
             {activeTab === 'JD Based' && (
-              <>JD-Tailored<br /><span className="text-[#6B46C1]">AI Mock Interviews</span></>
+              <>JD-Tailored<br /><span className="bg-gradient-to-r from-[#6B46C1] via-[#8B5CF6] to-[#A855F7] bg-clip-text text-transparent">AI Mock Interviews</span></>
             )}
           </h1>
 
-          <p className="text-slate-600 text-sm sm:text-base font-medium leading-relaxed max-w-2xl mx-auto mb-6">
+          <p className="text-slate-500 text-base leading-relaxed max-w-xl mx-auto mb-8 font-medium">
             {activeTab === 'Role Based' && 'Practice role-specific interviews with real-world questions. Improve domain knowledge, articulation and communication with instant feedback report.'}
             {activeTab === 'Company Based' && 'Train with real interview questions asked at top tech giants and MNCs. Upload your resume for realistic company-specific interview prep.'}
             {activeTab === 'JD Based' && 'Paste any target Job Description and upload your resume. AI will extract required skills, probe experience gaps, and generate 3× targeted questions.'}
           </p>
-
 
         </div>
 

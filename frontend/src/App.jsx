@@ -31,6 +31,9 @@ const ChangelogPage           = lazy(() => import('./pages/ChangelogPage.jsx'));
 const WhyMockMatePage         = lazy(() => import('./pages/WhyMockMatePage.jsx'));
 const ContactPage             = lazy(() => import('./pages/ContactPage.jsx'));
 
+const ResumeDashboardPage     = lazy(() => import('./pages/ResumeDashboardPage.jsx'));
+const ResumeBuilderPage       = lazy(() => import('./pages/ResumeBuilderPage.jsx'));
+
 function RouteFallback() {
   return (
     <div className="h-screen w-full flex items-center justify-center bg-[#f8f9fa]">
@@ -150,6 +153,24 @@ export default function App() {
         element={
           <ProtectedRoute>
             <TechInterviewReportPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ── Protected Resume Builder Module ── */}
+      <Route
+        path="/resume-builder"
+        element={
+          <ProtectedRoute>
+            <ResumeDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/resume-builder/:id/edit"
+        element={
+          <ProtectedRoute>
+            <ResumeBuilderPage />
           </ProtectedRoute>
         }
       />
