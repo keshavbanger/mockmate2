@@ -104,6 +104,16 @@ Return ONLY valid JSON. No markdown, no code blocks, no explanation. Pure JSON o
     }
 
     // ── User Prompt Builder ───────────────────────────────────
+    // Previously the prompt only said "DSA problems to assign (from real
+    // LeetCode problem set)" with zero visibility into which LeetCode IDs
+    // this app's local problem bank (~16 problems, see DSAProblemService)
+    // actually has full test cases/starter code for. The LLM would
+    // therefore freely invent well-known but unavailable problems (Group
+    // Anagrams, Number of Islands, etc.), every one of which used to
+    // silently resolve to Two Sum (see the now-removed masking fallback in
+    // DSAProblemService.findProblemInternal). Listing the real inventory
+    // here lets the model's picks actually match on the first try instead
+    // of falling through to a resolver-side guess.
     private String buildUserPrompt(InterviewPlanConfig config) {
         return """
 Generate a personalized interview plan.
@@ -117,6 +127,11 @@ Interview type: %s
 Company style: %s
 Total duration: %d minutes
 Preferred coding language: %s
+
+DSA PROBLEM SELECTION — MANDATORY CONSTRAINT:
+You may ONLY assign DSA problems from this exact list of LeetCode IDs — this app has no others loaded, and any ID outside this list cannot be shown to the candidate:
+%s
+Pick problems whose topic best matches the JD/resume, vary difficulty per the role level, and NEVER reuse the same leetcodeId twice across the whole plan.
 
 Return this exact JSON structure:
 {
@@ -177,9 +192,27 @@ Return this exact JSON structure:
                 config.getCompanyStyle(),
                 config.getDurationMinutes(),
                 config.getPreferredLanguage(),
+                buildAvailableProblemsBlock(),
                 config.getDurationMinutes(),
                 config.getPreferredLanguage()
         );
+    }
+
+    // Formats the local DSA problem bank as a compact, LLM-readable list so
+    // plan generation picks IDs that actually exist locally instead of
+    // guessing against the full universe of real LeetCode problems.
+    private String buildAvailableProblemsBlock() {
+        Collection<DSAProblem> all = dsaProblemService.getAllProblems();
+        if (all.isEmpty()) return "(none loaded)";
+        StringBuilder sb = new StringBuilder();
+        for (DSAProblem p : all) {
+            sb.append("- leetcodeId=").append(p.getLeetcodeId())
+              .append(" \"").append(p.getTitle()).append("\" (")
+              .append(p.getDifficulty()).append(", topics: ")
+              .append(p.getTopics() != null ? String.join(", ", p.getTopics()) : "general")
+              .append(")\n");
+        }
+        return sb.toString();
     }
 
     // ── Groq Call ─────────────────────────────────────────────

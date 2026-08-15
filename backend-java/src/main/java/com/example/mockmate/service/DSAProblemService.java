@@ -115,11 +115,18 @@ public class DSAProblemService {
             }
         }
 
-        // 4. Fallback to default problem (e.g. lc-001 "Two Sum") if bank is non-empty
-        if (problemBank.containsKey("lc-001")) {
-            return problemBank.get("lc-001");
-        }
-        return problemBank.isEmpty() ? null : problemBank.values().iterator().next();
+        // No match. This used to silently return "lc-001" (Two Sum) here,
+        // disguised as a genuine hit — every caller checked `!= null` as
+        // proof of a match, so any ID the LLM invented that wasn't one of
+        // the ~16 problems actually in the local bank (see loadProblems())
+        // resolved to Two Sum while being logged/treated as "the LLM's
+        // original pick." That's what made DSA rounds converge on Two Sum
+        // regardless of role/difficulty: InterviewPlanGeneratorService.
+        // resolveDsaProblems() already has a real diversity-aware fallback
+        // chain (numeric-ID lookup → curated relevance-sorted pool → last
+        // resort), but it only runs when this method actually reports a
+        // miss instead of masking it.
+        return null;
     }
 
     public DSAProblem findByLeetcodeId(int lcId) {

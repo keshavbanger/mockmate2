@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 
 // C++/Go can't be generically graded (see CodeExecutionService — no
@@ -36,7 +36,19 @@ export default function CodeEditorPanel({ problem, language, onLanguageChange, o
   const [submitting, setSubmitting] = useState(false);
   const [customInput, setCustomInput] = useState('');
 
+  // Backend Bug 6 fix: the AI can re-send editorConfig.loadProblem=true for
+  // the SAME problem that's already open (e.g. on a plain follow-up/hint
+  // turn) — that makes the parent refetch and pass down a brand-new
+  // `problem` object even though nothing actually changed. This effect used
+  // to key off `problem` itself, so that reference change alone reset
+  // `code` back to starter code, silently wiping whatever the candidate had
+  // already typed. Key off the problem's real ID instead, so only an
+  // actual problem change resets the editor.
+  const prevProblemIdRef = useRef(problem?.id);
   useEffect(() => {
+    const isNewProblem = problem?.id !== prevProblemIdRef.current;
+    prevProblemIdRef.current = problem?.id;
+    if (!isNewProblem) return;
     if (problem?.starterCode?.[language]) {
       setCode(problem.starterCode[language]);
     } else {

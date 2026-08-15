@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -88,6 +89,15 @@ public class TechInterviewSession {
         private List<String> topicsCovered;
         private int score; // 0-100
         private String summary;
+
+        // Live, per-round tracker for the "one advanced follow-up max" cap —
+        // deliberately kept here alongside elapsedMinutes/questionsAsked
+        // rather than on the static plan's InterviewRound, for the same
+        // reason those live here: a per-session counter that needs to
+        // actually change turn-to-turn belongs on session state, not on the
+        // immutable plan object.
+        private int followUpsOnCurrentTopic;
+        private String currentTopicKey;
     }
 
     // ── Nested: Candidate Performance ─────────────────────────
@@ -148,6 +158,13 @@ public class TechInterviewSession {
         private List<String> followUpAnswers;
         private int score; // 0-100
         private List<String> missedPoints;
+
+        // Which concrete edge-case probes (the "what would your solution
+        // return for input: X?" questions built from this problem's own
+        // test data) have already been asked this session — without this,
+        // a second trivial-answer occurrence later in the same session
+        // always re-picked the exact same first hidden test case verbatim.
+        private Set<String> usedProbeInputs;
     }
 
     // ── Nested: SQL Attempt ───────────────────────────────────

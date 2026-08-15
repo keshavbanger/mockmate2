@@ -210,6 +210,16 @@ public class TechnicalInterviewController {
             CodeExecutionResult codeResult = null;
             if (request.getCodeSubmission() != null) {
                 AnswerRequest.CodeSubmission cs = request.getCodeSubmission();
+                // Diagnostic for a reported "AI says my code is empty despite a
+                // passing solution on screen" case — logs what actually arrived
+                // in the request body, the earliest point this can be checked,
+                // so a recurrence can be pinpointed to frontend/transport vs.
+                // backend processing instead of guessed at.
+                int codeLen = cs.getCode() != null ? cs.getCode().length() : -1;
+                if (codeLen <= 0) {
+                    log.warn("Code submission for session {} arrived with {} — problemId={}, isSubmit={}. Payload itself is empty at the controller boundary.",
+                            sessionId, codeLen == 0 ? "an empty code string" : "no code field at all", cs.getProblemId(), cs.isSubmit());
+                }
                 if (cs.isSubmit()) {
                     try {
                         codeResult = codeExecutionService.execute(
