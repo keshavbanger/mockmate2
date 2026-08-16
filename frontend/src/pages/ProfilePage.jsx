@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
-import { getUserProfile, updatePreferences } from '../utils/api.js';
+import { getUserProfile, updatePreferences, updateProfileInfo, uploadAvatar } from '../utils/api.js';
 import { useSavedResumes } from '../hooks/useSavedResumes';
 import { uploadSavedResume, renameSavedResume, setDefaultSavedResume, deleteSavedResume } from '../utils/savedResumeApi';
 import { ROLE_LEVELS, INTERVIEW_TYPES, COMPANY_STYLES, LANGUAGES } from '../constants/interviewOptions.js';
@@ -17,6 +17,21 @@ function scoreColor(score) {
 function formatDate(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function TextField({ label, value, onChange, placeholder }) {
+  return (
+    <div>
+      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 focus:border-[var(--brand-primary)] outline-none bg-white"
+      />
+    </div>
+  );
 }
 
 export default function ProfilePage() {
@@ -36,6 +51,72 @@ export default function ProfilePage() {
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState(false);
+
+  // Avatar upload
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow picking the same file again later
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image is too large — max 2 MB.');
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      await uploadAvatar(file);
+      await refreshUser();
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to upload photo.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  // Personal details — name/username/mobile/social links/education/target.
+  // Free text, no fixed value set, unlike Interview Preferences below.
+  const [personal, setPersonal] = useState({
+    fullName: '', username: '', mobileNumber: '', linkedinUrl: '', githubUrl: '', instagramUrl: '',
+    college: '', yearOfStudy: '', currentStatus: '', targetDomain: '', targetCompanies: '',
+  });
+  const [personalSaving, setPersonalSaving] = useState(false);
+  const [personalSaved, setPersonalSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setPersonal({
+      fullName: user.fullName || '',
+      username: user.username || '',
+      mobileNumber: user.mobileNumber || '',
+      linkedinUrl: user.linkedinUrl || '',
+      githubUrl: user.githubUrl || '',
+      instagramUrl: user.instagramUrl || '',
+      college: user.college || '',
+      yearOfStudy: user.yearOfStudy || '',
+      currentStatus: user.currentStatus || '',
+      targetDomain: user.targetDomain || '',
+      targetCompanies: user.targetCompanies || '',
+    });
+  }, [user]);
+
+  const handleSavePersonal = async () => {
+    setPersonalSaving(true);
+    setPersonalSaved(false);
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(personal).map(([k, v]) => [k, v.trim() === '' ? null : v.trim()])
+      );
+      await updateProfileInfo(payload);
+      await refreshUser();
+      setPersonalSaved(true);
+      setTimeout(() => setPersonalSaved(false), 2500);
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to save profile details.');
+    } finally {
+      setPersonalSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -147,7 +228,7 @@ export default function ProfilePage() {
   const lastInterview = data?.lastInterview;
   const lastResume = data?.lastResume;
 
-  const displayName = profile?.fullName || user?.fullName || user?.full_name || 'there';
+  const displayName = user?.fullName || profile?.fullName || user?.full_name || 'there';
   const initials = displayName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || '?';
 
   // Whichever of the two "last activity" candidates is more recent — a
@@ -173,13 +254,17 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center gap-6 mb-10 bg-white border border-slate-200 rounded-3xl p-8 shadow-sm"
         >
-          <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[#6B46C1] to-[#5b3da6] flex items-center justify-center text-white text-2xl font-black overflow-hidden flex-shrink-0">
-            {profile?.avatarUrl ? (
-              <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+          <label className="relative h-20 w-20 rounded-full bg-gradient-to-br from-[#6B46C1] to-[#5b3da6] flex items-center justify-center text-white text-2xl font-black overflow-hidden flex-shrink-0 cursor-pointer group">
+            {(user?.avatarUrl || profile?.avatarUrl) ? (
+              <img src={user?.avatarUrl || profile?.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
             ) : (
               <span>{initials}</span>
             )}
-          </div>
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-bold text-center px-1">
+              {avatarUploading ? '…' : 'Change'}
+            </div>
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} disabled={avatarUploading} />
+          </label>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight truncate">{displayName}</h1>
             <p className="text-slate-500 text-sm mt-1 truncate">{profile?.email}</p>
@@ -225,6 +310,60 @@ export default function ProfilePage() {
             </button>
           </motion.div>
         )}
+
+        {/* Personal Details — identity, contact, social links, education,
+            and target role/companies. Email is intentionally not editable
+            here — it's the OTP-verified account identity and needs its own
+            re-verification flow to change safely, not a plain text field. */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06 }}
+          className="mb-12 bg-white border border-slate-200 rounded-3xl p-7 shadow-sm"
+        >
+          <div className="mb-5">
+            <h2 className="text-lg font-bold text-slate-900">Personal Details</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Who you are and what you're aiming for — used to personalize your prep.</p>
+          </div>
+
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Identity & Contact</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <TextField label="Full Name" value={personal.fullName} onChange={(v) => setPersonal((p) => ({ ...p, fullName: v }))} placeholder="Your name" />
+            <TextField label="Username" value={personal.username} onChange={(v) => setPersonal((p) => ({ ...p, username: v }))} placeholder="username" />
+            <TextField label="Mobile Number" value={personal.mobileNumber} onChange={(v) => setPersonal((p) => ({ ...p, mobileNumber: v }))} placeholder="+91 9XXXXXXXXX" />
+          </div>
+
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Social Links</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <TextField label="LinkedIn" value={personal.linkedinUrl} onChange={(v) => setPersonal((p) => ({ ...p, linkedinUrl: v }))} placeholder="linkedin.com/in/…" />
+            <TextField label="GitHub" value={personal.githubUrl} onChange={(v) => setPersonal((p) => ({ ...p, githubUrl: v }))} placeholder="github.com/…" />
+            <TextField label="Instagram" value={personal.instagramUrl} onChange={(v) => setPersonal((p) => ({ ...p, instagramUrl: v }))} placeholder="instagram.com/…" />
+          </div>
+
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Education & Status</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <TextField label="College / University" value={personal.college} onChange={(v) => setPersonal((p) => ({ ...p, college: v }))} placeholder="Your college" />
+            <TextField label="Year of Study" value={personal.yearOfStudy} onChange={(v) => setPersonal((p) => ({ ...p, yearOfStudy: v }))} placeholder="e.g. Final Year, Graduated" />
+            <TextField label="Current Status" value={personal.currentStatus} onChange={(v) => setPersonal((p) => ({ ...p, currentStatus: v }))} placeholder="e.g. Student, Working Professional" />
+          </div>
+
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">What You're Targeting</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+            <TextField label="Target Domain / Role" value={personal.targetDomain} onChange={(v) => setPersonal((p) => ({ ...p, targetDomain: v }))} placeholder="e.g. AI/ML Engineer, Backend Developer" />
+            <TextField label="Target Companies" value={personal.targetCompanies} onChange={(v) => setPersonal((p) => ({ ...p, targetCompanies: v }))} placeholder="e.g. Google, Amazon, Stripe" />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSavePersonal}
+              disabled={personalSaving}
+              className="text-xs font-bold text-white bg-[#6B46C1] px-5 py-2.5 rounded-xl hover:bg-[#5b3da6] transition-colors disabled:opacity-50"
+            >
+              {personalSaving ? 'Saving…' : 'Save Details'}
+            </button>
+            {personalSaved && <span className="text-xs font-semibold text-emerald-600">✓ Saved</span>}
+          </div>
+        </motion.section>
 
         {/* My Saved Resumes — upload once, reuse everywhere */}
         <motion.section

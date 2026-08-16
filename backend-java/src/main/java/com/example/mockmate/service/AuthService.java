@@ -210,8 +210,81 @@ public class AuthService {
                 .prefCompanyStyle(user.getPrefCompanyStyle())
                 .prefLanguage(user.getPrefLanguage())
                 .prefDurationMinutes(user.getPrefDurationMinutes())
+                .mobileNumber(user.getMobileNumber())
+                .linkedinUrl(user.getLinkedinUrl())
+                .githubUrl(user.getGithubUrl())
+                .instagramUrl(user.getInstagramUrl())
+                .college(user.getCollege())
+                .yearOfStudy(user.getYearOfStudy())
+                .currentStatus(user.getCurrentStatus())
+                .targetDomain(user.getTargetDomain())
+                .targetCompanies(user.getTargetCompanies())
                 .createdAt(user.getCreatedAt())
                 .build();
+    }
+
+    // Free-text identity/bio fields — no fixed value set to validate against
+    // (unlike updatePreferences' enum-style fields below), just basic
+    // length/sanity caps so a malformed request can't write an absurdly
+    // long string into the DB. Email is deliberately NOT editable here — an
+    // email change on an OTP-verified account needs its own re-verification
+    // flow, not a plain field update.
+    @Transactional
+    public UserResponse updateProfile(User user, Map<String, Object> updates) {
+        applyTextField(updates, "fullName", 200, user::setFullName);
+        applyTextField(updates, "username", 100, user::setUsername);
+        applyTextField(updates, "mobileNumber", 20, user::setMobileNumber);
+        applyTextField(updates, "linkedinUrl", 300, user::setLinkedinUrl);
+        applyTextField(updates, "githubUrl", 300, user::setGithubUrl);
+        applyTextField(updates, "instagramUrl", 300, user::setInstagramUrl);
+        applyTextField(updates, "college", 200, user::setCollege);
+        applyTextField(updates, "yearOfStudy", 50, user::setYearOfStudy);
+        applyTextField(updates, "currentStatus", 50, user::setCurrentStatus);
+        applyTextField(updates, "targetDomain", 100, user::setTargetDomain);
+        applyTextField(updates, "targetCompanies", 500, user::setTargetCompanies);
+        User saved = userRepository.save(user);
+        return mapToResponse(saved);
+    }
+
+    private void applyTextField(Map<String, Object> updates, String key, int maxLength, java.util.function.Consumer<String> setter) {
+        if (!updates.containsKey(key)) return;
+        Object val = updates.get(key);
+        if (val == null) {
+            setter.accept(null);
+            return;
+        }
+        String str = String.valueOf(val).trim();
+        if (str.length() > maxLength) {
+            throw new IllegalArgumentException(key + " must be " + maxLength + " characters or fewer");
+        }
+        setter.accept(str.isEmpty() ? null : str);
+    }
+
+    // Self-uploaded avatar, stored as a base64 data: URI directly on
+    // User.avatarUrl (see its column comment) — no external image-storage
+    // service exists in this project yet, and avatars are small enough that
+    // Postgres handles this fine at this scale. Capped well under Postgres'
+    // practical row-size comfort zone; a few hundred KB is more than enough
+    // for a profile photo actually rendered at avatar size in the UI.
+    private static final int MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2MB
+    private static final java.util.Set<String> VALID_AVATAR_TYPES = java.util.Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
+
+    @Transactional
+    public UserResponse uploadAvatar(User user, org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Please choose an image");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !VALID_AVATAR_TYPES.contains(contentType.toLowerCase())) {
+            throw new IllegalArgumentException("Only PNG, JPEG, WEBP, or GIF images are supported");
+        }
+        if (file.getSize() > MAX_AVATAR_BYTES) {
+            throw new IllegalArgumentException("Image is too large (max 2 MB)");
+        }
+        String base64 = java.util.Base64.getEncoder().encodeToString(file.getBytes());
+        user.setAvatarUrl("data:" + contentType + ";base64," + base64);
+        User saved = userRepository.save(user);
+        return mapToResponse(saved);
     }
 
     // Interview preferences — account-level defaults for Tech Interview

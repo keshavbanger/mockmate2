@@ -29,7 +29,12 @@ public class User {
     @Column(name = "full_name")
     private String fullName;
 
-    @Column(name = "avatar_url")
+    // TEXT, not the Hibernate default (varchar(255)) — self-uploaded avatars
+    // are stored as base64 data: URIs directly in this column (see
+    // AuthService.uploadAvatar), which comfortably exceeds 255 chars even
+    // for a small image. OAuth-provided external avatar URLs still fit fine
+    // in TEXT too, so this one column serves both cases unchanged.
+    @Column(name = "avatar_url", columnDefinition = "TEXT")
     private String avatarUrl;
 
     @Column(name = "created_at")
@@ -71,6 +76,27 @@ public class User {
     private String prefLanguage;
     @Column(name = "pref_duration_minutes")
     private Integer prefDurationMinutes;
+
+    // Personal / candidate profile details — free text (no fixed value set
+    // to validate against, unlike the enum-style interview preferences
+    // above), edited from the Profile page's "Personal Details" section.
+    @Column(name = "mobile_number")
+    private String mobileNumber;
+    @Column(name = "linkedin_url")
+    private String linkedinUrl;
+    @Column(name = "github_url")
+    private String githubUrl;
+    @Column(name = "instagram_url")
+    private String instagramUrl;
+    private String college;
+    @Column(name = "year_of_study")
+    private String yearOfStudy;       // e.g. "2nd Year", "Final Year", "Graduated"
+    @Column(name = "current_status")
+    private String currentStatus;     // e.g. "Student", "Working Professional"
+    @Column(name = "target_domain")
+    private String targetDomain;      // e.g. "AI/ML Engineer", "Backend Developer"
+    @Column(name = "target_companies", columnDefinition = "TEXT")
+    private String targetCompanies;   // free text, e.g. "Google, Amazon, Stripe"
 
     // Backward compatibility fields
     private String firstName;

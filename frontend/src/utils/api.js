@@ -44,6 +44,18 @@ api.interceptors.response.use(
 // PATCH /auth/preferences and AuthService.updatePreferences for validation.
 export const updatePreferences = (updates) => api.patch('/auth/preferences', updates);
 
+// Personal/candidate profile details (name, username, mobile, social links,
+// education, target domain/companies) — see AuthController's PATCH /auth/profile.
+export const updateProfileInfo = (updates) => api.patch('/auth/profile', updates);
+
+// Self-uploaded avatar — stored server-side as a base64 data: URI (see
+// AuthService.uploadAvatar), max 2MB, PNG/JPEG/WEBP/GIF only.
+export const uploadAvatar = (file) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post('/auth/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+
 // ---------- Session ----------
 export const createSession = (payload = {}) => api.post('/session/create', payload);
 export const getSession    = (sessionId) => api.get(`/session/${sessionId}`);

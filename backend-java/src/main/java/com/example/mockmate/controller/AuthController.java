@@ -114,6 +114,39 @@ public class AuthController {
         }
     }
 
+    // Personal/candidate profile details (name, username, mobile, social
+    // links, education, target domain/companies) — see AuthService.updateProfile.
+    @PatchMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @AuthenticationPrincipal User user,
+            @RequestBody java.util.Map<String, Object> updates) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        try {
+            return ResponseEntity.ok(authService.updateProfile(user, updates));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadAvatar(
+            @AuthenticationPrincipal User user,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        try {
+            return ResponseEntity.ok(authService.uploadAvatar(user, file));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        } catch (java.io.IOException e) {
+            log.error("Avatar upload failed for user {}", user.getId(), e);
+            return ResponseEntity.internalServerError().body(java.util.Map.of("error", "Failed to process image"));
+        }
+    }
+
     @PostMapping("/signup")
     public ResponseEntity<TokenResponse> signup(@Valid @RequestBody UserSignupRequest request) {
         return ResponseEntity.ok(authService.signup(request));

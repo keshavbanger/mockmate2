@@ -26,5 +26,14 @@ public class UserResponse {
     private String prefCompanyStyle;
     private String prefLanguage;
     private Integer prefDurationMinutes;
+    private String mobileNumber;
+    private String linkedinUrl;
+    private String githubUrl;
+    private String instagramUrl;
+    private String college;
+    private String yearOfStudy;
+    private String currentStatus;
+    private String targetDomain;
+    private String targetCompanies;
     private LocalDateTime createdAt;
 }
