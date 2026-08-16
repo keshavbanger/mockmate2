@@ -318,6 +318,13 @@ export default function Navbar() {
                       <span className="text-base">📄</span>
                       Resume Builder
                     </button>
+                    {user?.role === 'ADMIN' && (
+                      <button onClick={() => { navigate('/admin'); setDropdownOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left">
+                        <span className="text-base">🛠️</span>
+                        Admin Panel
+                      </button>
+                    )}
                   </div>
 
                   <div className="border-t border-slate-50 py-1.5">

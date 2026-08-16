@@ -106,3 +106,10 @@ judge0:
 piston:
   # Legacy Piston fallback config
   url: ${PISTON_URL:http://localhost:2000/api/v2/execute}
+
+app:
+  # Comma-separated emails auto-promoted to ADMIN on login/signup (see
+  # AuthService.promoteIfConfiguredAdmin) — bootstraps the first admin
+  # without a manual DB write. Further admins can be promoted afterward
+  # from the admin panel itself.
+  admin-emails: ${ADMIN_EMAILS:}

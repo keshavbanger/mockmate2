@@ -11,11 +11,13 @@ import com.example.mockmate.security.JwtUtil;
 import com.example.mockmate.security.SupabaseJwtVerifier;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 
@@ -28,6 +30,25 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final SupabaseJwtVerifier supabaseJwtVerifier;
     private final ResendEmailService resendEmailService;
+
+    // Comma-separated admin emails (ADMIN_EMAILS env var / app.admin-emails
+    // property). Checked on every verify/signup/login so an account gets
+    // promoted the moment it logs in with a matching email — including
+    // retroactively for accounts that existed before this feature, with no
+    // manual DB migration needed to bootstrap the first admin.
+    @Value("${app.admin-emails:}")
+    private String adminEmailsConfig;
+
+    private void promoteIfConfiguredAdmin(User user) {
+        if (user == null || user.getEmail() == null || adminEmailsConfig == null || adminEmailsConfig.isBlank()) return;
+        boolean isConfiguredAdmin = Arrays.stream(adminEmailsConfig.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .anyMatch(adminEmail -> adminEmail.equalsIgnoreCase(user.getEmail()));
+        if (isConfiguredAdmin && user.getRole() != User.UserRole.ADMIN) {
+            user.setRole(User.UserRole.ADMIN);
+        }
+    }
 
     @Transactional
     public TokenResponse verify(TokenVerificationRequest request) {
@@ -81,6 +102,7 @@ public class AuthService {
             }
         }
 
+        promoteIfConfiguredAdmin(user);
         User savedUser = userRepository.save(user);
         if (isNewUser) {
             java.util.concurrent.CompletableFuture.runAsync(() ->
@@ -122,6 +144,7 @@ public class AuthService {
                 .isActive(true)
                 .build();
 
+        promoteIfConfiguredAdmin(user);
         User savedUser = userRepository.save(user);
         java.util.concurrent.CompletableFuture.runAsync(() ->
             resendEmailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName())
@@ -152,6 +175,7 @@ public class AuthService {
         }
 
         user.setLastLogin(LocalDateTime.now());
+        promoteIfConfiguredAdmin(user);
         User savedUser = userRepository.save(user);
 
         String token = jwtUtil.generateToken(user.getEmail());
@@ -180,6 +204,7 @@ public class AuthService {
                 .avatarUrl(user.getAvatarUrl())
                 .supabaseUserId(user.getSupabaseUserId())
                 .planType(user.getPlanType() != null ? user.getPlanType().name() : "FREE")
+                .role(user.getRole() != null ? user.getRole().name() : "USER")
                 .createdAt(user.getCreatedAt())
                 .build();
     }

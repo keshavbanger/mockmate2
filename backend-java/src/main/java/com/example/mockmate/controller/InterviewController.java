@@ -72,6 +72,17 @@ public class InterviewController {
             @RequestBody Map<String, Object> request,
             @AuthenticationPrincipal User user) {
         try {
+            // AI Mock Interview is the one feature gated behind a paid plan
+            // (Tech Interview Lab, ATS, and Resume Builder stay free) — see
+            // the plan-based access gating feature. Admins bypass the gate
+            // so they can test the feature without needing a PRO account.
+            boolean hasAccess = user != null
+                    && (user.getPlanType() == User.PlanType.PRO || user.getRole() == User.UserRole.ADMIN);
+            if (!hasAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("detail", "Upgrade to a paid plan to access AI Mock Interviews", "code", "PLAN_REQUIRED"));
+            }
+
             String sessionId = (String) request.get("session_id");
             Map<String, Object> sessionData = sessionStoreService.getSession(sessionId);
             if (sessionData == null) {

@@ -210,6 +210,16 @@ export default function SetupPage() {
       addToast('Please agree to the terms and conditions to proceed.', 'warning');
       return;
     }
+    // AI Mock Interview is the one feature gated behind a paid plan (Tech
+    // Interview Lab, ATS, and Resume Builder all stay free) — checked here
+    // for UX so a free user gets a clear upgrade prompt instead of a wasted
+    // round-trip; the backend re-checks this on /start-interview regardless,
+    // since this client-side check alone isn't a real security boundary.
+    if (user?.planType !== 'PRO' && user?.role !== 'ADMIN') {
+      addToast('AI Mock Interview requires a paid plan. Redirecting to pricing…', 'warning', 4000);
+      setTimeout(() => navigate('/pricing'), 1200);
+      return;
+    }
 
     setStarting(true);
     try {
@@ -262,6 +272,13 @@ export default function SetupPage() {
     } catch (e) {
       const detail = e?.response?.data?.detail ?? 'Could not start interview. Please try again.';
       addToast(detail, 'error', 6000);
+      // Defense in depth: the client-side plan check above should catch this
+      // first, but the backend is the real boundary — if it still rejects
+      // with PLAN_REQUIRED (e.g. plan changed mid-session), send them to
+      // pricing the same way.
+      if (e?.response?.data?.code === 'PLAN_REQUIRED') {
+        setTimeout(() => navigate('/pricing'), 1200);
+      }
       setStarting(false);
     }
   };

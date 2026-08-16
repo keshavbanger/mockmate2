@@ -43,6 +43,16 @@ public class User {
     @Builder.Default
     private PlanType planType = PlanType.FREE;
 
+    // Authorization role — separate from planType (paid vs free feature
+    // access) since an admin isn't necessarily a paying customer and vice
+    // versa. Defaults to USER; promoted to ADMIN either manually via the
+    // admin panel or automatically on login for emails listed in
+    // app.admin-emails (see AuthService.promoteIfConfiguredAdmin).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role")
+    @Builder.Default
+    private UserRole role = UserRole.USER;
+
     // Backward compatibility fields
     private String firstName;
     private String lastName;
@@ -54,5 +64,9 @@ public class User {
 
     public enum PlanType {
         FREE, PRO
+    }
+
+    public enum UserRole {
+        USER, ADMIN
     }
 }

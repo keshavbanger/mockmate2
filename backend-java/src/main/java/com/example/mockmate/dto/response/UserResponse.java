@@ -20,5 +20,6 @@ public class UserResponse {
     private String avatarUrl;
     private String supabaseUserId;
     private String planType;
+    private String role;
     private LocalDateTime createdAt;
 }

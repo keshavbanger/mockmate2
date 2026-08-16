@@ -32,6 +32,7 @@ const PricingPage             = lazy(() => import('./pages/PricingPage.jsx'));
 const ChangelogPage           = lazy(() => import('./pages/ChangelogPage.jsx'));
 const BlogPage                = lazy(() => import('./pages/BlogPage.jsx'));
 const BlogPostPage            = lazy(() => import('./pages/BlogPostPage.jsx'));
+const AdminPage                = lazy(() => import('./pages/AdminPage.jsx'));
 const WhyMockMatePage         = lazy(() => import('./pages/WhyMockMatePage.jsx'));
 const ContactPage             = lazy(() => import('./pages/ContactPage.jsx'));
 
@@ -101,6 +102,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ATSHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <AdminPage />
           </ProtectedRoute>
         }
       />
