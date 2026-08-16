@@ -106,9 +106,32 @@ public class ATSAnalyzerService {
         for (AtsAnalysis row : rows) {
             if (row.getReportJson() != null) {
                 results.add(row.getReportJson());
-            } else {
-                readFromDisk(row.getReportId()).ifPresent(results::add);
+                continue;
             }
+            Optional<ATSReport> fromDisk = readFromDisk(row.getReportId());
+            if (fromDisk.isPresent()) {
+                results.add(fromDisk.get());
+                continue;
+            }
+            // Legacy row from before reportJson existed, whose disk file
+            // didn't survive an ephemeral-hosting restart in between — the
+            // full report content is genuinely gone. Previously this scan
+            // just silently vanished from history with no indication it had
+            // ever happened; show a minimal shell built from the DB row's
+            // own metadata instead, so at least the fact that it happened
+            // isn't lost too. Clicking into it will still 404 (getReport has
+            // no content to serve either), which is the honest outcome for
+            // data that's actually unrecoverable.
+            results.add(ATSReport.builder()
+                    .reportId(row.getReportId())
+                    .userId(row.getUserId())
+                    .timestamp(row.getCreatedAt() != null
+                            ? row.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant().toString()
+                            : java.time.Instant.now().toString())
+                    .resumeFileName(row.getResumeFileName())
+                    .finalScore(row.getFinalScore() != null ? row.getFinalScore() : 0)
+                    .verdict(row.getVerdict())
+                    .build());
         }
         return results;
     }

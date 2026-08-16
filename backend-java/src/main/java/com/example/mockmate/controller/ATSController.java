@@ -2,6 +2,7 @@ package com.example.mockmate.controller;
 
 import com.example.mockmate.model.ATSReport;
 import com.example.mockmate.model.SavedResume;
+import com.example.mockmate.model.User;
 import com.example.mockmate.service.ATSAnalyzerService;
 import com.example.mockmate.service.ATSCompareService;
 import com.example.mockmate.service.ATSDownloadService;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,8 +44,19 @@ public class ATSController {
             @RequestParam(value = "savedResumeId", required = false) String savedResumeId,
             @RequestParam(value = "saveAsResume", required = false, defaultValue = "false") boolean saveAsResume,
             @RequestParam(value = "label", required = false) String label,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @AuthenticationPrincipal User user) {
 
+        // NOTE: ATS reports/history are owned by the caller's JWT EMAIL (via
+        // accessGuard — this endpoint also supports anonymous scans, unlike
+        // the other 3 saved-resume call sites), but SavedResume rows are
+        // always keyed by the real User UUID (user.getId()), same as every
+        // other controller that reads/writes them. Mixing the two here is
+        // what caused "Saved resume not found" for a resume that genuinely
+        // existed and listed correctly — the lookup was querying by email
+        // against rows keyed by UUID. Use `userId` (email) ONLY for
+        // ATSReport/AtsAnalysis ownership below; use `user.getId()` for
+        // every SavedResumeService call.
         String userId = accessGuard.resolveUserId(authHeader);
         boolean usingSavedResume = savedResumeId != null && !savedResumeId.isBlank();
         log.info("[ATS] /analyze userId={} file={} savedResumeId={} jdLen={}",
@@ -57,11 +70,11 @@ public class ATSController {
         }
 
         if (usingSavedResume) {
-            if ("anonymous".equals(userId)) {
+            if (user == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Authentication required to use a saved resume"));
             }
             try {
-                SavedResume saved = savedResumeService.get(userId, savedResumeId);
+                SavedResume saved = savedResumeService.get(user.getId(), savedResumeId);
                 ATSReport report = atsAnalyzerService.analyzeText(saved.getRawText(), saved.getFileName(), jdText, userId);
                 return ResponseEntity.ok(report);
             } catch (NoSuchElementException e) {
@@ -83,9 +96,9 @@ public class ATSController {
 
         try {
             ATSReport report = atsAnalyzerService.analyze(file, jdText, userId);
-            if (saveAsResume && !"anonymous".equals(userId)) {
+            if (saveAsResume && user != null) {
                 try {
-                    savedResumeService.upload(userId, file, label, false);
+                    savedResumeService.upload(user.getId(), file, label, false);
                 } catch (Exception e) {
                     log.warn("Failed to save resume for reuse (user {}): {}", userId, e.getMessage());
                 }
