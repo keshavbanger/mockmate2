@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer.jsx';
 import LoginModal from '../components/LoginModal.jsx';
+import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
 
 const STEPS = [
   'Extracting resume text…',
@@ -79,8 +80,10 @@ export default function ATSUploadPage() {
 
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // Single mode
-  const [file,   setFile]   = useState(null);
+  // Single mode — either an upload ({mode:'upload', file, saveAsResume, label})
+  // or a previously saved resume ({mode:'saved', savedResumeId}), see
+  // ResumeSourcePicker.
+  const [resumeSource, setResumeSource] = useState(null);
   // Compare mode
   const [fileA,  setFileA]  = useState(null);
   const [fileB,  setFileB]  = useState(null);
@@ -116,7 +119,9 @@ export default function ATSUploadPage() {
       return;
     }
     if (loading) return; // guards against a double-click landing before disabled= takes effect
-    if (!compare && !file)   return setError('Please upload your resume.');
+    const singleModeReady = compare || (resumeSource?.mode === 'saved' && resumeSource.savedResumeId)
+      || (resumeSource?.mode === 'upload' && resumeSource.file);
+    if (!singleModeReady)   return setError('Please choose a resume.');
     if (compare && (!fileA || !fileB)) return setError('Please upload both resumes for comparison.');
     if (!jdText.trim())      return setError('Please paste the job description.');
     if (jdText.trim().length < 100)
@@ -129,7 +134,7 @@ export default function ATSUploadPage() {
         const result = await compareResumes(fileA, fileB, jdText);
         navigate('/ats/compare', { state: { result } });
       } else {
-        const report = await analyzeATS(file, jdText);
+        const report = await analyzeATS(resumeSource, jdText);
         navigate(`/ats/report/${report.reportId}`);
       }
     } catch (err) {
@@ -220,33 +225,9 @@ export default function ATSUploadPage() {
               key="single"
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.35 }}
-              onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { const err = validateFile(f); if (err) { setError(err); return; } setError(''); setFile(f); }}}
-              onDragOver={(e) => e.preventDefault()}
-              className={`relative flex flex-col items-center justify-center gap-4 p-12 rounded-3xl border-2 border-dashed
-                transition-all duration-300 cursor-pointer overflow-hidden shadow-sm
-                ${file ? 'border-emerald-400 bg-emerald-50/60' :
-                  'border-black/10 bg-white hover:border-[var(--brand-primary)] hover:bg-[var(--brand-light)]/40'}`}
+              className="bg-white border border-black/[0.05] rounded-3xl p-7 shadow-sm"
             >
-              <input id="ats-file-input" type="file" accept=".pdf,.docx"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) { const err = validateFile(f); if (err) { setError(err); return; } setError(''); setFile(f); }}}
-                className="absolute inset-0 opacity-0 cursor-pointer" />
-              {file ? (
-                <>
-                  <div className="h-16 w-16 rounded-2xl bg-emerald-100 flex items-center justify-center text-2xl">📄</div>
-                  <p className="font-bold text-emerald-700 text-base">{file.name}</p>
-                  <p className="text-xs text-slate-400 font-semibold">{(file.size / 1024).toFixed(1)} KB · Click or drag to replace</p>
-                </>
-              ) : (
-                <>
-                  <div className="h-16 w-16 rounded-2xl bg-[var(--brand-light)] flex items-center justify-center text-2xl">📂</div>
-                  <div className="text-center">
-                    <p className="font-bold text-black text-base">
-                      Drop your resume here, or <span className="text-[var(--brand-primary)] underline underline-offset-2">browse</span>
-                    </p>
-                    <p className="text-sm text-slate-400 font-medium mt-1">PDF or DOCX · Max 10 MB</p>
-                  </div>
-                </>
-              )}
+              <ResumeSourcePicker onChange={setResumeSource} />
             </motion.div>
           )}
         </AnimatePresence>

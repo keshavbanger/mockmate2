@@ -1,5 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useInterview } from '../context/InterviewContext.jsx';
@@ -9,6 +8,7 @@ import { createSession, parseResume, generateQuestions, startInterview } from '.
 import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer.jsx';
 import LoginModal from '../components/LoginModal.jsx';
+import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
 
 const TABS = ['Role Based', 'Company Based', 'JD Based'];
 
@@ -113,6 +113,9 @@ export default function SetupPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadDone, setUploadDone] = useState(() => Boolean(ctx.resumeData));
   const [fileName, setFileName] = useState('');
+  // Either { mode: 'upload', file, saveAsResume, label } or
+  // { mode: 'saved', savedResumeId } — see ResumeSourcePicker.
+  const [resumeSource, setResumeSource] = useState(null);
 
   // Starting loading state
   const [starting, setStarting] = useState(false);
@@ -136,16 +139,13 @@ export default function SetupPage() {
     });
   }, [selectedCategory, searchQuery]);
 
-  // Dropzone Handler
-  const onDrop = useCallback(async (accepted) => {
-    const file = accepted[0];
-    if (!file) return;
-    if (file.type !== 'application/pdf') {
-      addToast('Please upload a PDF file.', 'warning');
-      return;
-    }
+  // Fires whenever ResumeSourcePicker reports a usable source (a freshly
+  // chosen file, or a saved resume selection) — replaces the old dropzone's
+  // onDrop, parsing eagerly either way so the "Resume Parsed & Linked"
+  // summary below populates immediately.
+  const handleResumeSource = useCallback(async (source) => {
     setUploading(true);
-    setFileName(file.name);
+    setFileName(source.mode === 'upload' ? source.file.name : 'Saved resume');
 
     try {
       let sid = ctx.sessionId;
@@ -155,7 +155,7 @@ export default function SetupPage() {
         ctx.setSessionId(sid);
       }
 
-      const { data } = await parseResume(file, sid);
+      const { data } = await parseResume(source, sid);
       ctx.setResumeData(data.resume_data);
       setUploadDone(true);
       addToast('Resume uploaded and parsed successfully!', 'success');
@@ -168,12 +168,13 @@ export default function SetupPage() {
     }
   }, [ctx, user, addToast]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
-    maxFiles: 1,
-    multiple: false,
-  });
+  useEffect(() => {
+    if (!resumeSource) return;
+    if (resumeSource.mode === 'upload' && !resumeSource.file) return;
+    if (resumeSource.mode === 'saved' && !resumeSource.savedResumeId) return;
+    handleResumeSource(resumeSource);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSource]);
 
   // Mark selection done to reveal Step 3
   const handleContinueToStep3 = () => {
@@ -348,27 +349,14 @@ export default function SetupPage() {
           </div>
 
           {!uploadDone ? (
-            <div
-              {...getRootProps()}
-              className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
-                isDragActive ? 'border-[#6B46C1] bg-purple-50' : 'border-purple-200 bg-purple-50/30 hover:bg-purple-50 hover:border-purple-300'
-              }`}
-            >
-              <input {...getInputProps()} />
-              {uploading ? (
-                <div className="flex flex-col items-center gap-3 py-4">
-                  <Spinner />
-                  <p className="text-xs font-bold text-[#6B46C1]">Parsing and analyzing resume PDF…</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-3xl">📥</span>
-                  <p className="text-sm font-extrabold text-slate-800">Drop your resume PDF here</p>
-                  <p className="text-xs text-[#6B46C1] font-bold">or click to browse PDF file</p>
-                  <p className="text-[11px] text-slate-400 font-medium mt-1">Upload PDF (Max 5MB) so AI can tailor questions to your background</p>
-                </div>
-              )}
-            </div>
+            uploading ? (
+              <div className="border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-2xl p-6 flex flex-col items-center gap-3 py-4">
+                <Spinner />
+                <p className="text-xs font-bold text-[#6B46C1]">Parsing and analyzing resume…</p>
+              </div>
+            ) : (
+              <ResumeSourcePicker onChange={setResumeSource} />
+            )
           ) : (
             <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4">

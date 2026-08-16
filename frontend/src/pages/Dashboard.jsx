@@ -204,6 +204,15 @@ export default function Dashboard() {
     { label: 'Analytics', icon: '📈', path: '/history' },
   ];
 
+  // Every feature that produces a report gets a findable history page — see
+  // TechInterviewHistoryPage/ATSHistoryPage. Previously these reports were
+  // generated but had nowhere in the UI a user could come back and find them.
+  const reportLinks = [
+    { label: 'Mock Interview Reports', icon: '🎤', path: '/history' },
+    { label: 'Technical Interview Reports', icon: '💻', path: '/tech-interview/history' },
+    { label: 'ATS Scan Reports', icon: '📄', path: '/ats/history' },
+  ];
+
   // Real, navigable categories — not fabricated "projects" the user never
   // created. Standing in for the template's generic workspace section.
   const prepTracks = [
@@ -269,6 +278,23 @@ export default function Dashboard() {
                   className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left"
                 >
                   {item.dot ? <span className={`h-2 w-2 rounded-full ${item.dot} flex-shrink-0`} /> : <span className="text-sm">{item.icon}</span>}
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Your Reports — one place to find every report you've generated */}
+          <div className="mt-8">
+            <p className="px-4 text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Your Reports</p>
+            <nav className="space-y-1">
+              {reportLinks.map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => navigate(item.path)}
+                  className="w-full flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left"
+                >
+                  <span className="text-sm">{item.icon}</span>
                   {item.label}
                 </button>
               ))}

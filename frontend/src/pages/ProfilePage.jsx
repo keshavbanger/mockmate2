@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { getUserProfile } from '../utils/api.js';
+import { useSavedResumes } from '../hooks/useSavedResumes';
+import { uploadSavedResume, renameSavedResume, setDefaultSavedResume, deleteSavedResume } from '../utils/savedResumeApi';
 
 function scoreColor(score) {
   if (score >= 75) return { bg: 'bg-emerald-50', text: 'text-emerald-600' };
@@ -23,6 +25,61 @@ export default function ProfilePage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Saved resumes — upload once here, reuse from any feature (Mock
+  // Interview, Technical Interview Lab, ATS Checker, Resume Builder import)
+  // via ResumeSourcePicker instead of re-uploading every time.
+  const { resumes: savedResumes, loading: savedLoading, reload: reloadSaved } = useSavedResumes();
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadLabel, setUploadLabel] = useState('');
+  const [uploading, setUploading] = useState(false);
+
+  const handleUploadSaved = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    try {
+      await uploadSavedResume(uploadFile, { label: uploadLabel, setAsDefault: savedResumes.length === 0 });
+      setShowUploadModal(false);
+      setUploadFile(null);
+      setUploadLabel('');
+      reloadSaved();
+    } catch (err) {
+      alert(err.message || 'Failed to upload resume.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSetDefaultSaved = async (id) => {
+    try {
+      await setDefaultSavedResume(id);
+      reloadSaved();
+    } catch (err) {
+      alert(err.message || 'Failed to set default resume.');
+    }
+  };
+
+  const handleRenameSaved = async (id, currentLabel) => {
+    const next = window.prompt('Rename resume', currentLabel);
+    if (!next || next === currentLabel) return;
+    try {
+      await renameSavedResume(id, next);
+      reloadSaved();
+    } catch (err) {
+      alert(err.message || 'Failed to rename resume.');
+    }
+  };
+
+  const handleDeleteSaved = async (id) => {
+    if (!window.confirm('Delete this saved resume? This cannot be undone.')) return;
+    try {
+      await deleteSavedResume(id);
+      reloadSaved();
+    } catch (err) {
+      alert(err.message || 'Failed to delete resume.');
+    }
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -125,7 +182,137 @@ export default function ProfilePage() {
           </motion.div>
         )}
 
-        {/* Your Resumes */}
+        {/* My Saved Resumes — upload once, reuse everywhere */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className="mb-12"
+        >
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">My Saved Resumes</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Upload once here — every feature that needs a resume will offer to reuse it.</p>
+            </div>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="text-sm font-semibold text-purple-600 hover:text-purple-800 transition-colors"
+            >
+              + Upload Resume
+            </button>
+          </div>
+
+          {savedLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--brand-primary)]" />
+            </div>
+          ) : savedResumes.length === 0 ? (
+            <div className="bg-white border border-dashed border-slate-200 rounded-3xl p-10 text-center">
+              <div className="text-3xl mb-3">📎</div>
+              <p className="text-sm font-semibold text-slate-500 mb-1">No saved resumes yet</p>
+              <p className="text-xs text-slate-400 mb-4">Upload a resume here to reuse it across Mock Interview, Technical Interview Lab, ATS Checker, and Resume Builder — no re-uploading.</p>
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="text-xs font-bold px-5 py-2.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+              >
+                Upload Your First Resume
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {savedResumes.map((r) => (
+                <div key={r.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-900 truncate" title={r.label}>{r.label || r.fileName}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{r.fileName} · {formatDate(r.uploadedAt)}</p>
+                    </div>
+                    {r.isDefault && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex-shrink-0 ml-2">Default</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-auto pt-2">
+                    {!r.isDefault && (
+                      <button
+                        onClick={() => handleSetDefaultSaved(r.id)}
+                        className="text-xs font-bold py-2 px-3 rounded-full border border-slate-200 hover:bg-slate-50 transition-colors text-slate-700"
+                      >
+                        Set Default
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleRenameSaved(r.id, r.label)}
+                      className="text-xs font-bold py-2 px-3 rounded-full border border-slate-200 hover:bg-slate-50 transition-colors text-slate-700"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSaved(r.id)}
+                      className="text-xs font-bold py-2 px-3 rounded-full border border-red-100 hover:bg-red-50 transition-colors text-red-500 ml-auto"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.section>
+
+        {showUploadModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={() => !uploading && setShowUploadModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-100 shadow-2xl w-full max-w-md"
+            >
+              <h3 className="text-base font-extrabold text-slate-900 mb-1">Upload Resume</h3>
+              <p className="text-xs text-slate-500 font-medium mb-5">PDF or DOCX. This will be reusable across every feature.</p>
+
+              <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[var(--brand-primary)] cursor-pointer transition-colors mb-4">
+                <span className="text-2xl">📄</span>
+                <span className="text-sm font-semibold text-slate-600">{uploadFile ? uploadFile.name : 'Click to choose a file'}</span>
+                <input
+                  type="file"
+                  accept=".pdf,.docx"
+                  className="hidden"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                />
+              </label>
+
+              <input
+                type="text"
+                value={uploadLabel}
+                onChange={(e) => setUploadLabel(e.target.value)}
+                placeholder="Label (optional) — e.g. Backend Resume"
+                className="w-full text-sm px-3 py-2.5 rounded-lg border border-black/10 focus:border-[var(--brand-primary)] outline-none mb-5"
+              />
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowUploadModal(false)}
+                  disabled={uploading}
+                  className="text-xs font-bold text-slate-500 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUploadSaved}
+                  disabled={!uploadFile || uploading}
+                  className="text-xs font-bold text-white bg-[#6B46C1] px-5 py-2.5 rounded-xl hover:bg-[#5b3da6] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {uploading ? 'Uploading…' : 'Save Resume'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Your ATS Scans */}
         <motion.section
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -133,7 +320,7 @@ export default function ProfilePage() {
           className="mb-12"
         >
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-bold text-slate-900">Your Resumes</h2>
+            <h2 className="text-lg font-bold text-slate-900">Your ATS Scans</h2>
             <button
               onClick={() => navigate('/ats')}
               className="text-sm font-semibold text-purple-600 hover:text-purple-800 transition-colors"

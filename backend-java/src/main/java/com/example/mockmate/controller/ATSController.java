@@ -1,12 +1,15 @@
 package com.example.mockmate.controller;
 
 import com.example.mockmate.model.ATSReport;
+import com.example.mockmate.model.SavedResume;
 import com.example.mockmate.service.ATSAnalyzerService;
 import com.example.mockmate.service.ATSCompareService;
 import com.example.mockmate.service.ATSDownloadService;
+import com.example.mockmate.service.SavedResumeService;
 import com.example.mockmate.security.AtsReportAccessGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 @Slf4j
@@ -26,25 +30,50 @@ public class ATSController {
     private final ATSDownloadService atsDownloadService;
     private final ATSCompareService  atsCompareService;
     private final AtsReportAccessGuard accessGuard;
+    private final SavedResumeService savedResumeService;
 
     // ── POST /api/ats/analyze ──────────────────────────────────────────────────────
     @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> analyze(
-            @RequestParam("file")   MultipartFile file,
+            @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam("jdText") String jdText,
+            // Reuse a previously saved resume instead of re-uploading — see
+            // SavedResumeController. When present, `file` is ignored.
+            @RequestParam(value = "savedResumeId", required = false) String savedResumeId,
+            @RequestParam(value = "saveAsResume", required = false, defaultValue = "false") boolean saveAsResume,
+            @RequestParam(value = "label", required = false) String label,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
         String userId = accessGuard.resolveUserId(authHeader);
-        log.info("[ATS] /analyze userId={} file={} jdLen={}", userId, file.getOriginalFilename(), jdText.length());
+        boolean usingSavedResume = savedResumeId != null && !savedResumeId.isBlank();
+        log.info("[ATS] /analyze userId={} file={} savedResumeId={} jdLen={}",
+                userId, usingSavedResume ? null : (file != null ? file.getOriginalFilename() : null), savedResumeId, jdText.length());
 
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Resume file is required"));
-        }
         if (jdText == null || jdText.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Job description text is required"));
         }
         if (jdText.length() < 50) {
             return ResponseEntity.badRequest().body(Map.of("error", "Job description is too short — please paste the full JD"));
+        }
+
+        if (usingSavedResume) {
+            if ("anonymous".equals(userId)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Authentication required to use a saved resume"));
+            }
+            try {
+                SavedResume saved = savedResumeService.get(userId, savedResumeId);
+                ATSReport report = atsAnalyzerService.analyzeText(saved.getRawText(), saved.getFileName(), jdText, userId);
+                return ResponseEntity.ok(report);
+            } catch (NoSuchElementException e) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+            } catch (Exception e) {
+                log.error("[ATS] Analysis from saved resume failed", e);
+                return ResponseEntity.internalServerError().body(Map.of("error", "Analysis failed: " + e.getMessage()));
+            }
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Resume file is required"));
         }
 
         String name = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
@@ -54,6 +83,13 @@ public class ATSController {
 
         try {
             ATSReport report = atsAnalyzerService.analyze(file, jdText, userId);
+            if (saveAsResume && !"anonymous".equals(userId)) {
+                try {
+                    savedResumeService.upload(userId, file, label, false);
+                } catch (Exception e) {
+                    log.warn("Failed to save resume for reuse (user {}): {}", userId, e.getMessage());
+                }
+            }
             return ResponseEntity.ok(report);
         } catch (Exception e) {
             log.error("[ATS] Analysis failed", e);

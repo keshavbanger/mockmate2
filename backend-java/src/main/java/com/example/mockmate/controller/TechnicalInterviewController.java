@@ -3,6 +3,7 @@ package com.example.mockmate.controller;
 import com.example.mockmate.dto.techinterview.AnswerRequest;
 import com.example.mockmate.dto.techinterview.CodeExecuteRequest;
 import com.example.mockmate.dto.techinterview.SQLExecuteRequest;
+import com.example.mockmate.model.SavedResume;
 import com.example.mockmate.model.User;
 import com.example.mockmate.model.techinterview.*;
 import com.example.mockmate.service.*;
@@ -33,6 +34,8 @@ public class TechnicalInterviewController {
     private final InterviewEvaluationService evaluationService;
     private final DSAProblemService dsaProblemService;
     private final ResumeTextExtractor resumeTextExtractor;
+    private final SavedResumeService savedResumeService;
+    private final com.example.mockmate.repository.TechInterviewReportRepository reportRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     // None of the session-scoped endpoints below used to compare the
@@ -65,11 +68,32 @@ public class TechnicalInterviewController {
             @RequestPart(value = "durationMinutes", required = false) String durationMinutes,
             @RequestPart(value = "preferredLanguage", required = false) String preferredLanguage,
             @RequestParam(value = "startDirectlyToDsa", required = false) Boolean startDirectlyToDsa,
+            // Reuse a previously saved resume instead of re-uploading — see
+            // SavedResumeController. When present, `resume` is ignored.
+            @RequestParam(value = "savedResumeId", required = false) String savedResumeId,
+            @RequestParam(value = "saveAsResume", required = false, defaultValue = "false") boolean saveAsResume,
+            @RequestParam(value = "label", required = false) String label,
             @AuthenticationPrincipal User user) {
 
         try {
             String resumeText = "";
-            if (resume != null && !resume.isEmpty()) {
+            if (savedResumeId != null && !savedResumeId.isBlank()) {
+                if (user == null) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(Map.of("error", "Authentication required to use a saved resume"));
+                }
+                SavedResume saved;
+                try {
+                    saved = savedResumeService.get(user.getId(), savedResumeId);
+                } catch (NoSuchElementException e) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+                }
+                resumeText = saved.getRawText() != null ? saved.getRawText() : "";
+                if (resumeText.isBlank() || resumeText.length() < 30) {
+                    return ResponseEntity.badRequest().body(Map.of("error",
+                            "Your saved resume doesn't contain enough readable text. Try uploading a different file."));
+                }
+            } else if (resume != null && !resume.isEmpty()) {
                 resumeText = resumeTextExtractor.extract(resume);
                 // ResumeTextExtractor swallows every failure and returns "" —
                 // by design, so a bad file never 500s — but that means a
@@ -85,6 +109,13 @@ public class TechnicalInterviewController {
                             resumeText.length(), resume.getOriginalFilename());
                     return ResponseEntity.badRequest().body(Map.of("error",
                             "Couldn't read any text from that resume file. If it's a scanned image or a PDF exported from a design tool, try exporting a text-based PDF or DOCX instead."));
+                }
+                if (saveAsResume && user != null) {
+                    try {
+                        savedResumeService.upload(user.getId(), resume, label, false);
+                    } catch (Exception e) {
+                        log.warn("Failed to save resume for reuse (user {}): {}", user.getId(), e.getMessage());
+                    }
                 }
             }
 
@@ -435,15 +466,25 @@ public class TechnicalInterviewController {
             if (session == null) return ResponseEntity.notFound().build();
             if (isOwnedByOther(session, user)) return ownershipError();
 
+            // DB row is now the primary source; disk is only consulted for
+            // reports saved before this migration (a redeploy could have
+            // cleared the disk copy but not the DB row, or vice versa for a
+            // pre-migration session).
+            var existing = reportRepository.findBySessionId(sessionId);
+            if (existing.isPresent()) {
+                return ResponseEntity.ok(existing.get().getReportJson());
+            }
+
             java.io.File reportFile = new java.io.File(
                     "data/sessions/technical/" + sessionId + "/report.json");
-            if (!reportFile.exists()) {
-                // Generate on demand
-                TechInterviewReport report = evaluationService.evaluate(session);
-                saveReport(sessionId, report);
+            if (reportFile.exists()) {
+                TechInterviewReport report = objectMapper.readValue(reportFile, TechInterviewReport.class);
                 return ResponseEntity.ok(report);
             }
-            TechInterviewReport report = objectMapper.readValue(reportFile, TechInterviewReport.class);
+
+            // Generate on demand
+            TechInterviewReport report = evaluationService.evaluate(session);
+            saveReport(sessionId, report);
             return ResponseEntity.ok(report);
         } catch (Exception e) {
             log.error("Report fetch failed for session {}", sessionId, e);
@@ -463,34 +504,25 @@ public class TechnicalInterviewController {
         }
         String callerId = String.valueOf(user.getId());
         try {
-            java.io.File baseDir = new java.io.File("data/sessions/technical");
+            // Previously scanned every session directory on disk on every
+            // request — slow, unpaginated, and lost on an ephemeral-disk
+            // restart. Only completed interviews have a saved report row, so
+            // this naturally reflects "interviews you finished," which is
+            // what a report history should show anyway.
             List<Map<String, Object>> history = new ArrayList<>();
-            if (baseDir.exists()) {
-                java.io.File[] dirs = baseDir.listFiles(java.io.File::isDirectory);
-                if (dirs != null) {
-                    for (java.io.File dir : dirs) {
-                        java.io.File state = new java.io.File(dir, "state.json");
-                        if (state.exists()) {
-                            try {
-                                TechInterviewSession s = objectMapper.readValue(state, TechInterviewSession.class);
-                                if (callerId.equals(s.getUserId())) {
-                                    Map<String, Object> entry = new LinkedHashMap<>();
-                                    entry.put("sessionId", s.getSessionId());
-                                    entry.put("date", s.getStartedAt() * 1000);
-                                    entry.put("role", s.getPlan().getConfig().getRoleLevel());
-                                    entry.put("interviewType", s.getPlan().getConfig().getInterviewType());
-                                    entry.put("companyStyle", s.getPlan().getConfig().getCompanyStyle());
-                                    entry.put("ended", s.isEnded());
-                                    history.add(entry);
-                                }
-                            } catch (Exception ignored) {}
-                        }
-                    }
-                }
+            for (var entity : reportRepository.findByUserIdOrderByCreatedAtDesc(callerId)) {
+                TechInterviewReport report = entity.getReportJson();
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("sessionId", entity.getSessionId());
+                entry.put("date", entity.getCreatedAt()
+                        .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+                entry.put("role", entity.getRoleLevel());
+                entry.put("interviewType", entity.getInterviewType());
+                entry.put("overallScore", entity.getOverallScore());
+                entry.put("companyStyle", report != null ? report.getCompanyStyle() : null);
+                entry.put("ended", true);
+                history.add(entry);
             }
-            history.sort((a, b) -> Long.compare(
-                    (Long) b.getOrDefault("date", 0L),
-                    (Long) a.getOrDefault("date", 0L)));
             return ResponseEntity.ok(history);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
@@ -670,12 +702,30 @@ public class TechnicalInterviewController {
     }
 
     private void saveReport(String sessionId, TechInterviewReport report) {
+        // Disk copy kept as a secondary artifact (cheap, harmless); the DB
+        // row below is now the primary, durable source for getReport()/
+        // getHistory() — see TechInterviewReportEntity's javadoc for why.
         try {
             java.io.File dir = new java.io.File("data/sessions/technical/" + sessionId);
             dir.mkdirs();
             objectMapper.writeValue(new java.io.File(dir, "report.json"), report);
         } catch (Exception e) {
             log.error("Failed to save report for session {}", sessionId, e);
+        }
+
+        try {
+            com.example.mockmate.model.techinterview.TechInterviewReportEntity entity =
+                    reportRepository.findBySessionId(sessionId).orElseGet(
+                            com.example.mockmate.model.techinterview.TechInterviewReportEntity::new);
+            entity.setUserId(report.getUserId());
+            entity.setSessionId(sessionId);
+            entity.setRoleLevel(report.getRoleLevel());
+            entity.setInterviewType(report.getInterviewType());
+            entity.setOverallScore(report.getOverallScore());
+            entity.setReportJson(report);
+            reportRepository.save(entity);
+        } catch (Exception e) {
+            log.error("Failed to persist report row for session {}", sessionId, e);
         }
     }
 }

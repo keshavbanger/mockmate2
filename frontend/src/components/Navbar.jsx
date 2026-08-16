@@ -302,6 +302,16 @@ export default function Navbar() {
                       <span className="text-base">🏠</span>
                       Dashboard
                     </button>
+                    {/* Profile — where saved resumes are managed (see
+                        ProfilePage's "My Saved Resumes" section). Previously
+                        the only way here was Dashboard's own separate
+                        dropdown, so anyone not already on /dashboard had no
+                        visible path to it at all. */}
+                    <button onClick={() => { navigate('/profile'); setDropdownOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left">
+                      <span className="text-base">👤</span>
+                      Profile & Resumes
+                    </button>
                     <button onClick={() => { navigate('/resume-builder'); setDropdownOpen(false); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left">
                       <span className="text-base">📄</span>

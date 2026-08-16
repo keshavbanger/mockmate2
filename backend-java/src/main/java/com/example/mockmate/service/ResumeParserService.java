@@ -103,13 +103,21 @@ public class ResumeParserService {
     }
 
     public ResumeParsedResponse parseResumeWithGemini(byte[] pdfBytes) throws Exception {
-        String rawText = extractTextFromPdf(pdfBytes);
-        
+        return parseResumeFromText(extractTextFromPdf(pdfBytes));
+    }
+
+    // Split out of parseResumeWithGemini so callers that already have plain
+    // text (e.g. SavedResumeService, which extracts via ResumeTextExtractor
+    // to support both PDF and DOCX) can get the same structured-profile
+    // parsing without being stuck re-deriving text through the PDF-only path
+    // above, or duplicating the prompt/call logic.
+    public ResumeParsedResponse parseResumeFromText(String rawText) throws Exception {
+        String text = rawText != null ? rawText : "";
         // Truncate to ~18 000 chars — raised from 12 000 now that the prompt
         // asks for full section detail (bullets, dates, projects) rather than
         // just a flat summary, so denser multi-page resumes need more room
         // before hitting the cutoff.
-        String truncatedText = rawText.length() > 18000 ? rawText.substring(0, 18000) : rawText;
+        String truncatedText = text.length() > 18000 ? text.substring(0, 18000) : text;
         String prompt = EXTRACTION_PROMPT.replace("%s", truncatedText);
 
         return callGeminiApi(prompt);

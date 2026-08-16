@@ -44,9 +44,20 @@ export const createSession = (payload = {}) => api.post('/session/create', paylo
 export const getSession    = (sessionId) => api.get(`/session/${sessionId}`);
 
 // ---------- Resume ----------
-export const parseResume = (file, sessionId) => {
+/**
+ * `source` is either { mode: 'upload', file, saveAsResume, label } or
+ * { mode: 'saved', savedResumeId } — see ResumeSourcePicker. A plain File is
+ * also accepted for back-compat.
+ */
+export const parseResume = (source, sessionId) => {
   const form = new FormData();
-  form.append('file', file);
+  if (source?.mode === 'saved') {
+    form.append('savedResumeId', source.savedResumeId);
+  } else {
+    form.append('file', source?.file ?? source);
+    if (source?.saveAsResume) form.append('saveAsResume', 'true');
+    if (source?.label) form.append('label', source.label);
+  }
   form.append('session_id', sessionId);
   return api.post('/parse-resume', form, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
@@ -88,10 +99,20 @@ export const getUserProfile = () => api.get('/dashboard/profile');
 // ============================================================
 const getToken = () => localStorage.getItem('token') || localStorage.getItem('mockmate_token') || '';
 
-/** Analyze a single resume against a job description */
-export async function analyzeATS(file, jdText) {
+/**
+ * Analyze a resume against a job description. `source` is either
+ * { mode: 'upload', file, saveAsResume, label } or
+ * { mode: 'saved', savedResumeId } — see ResumeSourcePicker.
+ */
+export async function analyzeATS(source, jdText) {
   const form = new FormData();
-  form.append('file', file);
+  if (source?.mode === 'saved') {
+    form.append('savedResumeId', source.savedResumeId);
+  } else {
+    form.append('file', source?.file ?? source); // back-compat: plain File also accepted
+    if (source?.saveAsResume) form.append('saveAsResume', 'true');
+    if (source?.label) form.append('label', source.label);
+  }
   form.append('jdText', jdText);
   const res = await fetch(`${getBaseUrl()}/ats/analyze`, {
     method:  'POST',

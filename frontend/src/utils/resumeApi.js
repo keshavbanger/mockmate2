@@ -55,9 +55,20 @@ export const duplicateResume = (id) =>
 
 // ── Import ────────────────────────────────────────────────────────────────────
 
-export const importResume = (file) => {
+/**
+ * `source` is either { mode: 'upload', file, saveAsResume, label } or
+ * { mode: 'saved', savedResumeId } — see ResumeSourcePicker. A plain File is
+ * also accepted for back-compat.
+ */
+export const importResume = (source) => {
   const formData = new FormData();
-  formData.append('file', file);
+  if (source?.mode === 'saved') {
+    formData.append('savedResumeId', source.savedResumeId);
+  } else {
+    formData.append('file', source?.file ?? source);
+    if (source?.saveAsResume) formData.append('saveAsResume', 'true');
+    if (source?.label) formData.append('label', source.label);
+  }
   return fetch(`${BASE}/api/resumes/import`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${getToken()}` },

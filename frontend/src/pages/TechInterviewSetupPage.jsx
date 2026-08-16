@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer.jsx';
 import LoginModal from '../components/LoginModal.jsx';
+import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
 
 const ROLE_LEVELS = [
   { value: 'INTERN',  label: 'Intern' },
@@ -41,12 +42,12 @@ const LANGUAGES = [
 export default function TechInterviewSetupPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const resumeRef = useRef(null);
-
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Core Form State (3 Essential Fields primary, optional advanced)
-  const [resume, setResume]           = useState(null);
+  // Either { mode: 'upload', file, saveAsResume, label } or
+  // { mode: 'saved', savedResumeId } — see ResumeSourcePicker.
+  const [resumeSource, setResumeSource] = useState(null);
   const [roleLevel, setRoleLevel]     = useState('SDE_1');
   const [jdText, setJdText]           = useState('');
 
@@ -89,7 +90,9 @@ export default function TechInterviewSetupPage() {
     // actually personalized even though the personalization prompt/plumbing
     // was working correctly. The page promises "Tailored specifically to
     // your resume" — enforce that instead of degrading silently.
-    if (!resume) {
+    const hasResumeSource = (resumeSource?.mode === 'saved' && resumeSource.savedResumeId)
+      || (resumeSource?.mode === 'upload' && resumeSource.file);
+    if (!hasResumeSource) {
       setError('Please upload your resume first — without it, every question defaults to generic and nothing is tailored to your actual background.');
       return;
     }
@@ -97,7 +100,13 @@ export default function TechInterviewSetupPage() {
     setError('');
     try {
       const formData = new FormData();
-      if (resume) formData.append('resume', resume);
+      if (resumeSource.mode === 'saved') {
+        formData.append('savedResumeId', resumeSource.savedResumeId);
+      } else {
+        formData.append('resume', resumeSource.file);
+        if (resumeSource.saveAsResume) formData.append('saveAsResume', 'true');
+        if (resumeSource.label) formData.append('label', resumeSource.label);
+      }
       formData.append('jdText', jdText || 'Software Engineer general technical assessment');
       formData.append('roleLevel', roleLevel);
       formData.append('interviewType', interviewType);
@@ -194,42 +203,7 @@ export default function TechInterviewSetupPage() {
                 </div>
               </div>
 
-              <div
-                style={styles.dropzone}
-                onClick={() => resumeRef.current?.click()}
-              >
-                <input
-                  ref={resumeRef}
-                  type="file"
-                  accept=".pdf,.docx,.txt"
-                  style={{ display: 'none' }}
-                  onChange={(e) => setResume(e.target.files[0])}
-                />
-                {resume ? (
-                  <div style={styles.fileSelected}>
-                    <span>📄 {resume.name}</span>
-                    <button
-                      style={styles.changeBtn}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setResume(null);
-                      }}
-                    >
-                      Change
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>📁</div>
-                    <div style={{ fontSize: '0.88rem', color: '#111827', fontWeight: '600' }}>
-                      Click to upload resume
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>
-                      Supports PDF, DOCX, or TXT
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ResumeSourcePicker onChange={setResumeSource} />
             </div>
 
             {/* Step 2: Experience Level */}

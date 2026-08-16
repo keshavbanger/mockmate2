@@ -595,6 +595,7 @@ public class InterviewController {
                                     .companyId(companyIdStr)
                                     .fillerWordCount(fillerCount)
                                     .averageWpm(wpm)
+                                    .fullReportJson(report)
                                     .build();
                         } else {
                             interview.setOverallScore(overallScore);
@@ -604,6 +605,7 @@ public class InterviewController {
                             interview.setCompanyId(companyIdStr);
                             interview.setFillerWordCount(fillerCount);
                             interview.setAverageWpm(wpm);
+                            interview.setFullReportJson(report);
                         }
 
                         interviewRepository.save(interview);

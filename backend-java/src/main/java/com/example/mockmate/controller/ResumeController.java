@@ -1,7 +1,9 @@
 package com.example.mockmate.controller;
 
 import com.example.mockmate.dto.response.ResumeParsedResponse;
+import com.example.mockmate.model.SavedResume;
 import com.example.mockmate.service.ResumeParserService;
+import com.example.mockmate.service.SavedResumeService;
 import com.example.mockmate.service.SessionStoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import lombok.extern.slf4j.Slf4j;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @Slf4j
 @RestController
@@ -23,25 +26,50 @@ public class ResumeController {
 
     private final ResumeParserService resumeParserService;
     private final SessionStoreService sessionStoreService;
+    private final SavedResumeService savedResumeService;
 
     @PostMapping("/parse-resume")
     public ResponseEntity<?> uploadResume(
-            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam("session_id") String sessionId,
+            // Reuse a previously saved resume instead of re-uploading — see
+            // SavedResumeController. When present, `file` is ignored.
+            @RequestParam(value = "savedResumeId", required = false) String savedResumeId,
+            @RequestParam(value = "saveAsResume", required = false, defaultValue = "false") boolean saveAsResume,
+            @RequestParam(value = "label", required = false) String label,
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.example.mockmate.model.User user) {
-        
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Please upload a file"));
-        }
-        
-        if (file.getContentType() == null || !file.getContentType().equals("application/pdf")) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Only PDF files are supported"));
+
+        boolean usingSavedResume = savedResumeId != null && !savedResumeId.isBlank();
+        if (!usingSavedResume) {
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Please upload a file"));
+            }
+            if (file.getContentType() == null || !file.getContentType().equals("application/pdf")) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Only PDF files are supported"));
+            }
+        } else if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Authentication required to use a saved resume"));
         }
 
         try {
-            byte[] pdfBytes = file.getBytes();
-            ResumeParsedResponse parsedData = resumeParserService.parseResumeWithGemini(pdfBytes);
-            
+            ResumeParsedResponse parsedData;
+            if (usingSavedResume) {
+                SavedResume saved = savedResumeService.get(user.getId(), savedResumeId);
+                parsedData = saved.getParsedProfile() != null
+                        ? saved.getParsedProfile()
+                        : resumeParserService.parseResumeFromText(saved.getRawText());
+            } else {
+                byte[] pdfBytes = file.getBytes();
+                parsedData = resumeParserService.parseResumeWithGemini(pdfBytes);
+                if (saveAsResume && user != null) {
+                    try {
+                        savedResumeService.upload(user.getId(), file, label, false);
+                    } catch (Exception e) {
+                        log.warn("Failed to save resume for reuse (user {}): {}", user.getId(), e.getMessage());
+                    }
+                }
+            }
+
             // Convert to Map to save in session
             Map<String, Object> session = sessionStoreService.getSession(sessionId);
             if (session == null) {
@@ -78,6 +106,8 @@ public class ResumeController {
             sessionStoreService.updateSession(sessionId, "resume_data", resumeMap);
             
             return ResponseEntity.ok(Map.of("resume_data", resumeMap));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("detail", e.getMessage()));
         } catch (Exception e) {
             log.error("Resume parsing error: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

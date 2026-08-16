@@ -32,13 +32,19 @@ public class ATSAnalyzerService {
     // ── Main orchestration ─────────────────────────────────────────────────────────
     public ATSReport analyze(MultipartFile file, String jdText, String userId) {
         log.info("[ATS] Starting analysis userId={} file={}", userId, file.getOriginalFilename());
-
-        // Step 1: Extract resume text
         String resumeText = resumeTextExtractor.extract(file);
         if (resumeText.isBlank()) {
             log.warn("[ATS] Extraction returned empty — file may be unsupported or empty");
         }
+        String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "resume";
+        return analyzeText(resumeText, fileName, jdText, userId);
+    }
 
+    // Split out so a saved resume (already-extracted text, no MultipartFile
+    // to re-extract from) can go through the exact same scoring/persistence
+    // pipeline instead of duplicating it — see SavedResumeService/
+    // ATSController's savedResumeId handling.
+    public ATSReport analyzeText(String resumeText, String fileName, String jdText, String userId) {
         // Step 2: Deterministic scoring (no API cost)
         ATSScoringService.ScoringResult scoring = atsScoringService.score(resumeText, jdText);
 
@@ -46,16 +52,19 @@ public class ATSAnalyzerService {
         HonestResumeAssessment assessment = groqATSService.analyze(resumeText, jdText, scoring);
 
         // Step 4: Build final report
-        String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "resume";
         ATSReport report = atsReportBuilder.build(userId, fileName, resumeText, scoring, assessment);
 
-        // Step 5: Persist to disk
+        // Step 5: Persist to disk — kept for ATSDownloadService's separate
+        // DOCX-generation pipeline, which reads these files directly and is
+        // out of scope here; report RETRIEVAL below no longer depends on it.
         saveReport(report);
 
         // Step 6: Save raw text for Resume Studio (needed for DOCX generation)
         atsDownloadService.saveRawText(report.getReportId(), resumeText);
-        
-        // Step 7: Log to Database
+
+        // Step 7: Log to Database — reportJson is now the primary, durable
+        // copy of the full report; the disk file above is a secondary
+        // artifact for the download pipeline only.
         if (!"anonymous".equals(userId)) {
             AtsAnalysis analysis = AtsAnalysis.builder()
                     .userId(userId)
@@ -63,6 +72,7 @@ public class ATSAnalyzerService {
                     .resumeFileName(fileName)
                     .finalScore(report.getFinalScore())
                     .verdict(report.getVerdict())
+                    .reportJson(report)
                     .build();
             atsAnalysisRepository.save(analysis);
         }
@@ -73,7 +83,37 @@ public class ATSAnalyzerService {
     }
 
     // ── Fetch by report ID ─────────────────────────────────────────────────────────
+    // DB row (durable, survives redeploy/ephemeral-disk restarts) is now the
+    // primary source; disk is only consulted for reports created before this
+    // migration (a DB row exists with no reportJson yet, or no DB row at all
+    // for anonymous-user reports, which were never logged to the DB).
     public Optional<ATSReport> getReport(String reportId) {
+        Optional<AtsAnalysis> row = atsAnalysisRepository.findByReportId(reportId);
+        if (row.isPresent() && row.get().getReportJson() != null) {
+            return Optional.of(row.get().getReportJson());
+        }
+        return readFromDisk(reportId);
+    }
+
+    // ── History for a user ─────────────────────────────────────────────────────────
+    // Previously scanned every file in reports/ats/ on every request — slow,
+    // unpaginated, and lost on any ephemeral-disk restart. Now queries the DB
+    // rows directly, falling back to disk per-row only for legacy analyses
+    // saved before reportJson existed.
+    public List<ATSReport> getHistory(String userId) {
+        List<AtsAnalysis> rows = atsAnalysisRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<ATSReport> results = new ArrayList<>();
+        for (AtsAnalysis row : rows) {
+            if (row.getReportJson() != null) {
+                results.add(row.getReportJson());
+            } else {
+                readFromDisk(row.getReportId()).ifPresent(results::add);
+            }
+        }
+        return results;
+    }
+
+    private Optional<ATSReport> readFromDisk(String reportId) {
         File file = reportFile(reportId);
         if (!file.exists()) return Optional.empty();
         try {
@@ -82,28 +122,6 @@ public class ATSAnalyzerService {
             log.error("[ATS] Failed to read report file: {}", file.getPath(), e);
             return Optional.empty();
         }
-    }
-
-    // ── History for a user ─────────────────────────────────────────────────────────
-    public List<ATSReport> getHistory(String userId) {
-        File dir = new File(ATS_DIR);
-        if (!dir.exists()) return List.of();
-
-        List<ATSReport> results   = new ArrayList<>();
-        File[]          jsonFiles = dir.listFiles((d, name) -> name.endsWith(".json"));
-        if (jsonFiles == null) return List.of();
-
-        for (File f : jsonFiles) {
-            try {
-                ATSReport r = objectMapper.readValue(f, ATSReport.class);
-                if (userId.equals(r.getUserId())) results.add(r);
-            } catch (IOException e) {
-                log.warn("[ATS] Skipping unreadable report file: {}", f.getName());
-            }
-        }
-
-        results.sort(Comparator.comparing(ATSReport::getTimestamp).reversed());
-        return results;
     }
 
     // ── Disk persistence ───────────────────────────────────────────────────────────

@@ -26,6 +26,8 @@ const InterviewHistoryPage    = lazy(() => import('./pages/InterviewHistoryPage.
 const TechInterviewSetupPage  = lazy(() => import('./pages/TechInterviewSetupPage.jsx'));
 const TechInterviewPage       = lazy(() => import('./pages/TechInterviewPage.jsx'));
 const TechInterviewReportPage = lazy(() => import('./pages/TechInterviewReportPage.jsx'));
+const TechInterviewHistoryPage = lazy(() => import('./pages/TechInterviewHistoryPage.jsx'));
+const ATSHistoryPage          = lazy(() => import('./pages/ATSHistoryPage.jsx'));
 const PricingPage             = lazy(() => import('./pages/PricingPage.jsx'));
 const ChangelogPage           = lazy(() => import('./pages/ChangelogPage.jsx'));
 const WhyMockMatePage         = lazy(() => import('./pages/WhyMockMatePage.jsx'));
@@ -79,6 +81,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <InterviewHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tech-interview/history"
+        element={
+          <ProtectedRoute>
+            <TechInterviewHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ats/history"
+        element={
+          <ProtectedRoute>
+            <ATSHistoryPage />
           </ProtectedRoute>
         }
       />

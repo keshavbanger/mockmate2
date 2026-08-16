@@ -6,6 +6,7 @@ import { fetchResumes, createResume, deleteResume, duplicateResume, importResume
 import { SAMPLE_RESUME_DATA } from '../utils/resumeDefaults';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
 
 export default function ResumeDashboardPage() {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export default function ResumeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importSource, setImportSource] = useState(null);
 
   useEffect(() => {
     loadResumes();
@@ -69,16 +72,20 @@ export default function ResumeDashboardPage() {
     }
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImport = async (source) => {
+    if (!source) return;
+    const isUpload = source.mode === 'upload';
+    if (isUpload && !source.file) return;
+    if (!isUpload && !source.savedResumeId) return;
+    const fileLabel = isUpload ? source.file.name : 'Saved resume';
     setImporting(true);
+    setShowImportModal(false);
     try {
-      const res = await importResume(file);
+      const res = await importResume(source);
       if (res?.parsed) {
         const parsed = res.parsed;
         const newResume = await createResume({
-          title: `Imported - ${file.name.replace(/\.[^/.]+$/, '')}`,
+          title: `Imported - ${fileLabel.replace(/\.[^/.]+$/, '')}`,
           templateId: 'modern',
           resumeData: {
             personalInfo: {
@@ -148,6 +155,7 @@ export default function ResumeDashboardPage() {
       alert(err?.message || 'Failed to parse resume file.');
     } finally {
       setImporting(false);
+      setImportSource(null);
     }
   };
 
@@ -219,13 +227,49 @@ export default function ResumeDashboardPage() {
               Create Blank Resume
             </button>
 
-            <label className="px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm hover:border-purple-300 transition-all flex items-center gap-2 cursor-pointer">
+            <button
+              onClick={() => setShowImportModal(true)}
+              disabled={importing}
+              className="px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm hover:border-purple-300 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
               {importing ? <Loader2 className="w-4 h-4 animate-spin text-purple-600" /> : <Upload className="w-4 h-4 text-purple-600" />}
               Import PDF / DOCX
-              <input type="file" accept=".pdf,.docx" onChange={handleFileUpload} className="hidden" />
-            </label>
+            </button>
           </motion.div>
         </div>
+
+        {showImportModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={() => setShowImportModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-100 shadow-2xl w-full max-w-md"
+            >
+              <h3 className="text-base font-extrabold text-slate-900 mb-1">Import Resume</h3>
+              <p className="text-xs text-slate-500 font-medium mb-5">Choose a saved resume or upload a new PDF/DOCX file.</p>
+              <ResumeSourcePicker onChange={setImportSource} />
+              <div className="flex items-center justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="text-xs font-bold text-slate-500 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleImport(importSource)}
+                  disabled={!importSource || (importSource.mode === 'upload' && !importSource.file) || (importSource.mode === 'saved' && !importSource.savedResumeId)}
+                  className="text-xs font-bold text-white bg-[#6B46C1] px-5 py-2.5 rounded-xl hover:bg-[#5b3da6] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* ── Saved Resumes Section ── */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-purple-100 shadow-xl shadow-purple-900/5">

@@ -1,10 +1,13 @@
 package com.example.mockmate.controller;
 
+import com.example.mockmate.dto.response.ResumeParsedResponse;
 import com.example.mockmate.model.ResumeBuilder;
+import com.example.mockmate.model.SavedResume;
 import com.example.mockmate.model.User;
 import com.example.mockmate.service.ResumeBuilderService;
 import com.example.mockmate.service.ResumeAIService;
 import com.example.mockmate.service.ResumeParserService;
+import com.example.mockmate.service.SavedResumeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -36,6 +39,8 @@ public class ResumeBuilderController {
     private final ResumeBuilderService builderService;
     private final ResumeAIService      aiService;
     private final ResumeParserService  parserService;
+    private final SavedResumeService   savedResumeService;
+    private final com.example.mockmate.service.ResumeTextExtractor resumeTextExtractor;
 
     // ════════════════════════════════════════════════════════════════════════
     // CRUD
@@ -138,10 +143,31 @@ public class ResumeBuilderController {
      */
     @PostMapping("/api/resumes/import")
     public ResponseEntity<?> importResume(
-            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            // Reuse a previously saved resume instead of re-uploading — see
+            // SavedResumeController. When present, `file` is ignored.
+            @RequestParam(value = "savedResumeId", required = false) String savedResumeId,
+            @RequestParam(value = "saveAsResume", required = false, defaultValue = "false") boolean saveAsResume,
+            @RequestParam(value = "label", required = false) String label,
             @AuthenticationPrincipal User user) {
         if (user == null) return unauthorized();
-        if (file.isEmpty()) {
+
+        if (savedResumeId != null && !savedResumeId.isBlank()) {
+            try {
+                SavedResume saved = savedResumeService.get(user.getId(), savedResumeId);
+                ResumeParsedResponse parsed = saved.getParsedProfile() != null
+                        ? saved.getParsedProfile()
+                        : parserService.parseResumeFromText(saved.getRawText());
+                return ResponseEntity.ok(Map.of("parsed", parsed, "status", "review_required"));
+            } catch (NoSuchElementException e) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+            } catch (Exception e) {
+                log.error("[ResumeBuilder] import from saved resume failed: {}", e.getMessage());
+                return error("Failed to parse resume: " + e.getMessage());
+            }
+        }
+
+        if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Please upload a file"));
         }
 
@@ -154,9 +180,19 @@ public class ResumeBuilderController {
         }
 
         try {
-            byte[] bytes = file.getBytes();
-            // Reuse existing ResumeParserService (PDF + AI parsing already implemented)
-            var parsed = parserService.parseResumeWithGemini(bytes);
+            // Reuse existing ResumeParserService — parseResumeWithGemini is
+            // PDF-only internally, so a DOCX still needs text extracted via
+            // ResumeTextExtractor first and parsed from that text instead.
+            ResumeParsedResponse parsed = isPdf
+                    ? parserService.parseResumeWithGemini(file.getBytes())
+                    : parserService.parseResumeFromText(resumeTextExtractor.extract(file));
+            if (saveAsResume) {
+                try {
+                    savedResumeService.upload(user.getId(), file, label, false);
+                } catch (Exception e) {
+                    log.warn("Failed to save resume for reuse (user {}): {}", user.getId(), e.getMessage());
+                }
+            }
             return ResponseEntity.ok(Map.of("parsed", parsed, "status", "review_required"));
         } catch (Exception e) {
             log.error("[ResumeBuilder] import failed: {}", e.getMessage());

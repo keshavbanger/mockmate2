@@ -5,10 +5,13 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import org.springframework.data.domain.Persistable;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Data
 @Builder
@@ -65,4 +68,14 @@ public class Interview implements Persistable<String> {
 
     @Column(name = "average_wpm")
     private Integer averageWpm;
+
+    // Full report body (transcript, per-question feedback, coaching plan,
+    // etc.) — previously this only ever lived in SessionStoreService's
+    // 2-hour-TTL cache, so once a session expired the rich report was gone
+    // permanently even though this row (with just the 6 scalar fields
+    // above) survived. This is now the durable source for GET
+    // /api/interviews/{id}.
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "full_report_json", columnDefinition = "jsonb")
+    private Map<String, Object> fullReportJson;
 }
