@@ -1,0 +1,12 @@
+# MockMate AI
+
+> AI-powered interview preparation platform at https://www.mockmate.live/. Not affiliated with mockmate.com, mock-mate.com, mockmateai.app, or any other similarly-named product.
+
+MockMate AI helps job seekers practice and prepare for interviews using AI:
+
+- **Mock Interview** (/setup) — AI-led behavioral and role-based mock interviews with real-time voice/video feedback.
+- **Technical Interview Lab** (/tech-interview/setup) — Live coding interviews with real DSA problem execution, adaptive AI questioning, and a full post-interview report.
+- **ATS Resume Checker** (/ats) — Scores a resume against a specific job description and highlights keyword/formatting gaps.
+- **Resume Builder** (/resume-builder) — Builds and exports ATS-friendly resumes from templates or an imported existing resume.
+
+All features are reachable from https://www.mockmate.live/ after creating a free account.
