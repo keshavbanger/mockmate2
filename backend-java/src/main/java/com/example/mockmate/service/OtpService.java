@@ -32,6 +32,9 @@ public class OtpService {
         if ("SIGNUP".equals(purpose) && userRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("An account with this email already exists. Please log in instead.");
         }
+        if ("RESET_PASSWORD".equals(purpose) && !userRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("No account found with this email address.");
+        }
 
         // Generate 6-digit numeric OTP
         String otpCode = String.format("%06d", random.nextInt(1000000));

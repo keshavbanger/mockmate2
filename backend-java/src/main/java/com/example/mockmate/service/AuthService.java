@@ -1,8 +1,10 @@
 package com.example.mockmate.service;
 
+import com.example.mockmate.dto.request.ResetPasswordRequest;
 import com.example.mockmate.dto.request.TokenVerificationRequest;
 import com.example.mockmate.dto.request.UserLoginRequest;
 import com.example.mockmate.dto.request.UserSignupRequest;
+import com.example.mockmate.dto.request.VerifyOtpRequest;
 import com.example.mockmate.dto.response.TokenResponse;
 import com.example.mockmate.dto.response.UserResponse;
 import com.example.mockmate.model.User;
@@ -30,6 +32,7 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final SupabaseJwtVerifier supabaseJwtVerifier;
     private final ResendEmailService resendEmailService;
+    private final OtpService otpService;
 
     // Comma-separated admin emails (ADMIN_EMAILS env var / app.admin-emails
     // property). Checked on every verify/signup/login so an account gets
@@ -179,6 +182,39 @@ public class AuthService {
         User savedUser = userRepository.save(user);
 
         String token = jwtUtil.generateToken(user.getEmail());
+
+        return TokenResponse.builder()
+                .accessToken(token)
+                .user(mapToResponse(savedUser))
+                .build();
+    }
+
+    // Password reset for legacy backend-password accounts (Supabase-created
+    // accounts use Supabase's own resetPasswordForEmail/updateUser flow
+    // client-side and never reach this method — see ForgotPasswordPage.jsx).
+    // Reuses the same OTP infrastructure SIGNUP already relies on
+    // (OtpService.verifyOtp marks the code used and throws on mismatch/
+    // expiry), just with purpose=RESET_PASSWORD instead of SIGNUP.
+    @Transactional
+    public TokenResponse resetPassword(ResetPasswordRequest request) {
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new IllegalArgumentException("No account found with this email address."));
+
+        if (user.getPasswordHash() == null) {
+            throw new IllegalArgumentException("This account uses social/Google login — please reset your password that way");
+        }
+
+        VerifyOtpRequest verifyRequest = new VerifyOtpRequest();
+        verifyRequest.setEmail(normalizedEmail);
+        verifyRequest.setOtpCode(request.getOtpCode());
+        verifyRequest.setPurpose("RESET_PASSWORD");
+        otpService.verifyOtp(verifyRequest);
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        User savedUser = userRepository.save(user);
+
+        String token = jwtUtil.generateToken(savedUser.getEmail());
 
         return TokenResponse.builder()
                 .accessToken(token)

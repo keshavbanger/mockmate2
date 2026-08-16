@@ -1,12 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { useAuth } from '../context/AuthContext';
-import { getUserProfile, updatePreferences, updateProfileInfo, uploadAvatar } from '../utils/api.js';
+import { useAuth, supabase } from '../context/AuthContext';
+import { getUserProfile, updatePreferences, updateProfileInfo, uploadAvatar, deleteAccount } from '../utils/api.js';
 import { useSavedResumes } from '../hooks/useSavedResumes';
 import { uploadSavedResume, renameSavedResume, setDefaultSavedResume, deleteSavedResume } from '../utils/savedResumeApi';
 import { ROLE_LEVELS, INTERVIEW_TYPES, COMPANY_STYLES, LANGUAGES } from '../constants/interviewOptions.js';
+
+const PROFILE_TABS = [
+  { id: 'overview', label: 'Overview', icon: '🏠' },
+  { id: 'personal', label: 'Personal Details', icon: '🧑' },
+  { id: 'security', label: 'Account & Security', icon: '🔒' },
+  { id: 'preferences', label: 'Interview Preferences', icon: '🎯' },
+  { id: 'resumes', label: 'Saved Resumes', icon: '📎' },
+  { id: 'ats', label: 'ATS History', icon: '📄' },
+  { id: 'sessions', label: 'Interview Sessions', icon: '🎤' },
+];
+
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return email || '';
+  const [name, domain] = email.split('@');
+  if (name.length <= 2) return `${name[0]}***@${domain}`;
+  return `${name.slice(0, 2)}${'*'.repeat(Math.min(name.length - 2, 6))}@${domain}`;
+}
 
 function scoreColor(score) {
   if (score >= 75) return { bg: 'bg-emerald-50', text: 'text-emerald-600' };
@@ -34,6 +51,250 @@ function TextField({ label, value, onChange, placeholder }) {
   );
 }
 
+// Change-password (OTP-to-own-email, reusing the same flow as forgot
+// password — see ForgotPasswordPage.jsx) + whole-account deletion. Kept as
+// its own component since it manages a fair amount of local state that has
+// nothing to do with the rest of ProfilePage.
+function AccountSecurityPanel({ user }) {
+  const navigate = useNavigate();
+  const { sendOtp, resetPassword, logout } = useAuth();
+
+  const [pwStep, setPwStep] = useState('IDLE'); // 'IDLE' | 'OTP_SENT'
+  const [pwSending, setPwSending] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSocialNotice, setPwSocialNotice] = useState(false);
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const otpRefs = useRef([]);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+  const [pwDone, setPwDone] = useState(false);
+
+  const handleSendPasswordOtp = async () => {
+    setPwSending(true);
+    setPwError('');
+    setPwSocialNotice(false);
+    try {
+      await sendOtp(user.email, 'RESET_PASSWORD');
+      setPwStep('OTP_SENT');
+    } catch (err) {
+      setPwError(err.message || 'Failed to send code');
+    } finally {
+      setPwSending(false);
+    }
+  };
+
+  const handleOtpDigit = (i, v) => {
+    if (!/^\d*$/.test(v)) return;
+    const next = [...otpDigits];
+    next[i] = v.slice(-1);
+    setOtpDigits(next);
+    if (v && i < 5) otpRefs.current[i + 1]?.focus();
+  };
+
+  const handleChangePassword = async () => {
+    setPwError('');
+    setPwSocialNotice(false);
+    const code = otpDigits.join('');
+    if (code.length !== 6) {
+      setPwError('Enter the 6-digit code sent to your email');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPwError('Password must be at least 8 characters long');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('Passwords do not match');
+      return;
+    }
+    setPwSubmitting(true);
+    try {
+      await resetPassword(user.email, code, newPassword);
+      setPwDone(true);
+      setPwStep('IDLE');
+      setOtpDigits(['', '', '', '', '', '']);
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPwDone(false), 4000);
+    } catch (err) {
+      if ((err.message || '').toLowerCase().includes('social/google')) {
+        setPwSocialNotice(true);
+      } else {
+        setPwError(err.message || 'Failed to change password');
+      }
+    } finally {
+      setPwSubmitting(false);
+    }
+  };
+
+  const handleSendSupabaseReset = async () => {
+    try {
+      await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      setPwSocialNotice(false);
+      setPwError('');
+      setPwDone(true);
+      setTimeout(() => setPwDone(false), 4000);
+    } catch {
+      // Best-effort; Supabase doesn't reliably surface errors here either way.
+    }
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      await logout();
+      navigate('/');
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to delete account.');
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-white border border-slate-200 rounded-3xl p-7 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-slate-900">Account</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Your sign-in identity — email itself isn't editable here since it's tied to how you verify who you are.</p>
+        </div>
+        <div className="flex items-center justify-between py-3 border-t border-slate-100">
+          <span className="text-sm text-slate-500">Email</span>
+          <span className="text-sm font-bold text-slate-900">{maskEmail(user?.email)}</span>
+        </div>
+        <div className="flex items-center justify-between py-3 border-t border-slate-100">
+          <span className="text-sm text-slate-500">Sign-in method</span>
+          <span className="text-sm font-bold text-slate-900">
+            {user?.supabaseUserId ? 'Google / secure sign-in' : 'Email + password'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between py-3 border-t border-slate-100">
+          <span className="text-sm text-slate-500">Plan</span>
+          <span className="text-sm font-bold text-slate-900">{user?.planType || 'FREE'}</span>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-3xl p-7 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-slate-900">Change Password</h2>
+          <p className="text-xs text-slate-400 mt-0.5">We'll email a 6-digit code to confirm it's you — same verification used for signup.</p>
+        </div>
+
+        {pwError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-semibold text-red-600">{pwError}</div>
+        )}
+        {pwDone && (
+          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-semibold text-emerald-600">✓ Done — check your email if a link was sent.</div>
+        )}
+        {pwSocialNotice && (
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
+            <p className="font-bold mb-2">This account signs in with Google, not a password.</p>
+            <button onClick={handleSendSupabaseReset} className="font-bold text-[#6B46C1] hover:underline">
+              Send a password-setup link to my email instead
+            </button>
+          </div>
+        )}
+
+        {pwStep === 'IDLE' ? (
+          <button
+            onClick={handleSendPasswordOtp}
+            disabled={pwSending}
+            className="text-xs font-bold text-white bg-[#6B46C1] px-5 py-2.5 rounded-xl hover:bg-[#5b3da6] transition-colors disabled:opacity-50"
+          >
+            {pwSending ? 'Sending…' : 'Send verification code'}
+          </button>
+        ) : (
+          <div className="space-y-4 max-w-sm">
+            <div className="flex gap-2">
+              {otpDigits.map((d, i) => (
+                <input
+                  key={i}
+                  ref={(el) => (otpRefs.current[i] = el)}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={d}
+                  onChange={(e) => handleOtpDigit(i, e.target.value)}
+                  className="w-10 h-11 text-center text-base font-bold bg-slate-50 border border-slate-200 rounded-lg focus:border-[#6B46C1] outline-none"
+                />
+              ))}
+            </div>
+            <TextField label="New Password" value={newPassword} onChange={setNewPassword} placeholder="At least 8 characters" />
+            <TextField label="Confirm New Password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Re-enter password" />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleChangePassword}
+                disabled={pwSubmitting}
+                className="text-xs font-bold text-white bg-[#6B46C1] px-5 py-2.5 rounded-xl hover:bg-[#5b3da6] transition-colors disabled:opacity-50"
+              >
+                {pwSubmitting ? 'Updating…' : 'Update Password'}
+              </button>
+              <button onClick={() => setPwStep('IDLE')} className="text-xs font-bold text-slate-500 hover:underline">Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white border border-red-100 rounded-3xl p-7 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-red-600">Danger Zone</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Permanently delete your account and all associated data. This cannot be undone.</p>
+        </div>
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="text-xs font-bold text-red-600 border border-red-200 px-5 py-2.5 rounded-xl hover:bg-red-50 transition-colors"
+        >
+          Delete My Account
+        </button>
+      </div>
+
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => !deleting && setShowDeleteModal(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl p-6 sm:p-8 border border-red-100 shadow-2xl w-full max-w-md">
+            <h3 className="text-base font-extrabold text-red-600 mb-1">Delete your account?</h3>
+            <p className="text-xs text-slate-500 font-medium mb-5">
+              This permanently deletes your account and profile data. Type <strong>{user?.email}</strong> to confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmEmail}
+              onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+              placeholder="Type your email to confirm"
+              className="w-full text-sm px-3 py-2.5 rounded-lg border border-black/10 focus:border-red-400 outline-none mb-5"
+            />
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="text-xs font-bold text-slate-500 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting || deleteConfirmEmail.trim().toLowerCase() !== (user?.email || '').toLowerCase()}
+                className="text-xs font-bold text-white bg-red-600 px-5 py-2.5 rounded-xl hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleting ? 'Deleting…' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading, refreshUser } = useAuth();
@@ -41,6 +302,7 @@ export default function ProfilePage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Interview Preferences — account-level defaults for the Tech Interview
   // setup form, and the Dashboard's readiness-score target company (see
@@ -282,13 +544,35 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
-        {/* Last Session Highlight */}
-        {lastActivity && (
+        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-8 items-start">
+          <aside className="lg:sticky lg:top-28 w-full">
+            <nav className="bg-white border border-slate-200 rounded-2xl p-2 flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible">
+              {PROFILE_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-colors text-left ${
+                    activeTab === tab.id ? 'bg-[#6B46C1] text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </aside>
+
+          <div className="min-w-0">
+
+        {/* Overview — last session highlight, or a nudge if there's no
+            activity yet. */}
+        {activeTab === 'overview' && (
+          <>
+        {lastActivity ? (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="mb-10 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-3xl p-7 flex items-center gap-5"
+            className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-3xl p-7 flex items-center gap-5"
           >
             <div className="h-12 w-12 rounded-2xl bg-purple-600 flex items-center justify-center text-xl flex-shrink-0 shadow-lg shadow-purple-200">
               {lastActivity.kind === 'interview' ? '🎤' : '📄'}
@@ -309,17 +593,25 @@ export default function ProfilePage() {
               View →
             </button>
           </motion.div>
+        ) : (
+          <div className="bg-white border border-dashed border-slate-200 rounded-3xl p-10 text-center">
+            <div className="text-3xl mb-3">👋</div>
+            <p className="text-sm font-semibold text-slate-500 mb-1">Nothing here yet</p>
+            <p className="text-xs text-slate-400">Scan a resume or run an interview and your last session will show up here.</p>
+          </div>
+        )}
+          </>
         )}
 
         {/* Personal Details — identity, contact, social links, education,
             and target role/companies. Email is intentionally not editable
             here — it's the OTP-verified account identity and needs its own
             re-verification flow to change safely, not a plain text field. */}
+        {activeTab === 'personal' && (
         <motion.section
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.06 }}
-          className="mb-12 bg-white border border-slate-200 rounded-3xl p-7 shadow-sm"
+          className="bg-white border border-slate-200 rounded-3xl p-7 shadow-sm"
         >
           <div className="mb-5">
             <h2 className="text-lg font-bold text-slate-900">Personal Details</h2>
@@ -364,13 +656,16 @@ export default function ProfilePage() {
             {personalSaved && <span className="text-xs font-semibold text-emerald-600">✓ Saved</span>}
           </div>
         </motion.section>
+        )}
+
+        {/* Account & Security — email display, change password, delete account */}
+        {activeTab === 'security' && <AccountSecurityPanel user={user} />}
 
         {/* My Saved Resumes — upload once, reuse everywhere */}
+        {activeTab === 'resumes' && (
         <motion.section
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          className="mb-12"
         >
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -469,6 +764,7 @@ export default function ProfilePage() {
             </div>
           )}
         </motion.section>
+        )}
 
         {showUploadModal && (
           <div
@@ -526,11 +822,11 @@ export default function ProfilePage() {
         {/* Interview Preferences — account-level defaults, removes the need
             to re-pick role/track/company/language/duration on every Tech
             Interview setup, and anchors the Dashboard's readiness score. */}
+        {activeTab === 'preferences' && (
         <motion.section
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.09 }}
-          className="mb-12 bg-white border border-slate-200 rounded-3xl p-7 shadow-sm"
+          className="bg-white border border-slate-200 rounded-3xl p-7 shadow-sm"
         >
           <div className="mb-5">
             <h2 className="text-lg font-bold text-slate-900">Interview Preferences</h2>
@@ -609,13 +905,13 @@ export default function ProfilePage() {
             {prefsSaved && <span className="text-xs font-semibold text-emerald-600">✓ Saved</span>}
           </div>
         </motion.section>
+        )}
 
         {/* Your ATS Scans */}
+        {activeTab === 'ats' && (
         <motion.section
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-12"
         >
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-bold text-slate-900">Your ATS Scans</h2>
@@ -679,12 +975,13 @@ export default function ProfilePage() {
             </div>
           )}
         </motion.section>
+        )}
 
         {/* Your Interview Sessions */}
+        {activeTab === 'sessions' && (
         <motion.section
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
         >
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-bold text-slate-900">Your Interview Sessions</h2>
@@ -736,6 +1033,10 @@ export default function ProfilePage() {
             </div>
           )}
         </motion.section>
+        )}
+
+          </div>
+        </div>
       </main>
     </div>
   );

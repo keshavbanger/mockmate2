@@ -7,6 +7,8 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import SignupPage from './pages/SignupPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 
 // Everything else is lazy: these pages pull in Monaco (~monaco-editor),
 // mediapipe face-landmark detection, chart.js, and react-syntax-highlighter
@@ -54,6 +56,8 @@ export default function App() {
       {/* ── Public Authentication Routes ── */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* ── Public Info Pages ── */}
       <Route path="/" element={<LandingPage />} />

@@ -2,8 +2,14 @@ package com.example.mockmate.controller;
 
 import com.example.mockmate.dto.response.InterviewSummaryDTO;
 import com.example.mockmate.model.AtsAnalysis;
+import com.example.mockmate.model.CareerRoadmapContent;
 import com.example.mockmate.model.User;
+import com.example.mockmate.model.techinterview.DSAProblem;
+import com.example.mockmate.model.techinterview.TechInterviewReportEntity;
 import com.example.mockmate.repository.AtsAnalysisRepository;
+import com.example.mockmate.repository.TechInterviewReportRepository;
+import com.example.mockmate.service.CareerRoadmapService;
+import com.example.mockmate.service.DSAProblemService;
 import com.example.mockmate.service.InterviewHistoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +29,9 @@ public class DashboardController {
 
     private final InterviewHistoryService interviewHistoryService;
     private final AtsAnalysisRepository atsAnalysisRepository;
+    private final TechInterviewReportRepository techInterviewReportRepository;
+    private final DSAProblemService dsaProblemService;
+    private final CareerRoadmapService careerRoadmapService;
     private final com.example.mockmate.service.DashboardInsightsService dashboardInsightsService;
 
     // ── GET /insights — the redesigned Dashboard's data source: a
@@ -180,5 +189,83 @@ public class DashboardController {
         body.put("lastResume", resumeList.isEmpty() ? null : resumeList.get(0));
 
         return ResponseEntity.ok(body);
+    }
+
+    // ── GET /roadmap — "which LeetCode questions to solve" (derived from
+    // the AI-generated topicsToRevise already sitting in the user's latest
+    // Tech Interview Lab report, cross-matched against the local DSA
+    // problem bank — see DSAProblemService.recommendForTopics) plus the
+    // LLM-generated domain roadmap (see CareerRoadmapService). Two
+    // independent CTA states: no tech-interview history yet vs. no
+    // targetDomain set — a user can be missing either, both, or neither.
+    @GetMapping("/roadmap")
+    public ResponseEntity<?> getRoadmap(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        Map<String, Object> leetcodeRoadmap = buildLeetcodeRoadmap(user);
+
+        Map<String, Object> domainRoadmap = new LinkedHashMap<>();
+        boolean hasTargetDomain = user.getTargetDomain() != null && !user.getTargetDomain().isBlank();
+        domainRoadmap.put("hasTargetDomain", hasTargetDomain);
+        domainRoadmap.put("targetDomain", user.getTargetDomain());
+        domainRoadmap.put("content", hasTargetDomain ? careerRoadmapService.getOrGenerate(user, false) : null);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("leetcodeRoadmap", leetcodeRoadmap);
+        body.put("domainRoadmap", domainRoadmap);
+        return ResponseEntity.ok(body);
+    }
+
+    @PostMapping("/roadmap/regenerate")
+    public ResponseEntity<?> regenerateRoadmap(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        if (user.getTargetDomain() == null || user.getTargetDomain().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Set your target domain in Profile first."));
+        }
+        try {
+            CareerRoadmapContent content = careerRoadmapService.getOrGenerate(user, true);
+            return ResponseEntity.ok(Map.of("targetDomain", user.getTargetDomain(), "content", content));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> buildLeetcodeRoadmap(User user) {
+        List<TechInterviewReportEntity> techHistory = techInterviewReportRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (techHistory.isEmpty() || techHistory.get(0).getReportJson() == null
+                || techHistory.get(0).getReportJson().getStudyPlan() == null
+                || techHistory.get(0).getReportJson().getStudyPlan().getTopicsToRevise() == null
+                || techHistory.get(0).getReportJson().getStudyPlan().getTopicsToRevise().isEmpty()) {
+            result.put("hasData", false);
+            result.put("topics", List.of());
+            return result;
+        }
+
+        List<String> weakTopics = techHistory.get(0).getReportJson().getStudyPlan().getTopicsToRevise();
+        Map<String, List<DSAProblem>> recommendations = dsaProblemService.recommendForTopics(weakTopics, 3);
+
+        List<Map<String, Object>> topics = recommendations.entrySet().stream()
+                .map(entry -> {
+                    Map<String, Object> topicMap = new LinkedHashMap<>();
+                    topicMap.put("topic", entry.getKey());
+                    topicMap.put("problems", entry.getValue().stream().map(p -> {
+                        Map<String, Object> pm = new LinkedHashMap<>();
+                        pm.put("title", p.getTitle());
+                        pm.put("difficulty", p.getDifficulty());
+                        pm.put("leetcodeUrl", p.getLeetcodeUrl());
+                        return pm;
+                    }).collect(Collectors.toList()));
+                    return topicMap;
+                })
+                .collect(Collectors.toList());
+
+        result.put("hasData", !topics.isEmpty());
+        result.put("topics", topics);
+        return result;
     }
 }

@@ -1,5 +1,6 @@
 package com.example.mockmate.controller;
 
+import com.example.mockmate.dto.request.ResetPasswordRequest;
 import com.example.mockmate.dto.request.SendOtpRequest;
 import com.example.mockmate.dto.request.TokenVerificationRequest;
 import com.example.mockmate.dto.request.UserLoginRequest;
@@ -144,6 +145,18 @@ public class AuthController {
         } catch (java.io.IOException e) {
             log.error("Avatar upload failed for user {}", user.getId(), e);
             return ResponseEntity.internalServerError().body(java.util.Map.of("error", "Failed to process image"));
+        }
+    }
+
+    // Password reset for legacy backend-password accounts, via the same
+    // send-otp (purpose=RESET_PASSWORD) flow already used for signup —
+    // see AuthService.resetPassword.
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        try {
+            return ResponseEntity.ok(authService.resetPassword(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
         }
     }
 

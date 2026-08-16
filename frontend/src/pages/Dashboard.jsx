@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Line } from 'react-chartjs-2';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardSummary, getDashboardInsights } from '../utils/api.js';
+import { getDashboardSummary, getDashboardInsights, getDashboardRoadmap, regenerateDashboardRoadmap } from '../utils/api.js';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
@@ -47,18 +47,33 @@ export default function Dashboard() {
 
   const [insights, setInsights] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [roadmap, setRoadmap] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) { setLoading(false); return; }
-    Promise.allSettled([getDashboardInsights(), getDashboardSummary(user.id)])
-      .then(([insightsRes, summaryRes]) => {
+    Promise.allSettled([getDashboardInsights(), getDashboardSummary(user.id), getDashboardRoadmap()])
+      .then(([insightsRes, summaryRes, roadmapRes]) => {
         if (insightsRes.status === 'fulfilled') setInsights(insightsRes.value.data);
         if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.data);
+        if (roadmapRes.status === 'fulfilled') setRoadmap(roadmapRes.value.data);
       })
       .finally(() => setLoading(false));
   }, [user, authLoading]);
+
+  const handleRegenerateRoadmap = async () => {
+    setRegenerating(true);
+    try {
+      const res = await regenerateDashboardRoadmap();
+      setRoadmap((prev) => ({ ...prev, domainRoadmap: { hasTargetDomain: true, targetDomain: res.data.targetDomain, content: res.data.content } }));
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to regenerate roadmap.');
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const userName = user?.fullName || user?.full_name || user?.name || 'there';
 
@@ -273,6 +288,89 @@ export default function Dashboard() {
               </div>
             </>
           )}
+
+          {/* Roadmap — weak-topic LeetCode picks (derived from the latest
+              Tech Interview Lab report's AI-generated topicsToRevise) and
+              an LLM-generated domain roadmap anchored on Profile's Target
+              Domain. Independent of hasActivity above: a user can have a
+              targetDomain set with zero interview history, or vice versa. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-10">
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+              <h4 className="text-sm font-extrabold text-black mb-1">Practice These Topics</h4>
+              <p className="text-xs text-slate-400 mb-4">LeetCode picks for what you're weakest in right now</p>
+              {roadmap?.leetcodeRoadmap?.hasData ? (
+                <div className="space-y-4">
+                  {roadmap.leetcodeRoadmap.topics.map((t) => (
+                    <div key={t.topic}>
+                      <p className="text-xs font-black text-slate-500 uppercase tracking-wide mb-2">{t.topic}</p>
+                      <div className="flex flex-col gap-1.5">
+                        {t.problems.map((p) => (
+                          <a key={p.title} href={p.leetcodeUrl} target="_blank" rel="noreferrer"
+                            className="flex items-center justify-between text-[13px] font-semibold text-slate-700 hover:text-[#6B46C1] py-1.5 px-2 -mx-2 rounded-lg hover:bg-slate-50 transition-colors">
+                            <span className="truncate">{p.title}</span>
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ml-2 flex-shrink-0 ${SCORE_STYLES[p.difficulty === 'EASY' ? 'good' : p.difficulty === 'HARD' ? 'low' : 'mid']}`}>{p.difficulty}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4">
+                  <p className="text-xs text-slate-400 font-medium mb-4">Complete a Tech Interview Lab session to get a personalized weak-topic list.</p>
+                  <button onClick={() => navigate('/tech-interview/setup')} className="text-xs font-bold px-4 py-2.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors">
+                    Try Technical Interview Lab
+                  </button>
+                </div>
+              )}
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+              className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm">
+              <div className="flex items-start justify-between mb-1">
+                <h4 className="text-sm font-extrabold text-black">
+                  {roadmap?.domainRoadmap?.hasTargetDomain ? `Your ${roadmap.domainRoadmap.targetDomain} Roadmap` : 'Your Roadmap'}
+                </h4>
+                {roadmap?.domainRoadmap?.hasTargetDomain && (
+                  <button onClick={handleRegenerateRoadmap} disabled={regenerating}
+                    className="text-[11px] font-bold text-[#6B46C1] hover:underline disabled:opacity-50 flex-shrink-0 ml-2">
+                    {regenerating ? 'Regenerating…' : 'Regenerate'}
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mb-4">Phased plan toward your target role</p>
+              {!roadmap?.domainRoadmap?.hasTargetDomain ? (
+                <div className="py-4">
+                  <p className="text-xs text-slate-400 font-medium mb-4">Set your target domain in Profile to generate a personalized roadmap.</p>
+                  <button onClick={() => navigate('/profile')} className="text-xs font-bold px-4 py-2.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors">
+                    Set Target Domain
+                  </button>
+                </div>
+              ) : roadmap.domainRoadmap.content ? (
+                <div>
+                  {roadmap.domainRoadmap.content.summary && (
+                    <p className="text-[13px] text-slate-600 leading-relaxed mb-4">{roadmap.domainRoadmap.content.summary}</p>
+                  )}
+                  <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                    {(roadmap.domainRoadmap.content.phases || []).map((phase, i) => (
+                      <div key={i} className="border-l-2 border-purple-100 pl-3">
+                        <p className="text-[13px] font-extrabold text-slate-900">{phase.title} <span className="text-slate-400 font-semibold">· {phase.durationWeeks}w</span></p>
+                        {phase.skillsToLearn?.length > 0 && (
+                          <p className="text-xs text-slate-500 mt-1"><span className="font-bold">Learn:</span> {phase.skillsToLearn.join(', ')}</p>
+                        )}
+                        {phase.projectIdeas?.length > 0 && (
+                          <p className="text-xs text-slate-500 mt-0.5"><span className="font-bold">Build:</span> {phase.projectIdeas.join(', ')}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 font-medium py-4">Roadmap unavailable right now — try Regenerate in a bit.</p>
+              )}
+            </motion.div>
+          </div>
         </div>
       </div>
       <Footer />

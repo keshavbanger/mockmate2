@@ -56,6 +56,12 @@ export const uploadAvatar = (file) => {
   return api.post('/auth/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
 
+// Whole-account deletion — see AuthController's DELETE /auth/account.
+// Password reset lives on AuthContext (useAuth().resetPassword), not here,
+// since a successful reset also needs to update the shared auth state
+// (token/user), same as login() already does.
+export const deleteAccount = () => api.delete('/auth/account');
+
 // ---------- Session ----------
 export const createSession = (payload = {}) => api.post('/session/create', payload);
 export const getSession    = (sessionId) => api.get(`/session/${sessionId}`);
@@ -109,6 +115,12 @@ export const getDashboardSummary = (userId) =>
   });
 
 export const getDashboardInsights = () => api.get('/dashboard/insights');
+
+// Weak-topic LeetCode recommendations + LLM-generated domain roadmap — see
+// DashboardController's GET /dashboard/roadmap and DSAProblemService.recommendForTopics
+// / CareerRoadmapService.getOrGenerate.
+export const getDashboardRoadmap = () => api.get('/dashboard/roadmap');
+export const regenerateDashboardRoadmap = () => api.post('/dashboard/roadmap/regenerate');
 
 // ---------- Profile ----------
 export const getUserProfile = () => api.get('/dashboard/profile');

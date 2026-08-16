@@ -349,6 +349,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Password reset for legacy backend-password accounts (no passwordHash ==
+  // social/Supabase-only login, rejected server-side) — mirrors login()'s
+  // shape (returns { accessToken, user }) since a successful reset also
+  // auto-logs the user in, same as AuthService.resetPassword does.
+  const resetPassword = async (email, otpCode, newPassword) => {
+    try {
+      setError(null);
+      const response = await api.post('/api/auth/reset-password', { email, otpCode, newPassword });
+      const { accessToken, user: userData } = response.data;
+      setToken(accessToken);
+      setUser(userData);
+      localStorage.setItem('token', accessToken);
+      localStorage.setItem('mockmate_token', accessToken);
+      return userData;
+    } catch (err) {
+      const message = err.response?.data?.error || err.response?.data?.message || err.message || 'Password reset failed';
+      setError(message);
+      throw new Error(message);
+    }
+  };
+
   // Re-fetch the current user from the backend and update context state —
   // previously nothing did this; `user` was only ever set once (on mount or
   // on login/verify), so a mutation like saving Interview Preferences had
@@ -394,6 +415,7 @@ export const AuthProvider = ({ children }) => {
         loginWithGoogle,
         sendOtp,
         verifyOtp,
+        resetPassword,
         logout,
         refreshUser,
         isAuthenticated: !!user,

@@ -251,6 +251,42 @@ public class DSAProblemService {
         return topics;
     }
 
+    // ── Weak-topic recommendations (Dashboard "practice these topics") ──
+    // Fuzzy-matches free-text topic names an AI report already produced
+    // (TechInterviewReport.StudyPlan.topicsToRevise, e.g. "Dynamic
+    // Programming", "Graphs") against this bank's own topic tags (e.g.
+    // "dp", "graph") using the same case-insensitive contains-either-way
+    // check relevanceScore() already relies on elsewhere in this class.
+    public Map<String, List<DSAProblem>> recommendForTopics(List<String> weakTopics, int perTopicLimit) {
+        Map<String, List<DSAProblem>> result = new LinkedHashMap<>();
+        if (weakTopics == null) return result;
+        for (String weakTopic : weakTopics) {
+            if (weakTopic == null || weakTopic.isBlank()) continue;
+            String needle = weakTopic.toLowerCase().trim();
+            List<DSAProblem> matches = problemBank.values().stream()
+                    .filter(p -> isValidProblem(p) && p.getTopics() != null && p.getTopics().stream()
+                            .anyMatch(t -> t.toLowerCase().contains(needle) || needle.contains(t.toLowerCase())))
+                    .sorted(Comparator.comparingInt(this::frequencyRank).reversed())
+                    .limit(perTopicLimit)
+                    .map(DSAProblem::toPublicView)
+                    .toList();
+            if (!matches.isEmpty()) {
+                result.put(weakTopic, matches);
+            }
+        }
+        return result;
+    }
+
+    private int frequencyRank(DSAProblem p) {
+        if (p.getFrequency() == null) return 0;
+        return switch (p.getFrequency().toUpperCase()) {
+            case "VERY_HIGH" -> 3;
+            case "HIGH" -> 2;
+            case "MEDIUM" -> 1;
+            default -> 0;
+        };
+    }
+
     public Collection<DSAProblem> getAllProblems() {
         return problemBank.values().stream()
                 .map(DSAProblem::toPublicView)
