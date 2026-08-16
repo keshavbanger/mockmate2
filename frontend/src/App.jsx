@@ -30,6 +30,8 @@ const TechInterviewHistoryPage = lazy(() => import('./pages/TechInterviewHistory
 const ATSHistoryPage          = lazy(() => import('./pages/ATSHistoryPage.jsx'));
 const PricingPage             = lazy(() => import('./pages/PricingPage.jsx'));
 const ChangelogPage           = lazy(() => import('./pages/ChangelogPage.jsx'));
+const BlogPage                = lazy(() => import('./pages/BlogPage.jsx'));
+const BlogPostPage            = lazy(() => import('./pages/BlogPostPage.jsx'));
 const WhyMockMatePage         = lazy(() => import('./pages/WhyMockMatePage.jsx'));
 const ContactPage             = lazy(() => import('./pages/ContactPage.jsx'));
 
@@ -56,6 +58,8 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/changelog" element={<ChangelogPage />} />
+      <Route path="/blog" element={<BlogPage />} />
+      <Route path="/blog/:slug" element={<BlogPostPage />} />
       <Route path="/why-mockmate" element={<WhyMockMatePage />} />
       <Route path="/contact" element={<ContactPage />} />
 

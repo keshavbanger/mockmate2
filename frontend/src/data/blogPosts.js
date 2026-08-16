@@ -1,0 +1,118 @@
+// Blog post content, kept as plain data (not MDX/markdown) so no new
+// parsing dependency is needed — BlogPostPage renders each block by type.
+// Matches ChangelogPage's convention: real, useful content, no filler.
+
+export const BLOG_POSTS = [
+  {
+    slug: 'technical-interview-prep-roadmap',
+    title: 'How to Prepare for a Technical Interview: A Practical Roadmap',
+    excerpt: 'A week-by-week plan for going from "I should probably start practicing" to walking into your interview actually ready — covering DSA, system design basics, and mock practice.',
+    category: 'Interview Prep',
+    date: '2026-08-10',
+    readTime: '7 min read',
+    content: [
+      { type: 'p', text: "Most technical interview prep fails for the same reason: it's unstructured. People grind random LeetCode problems for a few weeks, feel vaguely more confident, and then freeze the moment an interviewer asks them to explain their approach out loud. Solving problems and being interview-ready are different skills — the second one requires practice under the exact conditions you'll face: a time limit, someone watching, and having to narrate your thinking as you go." },
+      { type: 'h2', text: 'Weeks 1–2: Build the foundation' },
+      { type: 'p', text: "Before speed, get accuracy. Pick one language and stick with it. Work through core patterns — two pointers, sliding window, hash maps, BFS/DFS, basic dynamic programming — until you can recognize which pattern a problem is testing within the first minute of reading it. Don't time yourself yet. The goal here is pattern recognition, not speed." },
+      { type: 'h2', text: 'Weeks 3–4: Add pressure' },
+      { type: 'p', text: 'Once patterns feel automatic, start timing yourself — 25 to 35 minutes per problem, matching real interview constraints. This is also when you should start explaining your approach out loud before writing code, even alone. Talking through your reasoning is a distinct skill from having the reasoning in your head, and it\'s the part most candidates never practice until the actual interview.' },
+      { type: 'h2', text: 'Weeks 5–6: Simulate the real thing' },
+      { type: 'p', text: 'This is where mock interviews earn their keep. A real interviewer (or a good AI-driven one) will ask follow-up questions, push on your complexity analysis, and sometimes deliberately give you an ambiguous problem to see how you handle unclear requirements. None of that shows up when you\'re solving problems solo — it only shows up under actual interview-like conditions.' },
+      { type: 'h2', text: "Don't skip the non-coding half" },
+      { type: 'p', text: "If the role involves any system design or architecture discussion, most candidates under-invest here relative to how heavily it's weighted. You don't need to memorize distributed-systems trivia — you need to be able to reason out loud about trade-offs: consistency vs. availability, when to shard, when caching actually helps vs. adds complexity. That reasoning is trainable the same way DSA is, just with less rote memorization and more structured practice." },
+      { type: 'p', text: "The single highest-leverage thing you can do in the last week before a real interview is a full mock run-through: DSA problem, live coding, complexity discussion, and a couple of behavioral questions, back to back, with no pausing to look things up. It's uncomfortable the first time. That discomfort is exactly the signal that it's working." },
+    ],
+  },
+  {
+    slug: 'common-dsa-interview-mistakes',
+    title: 'Common DSA Interview Mistakes (and How to Fix Them)',
+    excerpt: "It's rarely the algorithm that sinks a DSA interview. It's usually one of these five things.",
+    category: 'DSA',
+    date: '2026-08-12',
+    readTime: '5 min read',
+    content: [
+      { type: 'p', text: "After watching a lot of technical interviews — real ones and simulated ones — the same handful of mistakes show up again and again, and almost none of them are about not knowing the algorithm. Here are the five that cost candidates the most points relative to how easy they are to fix." },
+      { type: 'h2', text: "1. Jumping straight into code" },
+      { type: 'p', text: "Silence while you think is fine. Silence while you're 40 lines into a solution the interviewer can't follow is not. State your approach in one or two sentences before you write a single line — it gives the interviewer a chance to redirect you early if you're heading toward a dead end, instead of discovering it five minutes later." },
+      { type: 'h2', text: '2. Not clarifying constraints' },
+      { type: 'p', text: 'Can the array be empty? Are there duplicates? Can values be negative? Skipping this isn\'t just a missed opportunity to show rigor — it\'s a real risk of solving the wrong problem. Interviewers notice, and often intentionally, when a candidate never asks.' },
+      { type: 'h2', text: '3. Guessing at complexity instead of deriving it' },
+      { type: 'p', text: '"I think it\'s O(n log n)" is a much weaker answer than walking through why: "the sort is O(n log n), the single pass after it is O(n), so O(n log n) dominates." Interviewers are listening for the reasoning, not just the final Big-O notation — and a wrong answer with correct reasoning behind it usually scores better than a right answer nobody can defend.' },
+      { type: 'h2', text: '4. Going silent when stuck' },
+      { type: 'p', text: "Getting stuck is normal and expected — interviewers calibrate for it. What actually hurts is going quiet for two full minutes instead of narrating the struggle: \"I'm trying a hash map approach but I think it breaks on duplicates, let me reconsider.\" That sentence alone tells the interviewer you're still reasoning, not stalled." },
+      { type: 'h2', text: '5. Never testing the solution' },
+      { type: 'p', text: "Finishing a solution and immediately declaring \"done\" without tracing through even one example is one of the most common ways candidates ship an off-by-one bug that a 30-second dry run would have caught. Always walk through at least one normal case and one edge case out loud before calling it finished." },
+      { type: 'p', text: 'None of these require being a stronger programmer. They require practicing the interview format itself — which is exactly the part that\'s hardest to get right by only solving problems alone.' },
+    ],
+  },
+  {
+    slug: 'what-is-an-ats-resume-rejected',
+    title: 'What Is an ATS, and Why Your Resume Might Be Getting Rejected Before a Human Sees It',
+    excerpt: "A plain-language explanation of Applicant Tracking Systems, what they actually check for, and the specific formatting choices that quietly tank a resume's score.",
+    category: 'Resumes',
+    date: '2026-08-13',
+    readTime: '6 min read',
+    content: [
+      { type: 'p', text: 'An Applicant Tracking System (ATS) is software companies use to store, search, and — increasingly — score resumes before a recruiter ever opens one. At high-volume employers, a meaningful share of applications never reach a human reviewer at all if the ATS ranks them low enough. Understanding what it\'s actually checking for is the difference between a resume that gets read and one that gets filtered out silently.' },
+      { type: 'h2', text: 'What an ATS actually evaluates' },
+      { type: 'list', items: [
+        'Keyword overlap with the job description — not just skills, but exact phrasing (e.g. "React.js" vs "ReactJS" vs "React" can be scored differently)',
+        'Whether your experience section is machine-parseable — dates, titles, and companies in a consistent, extractable format',
+        'Formatting that a parser can actually read — tables, text boxes, and multi-column layouts frequently parse incorrectly or not at all',
+        'Section headers using conventional names (Experience, Education, Skills) rather than creative alternatives',
+      ] },
+      { type: 'h2', text: 'The formatting mistakes that hurt the most' },
+      { type: 'p', text: 'Multi-column resumes and resumes built with text boxes or embedded graphics are the single most common cause of a good candidate scoring poorly — not because the content is weak, but because the parser reads the columns in the wrong order or skips text-box content entirely, sometimes turning "5 years of Python experience" into unparseable noise. A resume that looks polished visually can still score badly if it wasn\'t built with parsing in mind.' },
+      { type: 'h2', text: 'Keyword matching is more literal than people expect' },
+      { type: 'p', text: 'If a job description says "SQL" fifteen times and your resume only ever says "databases," a lot of ATS scoring logic won\'t connect the two. This doesn\'t mean stuffing every keyword from the JD into your resume verbatim — that reads badly to the human who eventually sees it, and some systems now penalize obvious keyword stuffing too. It means mirroring the specific terminology the job description actually uses, where it\'s honestly true of your experience.' },
+      { type: 'h2', text: "What actually helps" },
+      { type: 'p', text: 'Single-column layout. Standard section headers. Dates and titles in a consistent, predictable format. Skills and experience phrased close to how the target job description phrases them. None of this is exciting advice, but it\'s the difference between a resume a parser reads correctly and one it silently mangles — and the mangled version never gets a fair shot regardless of how strong the candidate actually is.' },
+    ],
+  },
+  {
+    slug: 'answer-tell-me-about-yourself-technical-interview',
+    title: '"Tell Me About Yourself" in a Technical Interview: What Interviewers Are Actually Listening For',
+    excerpt: "It's the most predictable question in any interview, and most candidates still answer it badly. Here's what a strong answer actually does differently.",
+    category: 'Interview Prep',
+    date: '2026-08-14',
+    readTime: '4 min read',
+    content: [
+      { type: 'p', text: '"Tell me about yourself" is asked in nearly every interview, gets almost zero dedicated prep time from most candidates, and quietly sets the tone for everything that follows. A strong opening makes the interviewer lean in; a weak one — usually a rambling chronological life story — makes them start mentally drafting harder follow-up questions to compensate.' },
+      { type: 'h2', text: "What the question is actually asking" },
+      { type: 'p', text: 'It\'s not "recite your resume." The interviewer already has your resume. What they\'re actually evaluating is whether you can synthesize your own background into a coherent narrative — which, for a technical role, is a genuine proxy for how you\'ll communicate about your work to teammates later.' },
+      { type: 'h2', text: 'A structure that works' },
+      { type: 'list', items: [
+        'Where you are now, in one sentence (role, what you focus on)',
+        'One or two pieces of relevant experience, chosen specifically because they connect to THIS role — not everything you\'ve ever done',
+        'Why you\'re interested in this specific opportunity, not interviews in general',
+      ] },
+      { type: 'p', text: 'Ninety seconds, maybe two minutes. Long enough to be substantive, short enough that the interviewer stays with you the whole time instead of tuning out halfway through.' },
+      { type: 'h2', text: 'The mistake that costs the most' },
+      { type: 'p', text: "Reciting your entire history in chronological order, including the internship from three years ago that has nothing to do with the role you're interviewing for. It's not that the information is wrong — it's that it signals you haven't thought about what's actually relevant to THIS conversation, which is a small but real preview of how you'll communicate on the job." },
+      { type: 'p', text: "Practicing this answer out loud — not just thinking through it mentally — matters more than it seems like it should. The gap between having a good answer in your head and being able to deliver it smoothly under mild pressure is real, and it's exactly the gap a few minutes of spoken practice closes." },
+    ],
+  },
+  {
+    slug: 'why-mock-interviews-work',
+    title: 'Why Practicing Out Loud Actually Works (Even When It Feels Unnecessary)',
+    excerpt: "You already know the material. So why does saying it out loud in a mock interview feel so much harder than expected?",
+    category: 'Interview Prep',
+    date: '2026-08-15',
+    readTime: '5 min read',
+    content: [
+      { type: 'p', text: 'A common pattern: someone studies hard, feels genuinely confident going into a mock interview, and then stumbles on questions they clearly know the answer to. That gap isn\'t a knowledge problem — it\'s the difference between recognition and recall under pressure, and it\'s one of the most reliable things a mock interview exposes that solo studying never will.' },
+      { type: 'h2', text: 'Recognition vs. recall' },
+      { type: 'p', text: "Reading a solution and understanding it is recognition — your brain confirms \"yes, that makes sense\" against information already on the page. Solving the same problem cold, out loud, with someone watching, is recall under pressure — a meaningfully different cognitive task. Passive review builds recognition. It does very little for recall. Interviews test almost exclusively the second one." },
+      { type: 'h2', text: "Talking changes how you think" },
+      { type: 'p', text: "Explaining an approach out loud forces a level of precision that thinking silently doesn't require. It's common to discover a gap in your own reasoning the moment you try to say it out loud — a gap that would have gone completely unnoticed solving the same problem silently. That's not a flaw in your understanding; it's the mock interview doing exactly what it's supposed to do: surfacing the gap before the real interview does." },
+      { type: 'h2', text: 'Pressure is a skill, not just a feeling' },
+      { type: 'p', text: "The mild stress of being watched and timed measurably affects performance — that's not a character flaw, it's how human cognition works under evaluation. But like most stress responses, it's trainable. The first mock interview is almost always the hardest. By the fifth or sixth, the same pressure that used to cause blanking starts feeling closer to background noise, because the brain has adapted to performing under exactly that condition." },
+      { type: 'h2', text: 'The honest takeaway' },
+      { type: 'p', text: "If a mock interview feels harder than solo prep, that's not a sign you're behind — it's a sign the mock interview is measuring something solo prep can't. The discomfort is the most useful part of the exercise, not a problem to route around." },
+    ],
+  },
+];
+
+export function getBlogPost(slug) {
+  return BLOG_POSTS.find((p) => p.slug === slug) || null;
+}

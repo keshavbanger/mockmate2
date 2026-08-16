@@ -21,6 +21,7 @@ const COLUMNS = [
       { label: 'Why MockMate', href: '/why-mockmate' },
       { label: 'What You Can Do', href: '/why-mockmate#capabilities' },
       { label: 'FAQs', href: '/why-mockmate#proof' },
+      { label: 'Blog', href: '/blog' },
       { label: 'Changelog', href: '/changelog' },
     ],
   },

@@ -8,5 +8,6 @@ MockMate AI helps job seekers practice and prepare for interviews using AI:
 - **Technical Interview Lab** (/tech-interview/setup) — Live coding interviews with real DSA problem execution, adaptive AI questioning, and a full post-interview report.
 - **ATS Resume Checker** (/ats) — Scores a resume against a specific job description and highlights keyword/formatting gaps.
 - **Resume Builder** (/resume-builder) — Builds and exports ATS-friendly resumes from templates or an imported existing resume.
+- **Blog** (/blog) — Original articles on technical interview prep, DSA practice, and resume/ATS optimization.
 
 All features are reachable from https://www.mockmate.live/ after creating a free account.

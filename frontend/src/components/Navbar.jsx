@@ -38,6 +38,7 @@ const FEATURE_LINKS = [
 const NAV_LINKS = [
   { label: 'Home',      type: 'route',  target: '/'          },
   { label: 'Pricing',   type: 'route',  target: '/pricing'   },
+  { label: 'Blog',      type: 'route',  target: '/blog'      },
   { label: 'Changelog', type: 'route',  target: '/changelog' },
   { label: 'Contact',   type: 'route',  target: '/contact'   },
 ];
