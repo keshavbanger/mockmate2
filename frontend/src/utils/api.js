@@ -39,6 +39,11 @@ api.interceptors.response.use(
   }
 );
 
+// ---------- Auth / Preferences ----------
+// Partial update — only send the keys that changed. See AuthController's
+// PATCH /auth/preferences and AuthService.updatePreferences for validation.
+export const updatePreferences = (updates) => api.patch('/auth/preferences', updates);
+
 // ---------- Session ----------
 export const createSession = (payload = {}) => api.post('/session/create', payload);
 export const getSession    = (sessionId) => api.get(`/session/${sessionId}`);
@@ -90,6 +95,8 @@ export const getDashboardSummary = (userId) =>
   api.get(`/dashboard/summary?userId=${userId}`, {
     headers: { Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('mockmate_token')}` }
   });
+
+export const getDashboardInsights = () => api.get('/dashboard/insights');
 
 // ---------- Profile ----------
 export const getUserProfile = () => api.get('/dashboard/profile');

@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
-import { getUserProfile } from '../utils/api.js';
+import { getUserProfile, updatePreferences } from '../utils/api.js';
 import { useSavedResumes } from '../hooks/useSavedResumes';
 import { uploadSavedResume, renameSavedResume, setDefaultSavedResume, deleteSavedResume } from '../utils/savedResumeApi';
+import { ROLE_LEVELS, INTERVIEW_TYPES, COMPANY_STYLES, LANGUAGES } from '../constants/interviewOptions.js';
 
 function scoreColor(score) {
   if (score >= 75) return { bg: 'bg-emerald-50', text: 'text-emerald-600' };
@@ -20,11 +21,54 @@ function formatDate(iso) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshUser } = useAuth();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Interview Preferences — account-level defaults for the Tech Interview
+  // setup form, and the Dashboard's readiness-score target company (see
+  // User.prefCompanyStyle). Local state seeded from `user` once it loads,
+  // then kept in sync as the user edits before saving.
+  const [prefs, setPrefs] = useState({
+    prefRoleLevel: '', prefInterviewType: '', prefCompanyStyle: '', prefLanguage: '', prefDurationMinutes: '',
+  });
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSaved, setPrefsSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setPrefs({
+      prefRoleLevel: user.prefRoleLevel || '',
+      prefInterviewType: user.prefInterviewType || '',
+      prefCompanyStyle: user.prefCompanyStyle || '',
+      prefLanguage: user.prefLanguage || '',
+      prefDurationMinutes: user.prefDurationMinutes ?? '',
+    });
+  }, [user]);
+
+  const handleSavePrefs = async () => {
+    setPrefsSaving(true);
+    setPrefsSaved(false);
+    try {
+      const payload = {
+        prefRoleLevel: prefs.prefRoleLevel || null,
+        prefInterviewType: prefs.prefInterviewType || null,
+        prefCompanyStyle: prefs.prefCompanyStyle || null,
+        prefLanguage: prefs.prefLanguage || null,
+        prefDurationMinutes: prefs.prefDurationMinutes === '' ? null : Number(prefs.prefDurationMinutes),
+      };
+      await updatePreferences(payload);
+      await refreshUser();
+      setPrefsSaved(true);
+      setTimeout(() => setPrefsSaved(false), 2500);
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to save preferences.');
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
 
   // Saved resumes — upload once here, reuse from any feature (Mock
   // Interview, Technical Interview Lab, ATS Checker, Resume Builder import)
@@ -231,6 +275,34 @@ export default function ProfilePage() {
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex-shrink-0 ml-2">Default</span>
                     )}
                   </div>
+
+                  {/* What we extracted from this resume — lets the user
+                      verify/spot-check it, since this is exactly what
+                      personalizes their interview questions and ATS scoring. */}
+                  {r.parsedProfile && (
+                    <div className="text-xs text-slate-500 mb-3 space-y-1.5 border-t border-slate-50 pt-3">
+                      {r.parsedProfile.jobTitles?.length > 0 && (
+                        <p><span className="font-bold text-slate-600">Roles:</span> {r.parsedProfile.jobTitles.slice(0, 3).join(', ')}</p>
+                      )}
+                      {r.parsedProfile.companies?.length > 0 && (
+                        <p><span className="font-bold text-slate-600">Companies:</span> {r.parsedProfile.companies.slice(0, 3).join(', ')}</p>
+                      )}
+                      {r.parsedProfile.skills?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {r.parsedProfile.skills.slice(0, 6).map((s) => (
+                            <span key={s} className="text-[10px] font-semibold bg-slate-50 border border-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{s}</span>
+                          ))}
+                          {r.parsedProfile.skills.length > 6 && (
+                            <span className="text-[10px] text-slate-400 px-1">+{r.parsedProfile.skills.length - 6} more</span>
+                          )}
+                        </div>
+                      )}
+                      {!r.parsedProfile.jobTitles?.length && !r.parsedProfile.companies?.length && !r.parsedProfile.skills?.length && (
+                        <p className="text-slate-400 italic">Nothing extracted from this file — personalization may be limited.</p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-2 mt-auto pt-2">
                     {!r.isDefault && (
                       <button
@@ -311,6 +383,93 @@ export default function ProfilePage() {
             </motion.div>
           </div>
         )}
+
+        {/* Interview Preferences — account-level defaults, removes the need
+            to re-pick role/track/company/language/duration on every Tech
+            Interview setup, and anchors the Dashboard's readiness score. */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.09 }}
+          className="mb-12 bg-white border border-slate-200 rounded-3xl p-7 shadow-sm"
+        >
+          <div className="mb-5">
+            <h2 className="text-lg font-bold text-slate-900">Interview Preferences</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Defaults for every new Technical Interview session — also sets your target company for the Dashboard's readiness score.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Role Level</label>
+              <select
+                value={prefs.prefRoleLevel}
+                onChange={(e) => setPrefs((p) => ({ ...p, prefRoleLevel: e.target.value }))}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 focus:border-[var(--brand-primary)] outline-none bg-white"
+              >
+                <option value="">Not set</option>
+                {ROLE_LEVELS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Track</label>
+              <select
+                value={prefs.prefInterviewType}
+                onChange={(e) => setPrefs((p) => ({ ...p, prefInterviewType: e.target.value }))}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 focus:border-[var(--brand-primary)] outline-none bg-white"
+              >
+                <option value="">Not set</option>
+                {INTERVIEW_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Target Company</label>
+              <select
+                value={prefs.prefCompanyStyle}
+                onChange={(e) => setPrefs((p) => ({ ...p, prefCompanyStyle: e.target.value }))}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 focus:border-[var(--brand-primary)] outline-none bg-white"
+              >
+                <option value="">Not set</option>
+                {COMPANY_STYLES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Preferred Language</label>
+              <select
+                value={prefs.prefLanguage}
+                onChange={(e) => setPrefs((p) => ({ ...p, prefLanguage: e.target.value }))}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 focus:border-[var(--brand-primary)] outline-none bg-white"
+              >
+                <option value="">Not set</option>
+                {LANGUAGES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1.5">Duration (minutes)</label>
+              <input
+                type="number" min="5" max="180"
+                value={prefs.prefDurationMinutes}
+                onChange={(e) => setPrefs((p) => ({ ...p, prefDurationMinutes: e.target.value }))}
+                placeholder="45"
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 focus:border-[var(--brand-primary)] outline-none bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSavePrefs}
+              disabled={prefsSaving}
+              className="text-xs font-bold text-white bg-[#6B46C1] px-5 py-2.5 rounded-xl hover:bg-[#5b3da6] transition-colors disabled:opacity-50"
+            >
+              {prefsSaving ? 'Saving…' : 'Save Preferences'}
+            </button>
+            {prefsSaved && <span className="text-xs font-semibold text-emerald-600">✓ Saved</span>}
+          </div>
+        </motion.section>
 
         {/* Your ATS Scans */}
         <motion.section

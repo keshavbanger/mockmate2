@@ -53,6 +53,25 @@ public class User {
     @Builder.Default
     private UserRole role = UserRole.USER;
 
+    // Interview preferences — account-level defaults for the Tech Interview
+    // setup form, so role/track/company/language/duration don't have to be
+    // re-picked every session. Deliberately nullable with no @Builder.Default:
+    // null means "not set yet," so the setup form falls back to its own
+    // existing hardcoded defaults rather than a fabricated one here.
+    // prefCompanyStyle doubles as the Dashboard's readiness-score target —
+    // see DashboardInsightsService.buildReadiness — rather than introducing
+    // a separate "goal" concept for the same underlying choice.
+    @Column(name = "pref_role_level")
+    private String prefRoleLevel;
+    @Column(name = "pref_interview_type")
+    private String prefInterviewType;
+    @Column(name = "pref_company_style")
+    private String prefCompanyStyle;
+    @Column(name = "pref_language")
+    private String prefLanguage;
+    @Column(name = "pref_duration_minutes")
+    private Integer prefDurationMinutes;
+
     // Backward compatibility fields
     private String firstName;
     private String lastName;

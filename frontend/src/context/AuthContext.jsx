@@ -349,6 +349,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Re-fetch the current user from the backend and update context state —
+  // previously nothing did this; `user` was only ever set once (on mount or
+  // on login/verify), so a mutation like saving Interview Preferences had
+  // no way to reach every consumer (Profile, Dashboard, Tech Interview
+  // setup) without a full page reload / re-login.
+  const refreshUser = async () => {
+    try {
+      const response = await api.get('/api/auth/me');
+      setUser(response.data);
+      return response.data;
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+      throw err;
+    }
+  };
+
   // Complete Logout
   const logout = async () => {
     try {
@@ -379,6 +395,7 @@ export const AuthProvider = ({ children }) => {
         sendOtp,
         verifyOtp,
         logout,
+        refreshUser,
         isAuthenticated: !!user,
         api,
       }}

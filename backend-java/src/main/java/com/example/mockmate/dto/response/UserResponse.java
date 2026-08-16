@@ -21,5 +21,10 @@ public class UserResponse {
     private String supabaseUserId;
     private String planType;
     private String role;
+    private String prefRoleLevel;
+    private String prefInterviewType;
+    private String prefCompanyStyle;
+    private String prefLanguage;
+    private Integer prefDurationMinutes;
     private LocalDateTime createdAt;
 }

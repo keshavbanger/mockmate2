@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateInterviewPlan, startTechInterview } from '../utils/api';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -6,42 +6,11 @@ import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer.jsx';
 import LoginModal from '../components/LoginModal.jsx';
 import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
-
-const ROLE_LEVELS = [
-  { value: 'INTERN',  label: 'Intern' },
-  { value: 'FRESHER', label: 'Fresher / New Grad' },
-  { value: 'SDE_1',   label: 'SDE-1 (0–2 yrs)' },
-  { value: 'SDE_2',   label: 'SDE-2 (2–5 yrs)' },
-  { value: 'SDE_3',   label: 'SDE-3 / Staff (5+ yrs)' },
-];
-
-const INTERVIEW_TYPES = [
-  { value: 'BACKEND',     label: '⚙️ Backend' },
-  { value: 'FRONTEND',    label: '🎨 Frontend' },
-  { value: 'FULLSTACK',   label: '🔗 Full Stack' },
-  { value: 'DATA_SCIENCE',label: '📊 Data Science' },
-  { value: 'DEVOPS',      label: '🚀 DevOps' },
-];
-
-const COMPANY_STYLES = [
-  { value: 'GOOGLE',    label: 'Google' },
-  { value: 'AMAZON',    label: 'Amazon' },
-  { value: 'MICROSOFT', label: 'Microsoft' },
-  { value: 'STARTUP',   label: 'Startup' },
-  { value: 'GENERIC',   label: 'Agnostic / Standard' },
-];
-
-const LANGUAGES = [
-  { value: 'java',       label: 'Java' },
-  { value: 'python',     label: 'Python' },
-  { value: 'cpp',        label: 'C++' },
-  { value: 'javascript', label: 'JavaScript' },
-  { value: 'go',         label: 'Go' },
-];
+import { ROLE_LEVELS, INTERVIEW_TYPES, COMPANY_STYLES, LANGUAGES } from '../constants/interviewOptions.js';
 
 export default function TechInterviewSetupPage() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Core Form State (3 Essential Fields primary, optional advanced)
@@ -58,6 +27,20 @@ export default function TechInterviewSetupPage() {
   const [durationMinutes, setDuration]    = useState(45);
   const [preferredLanguage, setLanguage]  = useState('java');
   const [startDirectlyToDsa, setStartDirectlyToDsa] = useState(false);
+
+  // Pre-fill from the account's saved Interview Preferences (set on
+  // Profile) once the user loads — only overrides the hardcoded defaults
+  // above when a preference actually exists, and only once, so it doesn't
+  // clobber whatever the user is actively picking on this page.
+  useEffect(() => {
+    if (!user) return;
+    if (user.prefRoleLevel) setRoleLevel(user.prefRoleLevel);
+    if (user.prefInterviewType) setInterviewType(user.prefInterviewType);
+    if (user.prefCompanyStyle) setCompanyStyle(user.prefCompanyStyle);
+    if (user.prefDurationMinutes) setDuration(user.prefDurationMinutes);
+    if (user.prefLanguage) setLanguage(user.prefLanguage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Step state: 'setup' | 'preview' | 'starting'
   const [step, setStep]       = useState('setup');

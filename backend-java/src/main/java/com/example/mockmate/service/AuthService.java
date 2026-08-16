@@ -205,7 +205,72 @@ public class AuthService {
                 .supabaseUserId(user.getSupabaseUserId())
                 .planType(user.getPlanType() != null ? user.getPlanType().name() : "FREE")
                 .role(user.getRole() != null ? user.getRole().name() : "USER")
+                .prefRoleLevel(user.getPrefRoleLevel())
+                .prefInterviewType(user.getPrefInterviewType())
+                .prefCompanyStyle(user.getPrefCompanyStyle())
+                .prefLanguage(user.getPrefLanguage())
+                .prefDurationMinutes(user.getPrefDurationMinutes())
                 .createdAt(user.getCreatedAt())
                 .build();
+    }
+
+    // Interview preferences — account-level defaults for Tech Interview
+    // setup (see User.prefRoleLevel etc.) and the Dashboard's readiness-score
+    // target company. Validated against the same known value sets the
+    // frontend's dropdowns use (frontend/src/constants/interviewOptions.js)
+    // so a bad/typo'd value can't silently corrupt future session defaults.
+    private static final java.util.Set<String> VALID_ROLE_LEVELS = java.util.Set.of("INTERN", "FRESHER", "SDE_1", "SDE_2", "SDE_3");
+    private static final java.util.Set<String> VALID_INTERVIEW_TYPES = java.util.Set.of("BACKEND", "FRONTEND", "FULLSTACK", "DATA_SCIENCE", "DEVOPS");
+    private static final java.util.Set<String> VALID_COMPANY_STYLES = java.util.Set.of("GOOGLE", "AMAZON", "MICROSOFT", "STARTUP", "GENERIC");
+    private static final java.util.Set<String> VALID_LANGUAGES = java.util.Set.of("java", "python", "cpp", "javascript", "go");
+
+    @Transactional
+    public UserResponse updatePreferences(User user, Map<String, Object> updates) {
+        if (updates.containsKey("prefRoleLevel")) {
+            user.setPrefRoleLevel(validateOrThrow(updates.get("prefRoleLevel"), VALID_ROLE_LEVELS, "prefRoleLevel"));
+        }
+        if (updates.containsKey("prefInterviewType")) {
+            user.setPrefInterviewType(validateOrThrow(updates.get("prefInterviewType"), VALID_INTERVIEW_TYPES, "prefInterviewType"));
+        }
+        if (updates.containsKey("prefCompanyStyle")) {
+            user.setPrefCompanyStyle(validateOrThrow(updates.get("prefCompanyStyle"), VALID_COMPANY_STYLES, "prefCompanyStyle"));
+        }
+        if (updates.containsKey("prefLanguage")) {
+            Object val = updates.get("prefLanguage");
+            if (val == null) {
+                user.setPrefLanguage(null);
+            } else if (VALID_LANGUAGES.contains(String.valueOf(val))) {
+                user.setPrefLanguage(String.valueOf(val));
+            } else {
+                throw new IllegalArgumentException("Invalid prefLanguage: " + val);
+            }
+        }
+        if (updates.containsKey("prefDurationMinutes")) {
+            Object val = updates.get("prefDurationMinutes");
+            if (val == null) {
+                user.setPrefDurationMinutes(null);
+            } else {
+                int minutes = ((Number) val).intValue();
+                if (minutes < 5 || minutes > 180) {
+                    throw new IllegalArgumentException("prefDurationMinutes must be between 5 and 180");
+                }
+                user.setPrefDurationMinutes(minutes);
+            }
+        }
+        User saved = userRepository.save(user);
+        return mapToResponse(saved);
+    }
+
+    // Uppercase enum-style fields (role level/type/company) accept null to
+    // clear the preference back to "unset", otherwise must exactly match the
+    // known value set — same validate-or-reject pattern already used in
+    // AdminController.updatePlan/updateRole.
+    private String validateOrThrow(Object value, java.util.Set<String> validValues, String fieldName) {
+        if (value == null) return null;
+        String upper = String.valueOf(value).toUpperCase();
+        if (!validValues.contains(upper)) {
+            throw new IllegalArgumentException("Invalid " + fieldName + ": " + value);
+        }
+        return upper;
     }
 }

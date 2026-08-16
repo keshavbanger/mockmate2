@@ -96,6 +96,24 @@ public class AuthController {
         return ResponseEntity.ok(authService.mapToResponse(user));
     }
 
+    // Account-level Interview Preferences (role/track/company/language/
+    // duration) — see User.prefRoleLevel etc. Partial update: only keys
+    // present in the body are touched, so the frontend can save one field
+    // at a time or all five together.
+    @PatchMapping("/preferences")
+    public ResponseEntity<?> updatePreferences(
+            @AuthenticationPrincipal User user,
+            @RequestBody java.util.Map<String, Object> updates) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        try {
+            return ResponseEntity.ok(authService.updatePreferences(user, updates));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/signup")
     public ResponseEntity<TokenResponse> signup(@Valid @RequestBody UserSignupRequest request) {
         return ResponseEntity.ok(authService.signup(request));

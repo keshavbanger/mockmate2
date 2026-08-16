@@ -23,6 +23,19 @@ public class DashboardController {
 
     private final InterviewHistoryService interviewHistoryService;
     private final AtsAnalysisRepository atsAnalysisRepository;
+    private final com.example.mockmate.service.DashboardInsightsService dashboardInsightsService;
+
+    // ── GET /insights — the redesigned Dashboard's data source: a
+    // synthesized readiness score, prioritized "what to work on next"
+    // items, and a practice streak, built from data already computed at
+    // report-generation time. See DashboardInsightsService.
+    @GetMapping("/insights")
+    public ResponseEntity<?> getInsights(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(dashboardInsightsService.buildInsights(user));
+    }
 
     @GetMapping("/summary")
     public ResponseEntity<?> getDashboardSummary(@AuthenticationPrincipal User user) {
