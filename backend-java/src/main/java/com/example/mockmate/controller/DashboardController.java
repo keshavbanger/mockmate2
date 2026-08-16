@@ -36,7 +36,15 @@ public class DashboardController {
         String userId = user.getId();
 
         List<InterviewSummaryDTO> interviews = interviewHistoryService.getInterviewHistory(userId);
-        List<AtsAnalysis> atsReports = atsAnalysisRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        // AtsAnalysis.userId is the caller's JWT EMAIL (see ATSController/
+        // ATSAnalyzerService — AtsReportAccessGuard resolves ownership from
+        // the token's email, not the account UUID, since ATS also supports
+        // anonymous scans). Interview.userId, by contrast, really is the UUID
+        // (set from user.getId() in InterviewController.startInterview) — so
+        // this one query must use a different identity than the one above it,
+        // which is exactly why it always returned nothing for any logged-in
+        // user: it was querying rows keyed by email using a UUID.
+        List<AtsAnalysis> atsReports = atsAnalysisRepository.findByUserIdOrderByCreatedAtDesc(user.getEmail());
         
         int interviewsCompleted = interviews.size();
         
@@ -104,7 +112,15 @@ public class DashboardController {
         String userId = user.getId();
 
         List<InterviewSummaryDTO> interviews = interviewHistoryService.getInterviewHistory(userId);
-        List<AtsAnalysis> atsReports = atsAnalysisRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        // AtsAnalysis.userId is the caller's JWT EMAIL (see ATSController/
+        // ATSAnalyzerService — AtsReportAccessGuard resolves ownership from
+        // the token's email, not the account UUID, since ATS also supports
+        // anonymous scans). Interview.userId, by contrast, really is the UUID
+        // (set from user.getId() in InterviewController.startInterview) — so
+        // this one query must use a different identity than the one above it,
+        // which is exactly why it always returned nothing for any logged-in
+        // user: it was querying rows keyed by email using a UUID.
+        List<AtsAnalysis> atsReports = atsAnalysisRepository.findByUserIdOrderByCreatedAtDesc(user.getEmail());
 
         Map<String, Object> profile = new LinkedHashMap<>();
         profile.put("id", user.getId());
