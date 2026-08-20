@@ -4,20 +4,28 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 
+// `featured` picks the two flagship tools shown as large visual cards in
+// the Features mega-menu (see FeatureCardGraphic below); everything else
+// renders as a compact text link. Swap the flags here to feature different
+// tools — nothing else needs to change.
 const FEATURE_LINKS = [
   {
     title: 'Interview Studio',
     desc: 'AI-powered mock interviews & feedback',
     icon: '🎙️',
     path: '/setup',
-    badge: 'Voice AI'
+    badge: 'Voice AI',
+    featured: true,
+    graphic: 'waveform',
   },
   {
     title: 'Technical Interview Lab',
     desc: 'Live coding, execution & AI-powered interviews',
     icon: '💻',
     path: '/tech-interview/setup',
-    badge: 'Coding'
+    badge: 'Coding',
+    featured: true,
+    graphic: 'code',
   },
   {
     title: 'Resume Analyzer',
@@ -41,6 +49,25 @@ const FEATURE_LINKS = [
     badge: 'Beta'
   },
 ];
+
+const FEATURE_GRAPHICS = {
+  // Abstract equalizer bars — evokes the Voice AI interview.
+  waveform: (
+    <svg className="absolute -bottom-3 -right-3 w-28 h-20 opacity-25" viewBox="0 0 140 60" fill="none">
+      {[10, 20, 30, 16, 34, 12, 24, 38, 14, 22].map((h, i) => (
+        <rect key={i} x={i * 14} y={60 - h} width="6" height={h} rx="3" fill="white" />
+      ))}
+    </svg>
+  ),
+  // Abstract </> bracket — evokes the live coding lab.
+  code: (
+    <svg className="absolute -bottom-4 -right-4 w-28 h-28 opacity-20" viewBox="0 0 120 120" fill="none">
+      <path d="M42 32 L20 62 L42 92" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M78 32 L100 62 L78 92" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="67" y1="26" x2="53" y2="98" stroke="white" strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  ),
+};
 
 const NAV_LINKS = [
   { label: 'Home',      type: 'route',  target: '/'          },
@@ -176,7 +203,10 @@ export default function Navbar() {
               </svg>
             </button>
 
-            {/* Features Dropdown Menu */}
+            {/* Features Dropdown Menu — a compact text list of secondary
+                tools alongside two large "featured" product cards, same
+                structure as a typical SaaS mega-menu but in MockMate's own
+                light/purple theme rather than a dark one. */}
             <AnimatePresence>
               {featuresOpen && (
                 <motion.div
@@ -184,38 +214,48 @@ export default function Navbar() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.97 }}
                   transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="absolute left-0 top-full mt-3 w-80 bg-white rounded-2xl border border-slate-200/80 shadow-2xl shadow-purple-900/10 p-2 overflow-hidden z-50"
+                  className="absolute left-0 top-full mt-3 w-[540px] bg-white rounded-2xl border border-slate-200/80 shadow-2xl shadow-purple-900/10 p-4 overflow-hidden z-50"
                 >
-                  <div className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-50/70 rounded-xl mb-1 flex items-center justify-between">
+                  <div className="px-2 pb-3 text-[10px] font-extrabold uppercase tracking-wider text-purple-700 flex items-center justify-between">
                     <span>Explore Core Tools</span>
-                    <span className="text-[9px] bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded-full font-bold">{FEATURE_LINKS.length} Tools</span>
+                    <span className="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded-full font-bold">{FEATURE_LINKS.length} Tools</span>
                   </div>
 
-                  <div className="space-y-1">
-                    {FEATURE_LINKS.map((f) => (
-                      <button
-                        key={f.title}
-                        onClick={() => handleFeatureClick(f.path)}
-                        className="w-full flex items-start gap-3 p-2.5 rounded-xl hover:bg-purple-50/60 transition-colors text-left group cursor-pointer"
-                      >
-                        <span className="text-xl p-1.5 bg-slate-100 rounded-lg group-hover:bg-white group-hover:shadow-sm transition-all flex-shrink-0">
-                          {f.icon}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[13px] font-bold text-slate-800 group-hover:text-[#6B46C1] transition-colors">
-                              {f.title}
-                            </span>
-                            <span className="text-[9px] font-bold text-slate-400 bg-slate-100 group-hover:bg-purple-100 group-hover:text-purple-700 px-1.5 py-0.5 rounded-full transition-colors">
-                              {f.badge}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 font-medium leading-snug line-clamp-1 mt-0.5">
-                            {f.desc}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="flex gap-4">
+                    {/* Compact text list — everything not called out as featured */}
+                    <div className="w-[168px] flex-shrink-0 space-y-0.5">
+                      {FEATURE_LINKS.filter((f) => !f.featured).map((f) => (
+                        <button
+                          key={f.title}
+                          onClick={() => handleFeatureClick(f.path)}
+                          className="w-full flex items-center gap-2 px-2.5 py-2.5 rounded-xl hover:bg-purple-50/70 transition-colors text-left group cursor-pointer"
+                        >
+                          <span className="text-sm flex-shrink-0">{f.icon}</span>
+                          <span className="text-[13px] font-semibold text-slate-700 group-hover:text-[#6B46C1] transition-colors truncate">
+                            {f.title}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Featured product cards */}
+                    <div className="flex-1 grid grid-cols-2 gap-3">
+                      {FEATURE_LINKS.filter((f) => f.featured).map((f) => (
+                        <button
+                          key={f.title}
+                          onClick={() => handleFeatureClick(f.path)}
+                          className="relative aspect-[4/5] rounded-2xl bg-gradient-to-br from-[#6B46C1] to-[#3d2666] p-3.5 flex flex-col justify-between text-left overflow-hidden group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-purple-900/30"
+                        >
+                          {FEATURE_GRAPHICS[f.graphic]}
+                          <span className="relative text-[9px] font-bold text-white/70 uppercase tracking-wider">
+                            {f.badge}
+                          </span>
+                          <span className="relative text-[15px] font-extrabold text-white leading-tight">
+                            {f.title}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
               )}
