@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 
 // Video-loop avatar — the active AvatarProvider (see AvatarStage.jsx).
@@ -61,6 +61,18 @@ export default function VideoAvatarFace({ state, avatarSet = 'man' }) {
     }));
   }, [sources]);
 
+  // Whichever clip is active the moment this component first mounts —
+  // computed once via the lazy initializer, not re-derived on every render,
+  // so it stays fixed even after `state` moves on. On interview start this
+  // is almost always "speaking" (the intro plays immediately), which is
+  // also the largest file (1080p) of the three — exactly the one that most
+  // needs to not be fighting the other two for bandwidth.
+  const [priorityClipId] = useState(() => clips.find((c) => c.matchesState(state))?.id ?? null);
+  const [priorityLoadDone, setPriorityLoadDone] = useState(false);
+  // First real frame from ANY clip — flips once and never resets, so the
+  // loading spinner only ever covers that initial gap, not later transitions.
+  const [hasRenderedFrame, setHasRenderedFrame] = useState(false);
+
   // Muted programmatically, not just via the JSX attribute — some browsers
   // evaluate autoplay eligibility off the DOM property before React's
   // attribute commit is guaranteed to have landed, and a play() rejection
@@ -102,16 +114,43 @@ export default function VideoAvatarFace({ state, avatarSet = 'man' }) {
 
   // Preload all three on mount (and whenever avatarSet changes) regardless
   // of initial state, per the spec — switching states should never trigger
-  // a load, only a crossfade.
+  // a load, only a crossfade. But NOT all three at once: loading them
+  // together made the one clip that's actually visible on interview start
+  // (see priorityClipId above) compete for bandwidth with two the candidate
+  // won't see for a while, which is what produced a multi-second blank gap
+  // before the very first frame appeared. Load the priority clip alone
+  // first, then bring the rest in shortly after.
   useEffect(() => {
-    clips.forEach((clip) => {
-      const el = videoRefs.current[clip.id];
-      if (el) el.load();
-    });
+    const priorityEl = videoRefs.current[priorityClipId];
+    if (priorityEl) priorityEl.load();
+
+    const timer = setTimeout(() => {
+      setPriorityLoadDone(true);
+      clips.forEach((clip) => {
+        if (clip.id === priorityClipId) return;
+        const el = videoRefs.current[clip.id];
+        if (el) {
+          // Set imperatively before load() — React's re-render (from the
+          // setPriorityLoadDone above) that would otherwise flip the
+          // preload="auto" JSX attribute lands a tick later, and load()
+          // reads whatever preload value is on the element right now.
+          el.preload = 'auto';
+          el.load();
+        }
+      });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clips]);
 
   return (
     <div className="relative w-full max-w-2xl aspect-video rounded-[28px] overflow-hidden bg-slate-900 shadow-xl">
+      {!hasRenderedFrame && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="h-9 w-9 rounded-full border-[3px] border-white/15 border-t-white/70 animate-spin" />
+        </div>
+      )}
       {clips.map((clip) => (
         <motion.video
           key={clip.id}
@@ -121,7 +160,8 @@ export default function VideoAvatarFace({ state, avatarSet = 'man' }) {
           autoPlay
           loop
           playsInline
-          preload="auto"
+          preload={clip.id === priorityClipId || priorityLoadDone ? 'auto' : 'metadata'}
+          onPlaying={() => setHasRenderedFrame(true)}
           onError={(e) => {
             const err = e.currentTarget.error;
             console.error('[VideoAvatarFace] failed to load', clip.src, '— code', err?.code, err?.message);
