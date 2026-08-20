@@ -61,6 +61,19 @@ export default function VideoAvatarFace({ state, avatarSet = 'man' }) {
     }));
   }, [sources]);
 
+  // Muted programmatically, not just via the JSX attribute — some browsers
+  // evaluate autoplay eligibility off the DOM property before React's
+  // attribute commit is guaranteed to have landed, and a play() rejection
+  // here used to be swallowed with zero trace, which is exactly what made
+  // "the box is just black" impossible to diagnose without DevTools.
+  const attemptPlay = (el, src) => {
+    if (!el) return;
+    el.muted = true;
+    el.play().catch((err) => {
+      console.warn('[VideoAvatarFace] play() blocked for', src, '—', err?.name || err);
+    });
+  };
+
   useEffect(() => {
     // Play the incoming clip immediately as its fade-in starts; pause the
     // outgoing one only after its fade-out has actually finished, so we
@@ -69,7 +82,7 @@ export default function VideoAvatarFace({ state, avatarSet = 'man' }) {
     const activeEl = videoRefs.current[activeClip?.id];
     if (activeEl && activeEl.paused) {
       activeEl.currentTime = activeEl.currentTime || 0;
-      activeEl.play().catch(() => {});
+      attemptPlay(activeEl, activeClip.src);
     }
 
     const timeout = setTimeout(() => {
@@ -77,7 +90,7 @@ export default function VideoAvatarFace({ state, avatarSet = 'man' }) {
         const el = videoRefs.current[clip.id];
         if (!el) return;
         if (clip.matchesState(state)) {
-          el.play().catch(() => {});
+          attemptPlay(el, clip.src);
         } else {
           el.pause();
         }
@@ -105,9 +118,14 @@ export default function VideoAvatarFace({ state, avatarSet = 'man' }) {
           ref={(el) => { videoRefs.current[clip.id] = el; }}
           src={clip.src}
           muted
+          autoPlay
           loop
           playsInline
           preload="auto"
+          onError={(e) => {
+            const err = e.currentTarget.error;
+            console.error('[VideoAvatarFace] failed to load', clip.src, '— code', err?.code, err?.message);
+          }}
           className="absolute inset-0 w-full h-full object-cover"
           initial={false}
           animate={{ opacity: clip.matchesState(state) ? 1 : 0 }}
