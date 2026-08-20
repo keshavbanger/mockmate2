@@ -8,7 +8,7 @@ import { createSession, parseResume, generateQuestions, startInterview } from '.
 import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer.jsx';
 import LoginModal from '../components/LoginModal.jsx';
-import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
+import ResumeUploadCard, { ResumeParsedBadge } from '../components/shared/ResumeUploadCard.jsx';
 
 const TABS = ['Role Based', 'Company Based', 'JD Based'];
 
@@ -358,57 +358,16 @@ export default function SetupPage() {
               </div>
               <h2 className="text-base font-extrabold text-slate-900">Your Professional Resume</h2>
             </div>
-            {uploadDone && (
-              <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                ✓ Resume Parsed & Linked
-              </span>
-            )}
+            {uploadDone && <ResumeParsedBadge />}
           </div>
 
-          {!uploadDone ? (
-            uploading ? (
-              <div className="border-2 border-dashed border-purple-200 bg-purple-50/30 rounded-2xl p-6 flex flex-col items-center gap-3 py-4">
-                <Spinner />
-                <p className="text-xs font-bold text-[#6B46C1]">Parsing and analyzing resume…</p>
-              </div>
-            ) : (
-              <ResumeSourcePicker onChange={setResumeSource} />
-            )
-          ) : (
-            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-[#6B46C1] text-white font-bold flex items-center justify-center text-lg shadow-md shrink-0">
-                  {rd?.name?.[0]?.toUpperCase() ?? '?'}
-                </div>
-                <div>
-                  <h4 className="font-extrabold text-slate-900 text-sm">{rd?.name ?? 'Candidate Profile'}</h4>
-                  <p className="text-xs text-slate-500 font-medium">
-                    {rd?.email} · {rd?.total_experience_years ?? 0}y experience
-                  </p>
-                  {rd?.skills?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {rd.skills.slice(0, 8).map(skill => (
-                        <span key={skill} className="bg-white border border-purple-200 text-purple-800 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
-                          {skill}
-                        </span>
-                      ))}
-                      {rd.skills.length > 8 && (
-                        <span className="text-[9px] text-slate-400 font-bold px-1 py-0.5">
-                          +{rd.skills.length - 8} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => setUploadDone(false)}
-                className="text-xs font-bold text-[#6B46C1] bg-white border border-purple-200 px-3.5 py-2 rounded-xl hover:bg-purple-50 transition-colors shrink-0"
-              >
-                Replace Resume
-              </button>
-            </div>
-          )}
+          <ResumeUploadCard
+            uploading={uploading}
+            uploadDone={uploadDone}
+            resumeData={rd}
+            onSourceChange={setResumeSource}
+            onReplace={() => setUploadDone(false)}
+          />
         </div>
 
         {/* ── STEP 2: MODE SPECIFIC SELECTION & CONFIGURATION ────────────────── */}

@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
+import ResumeUploadCard, { ResumeParsedBadge } from '../components/shared/ResumeUploadCard.jsx';
 import AIInterviewer from '../components/aiinterviewer/AIInterviewer.jsx';
 import AudioRecorder from '../utils/audioRecorder.js';
 import { speak, cancelSpeech } from '../utils/ttsProvider.js';
@@ -36,9 +36,7 @@ const MIN_THINKING_MS = 700;
 // Fully self-contained page for the AI Interview Engine (beta, no Tavus) —
 // its own resume upload + session state (not the shared InterviewContext
 // the Tavus flow uses), so there is zero shared-state risk with the
-// existing AI Mock Interview. Not linked from any nav menu; reachable only
-// via /ai-engine-beta directly, for local testing before any decision to
-// replace Tavus is made.
+// existing AI Mock Interview. Listed in the Navbar's feature menu.
 export default function AIInterviewBetaPage() {
   const navigate = useNavigate();
   const { addToast, ToastContainer } = useToast();
@@ -49,6 +47,9 @@ export default function AIInterviewBetaPage() {
   // Either { mode: 'saved', savedResumeId } or
   // { mode: 'upload', file, saveAsResume, label } — see ResumeSourcePicker.
   const [resumeSource, setResumeSource] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
+  const [parsedResumeData, setParsedResumeData] = useState(null);
   const [roleTitle, setRoleTitle] = useState('');
   const [jobDescription, setJobDescription] = useState(''); // optional — see spec §4
   const [interviewType, setInterviewType] = useState('Technical');
@@ -140,6 +141,7 @@ export default function AIInterviewBetaPage() {
   const playAiMessage = (text) => {
     setAvatarState('speaking');
     speak(text, {
+      gender: avatarSet,
       onBoundary: () => setMouthPulse((n) => n + 1),
       onEnd: () => {
         if (isLastQuestionRef.current) {
@@ -206,30 +208,62 @@ export default function AIInterviewBetaPage() {
     await submitAnswer(text);
   };
 
-  // Mirrors TechInterviewSetupPage's own check — resumeSource starts out
-  // null, and upload-mode only becomes valid once a file is actually chosen.
-  const hasResumeSource = (resumeSource?.mode === 'saved' && resumeSource.savedResumeId)
-    || (resumeSource?.mode === 'upload' && resumeSource.file);
+  // Fires whenever ResumeSourcePicker (inside ResumeUploadCard) reports a
+  // usable source — parses eagerly, same as SetupPage's own pattern, so the
+  // "Resume Parsed & Linked" summary populates before Start is even
+  // clicked instead of only being discoverable after. Creates the session
+  // early too (previously only created inside handleStart), since parsing
+  // needs a session_id to attach to either way.
+  const handleResumeSource = useCallback(async (source) => {
+    setUploading(true);
+    try {
+      let sid = sessionId;
+      if (!sid) {
+        const { data } = await createSession();
+        sid = data.session_id;
+        setSessionId(sid);
+      }
+      const { data } = await parseResume(source, sid);
+      setParsedResumeData(data.resume_data);
+      setUploadDone(true);
+    } catch (err) {
+      console.error('[AIInterviewBeta] Resume parse failed:', err);
+      addToast(err?.response?.data?.detail || 'Resume upload failed. Please try again.', 'error');
+      setUploadDone(false);
+    } finally {
+      setUploading(false);
+    }
+  }, [sessionId, addToast]);
+
+  useEffect(() => {
+    if (!resumeSource) return;
+    if (resumeSource.mode === 'upload' && !resumeSource.file) return;
+    if (resumeSource.mode === 'saved' && !resumeSource.savedResumeId) return;
+    handleResumeSource(resumeSource);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSource]);
+
+  const handleReplaceResume = () => {
+    setUploadDone(false);
+    setResumeSource(null);
+    setParsedResumeData(null);
+  };
 
   // ── Setup → start ───────────────────────────────────────────────────
   const handleStart = async () => {
-    if (!hasResumeSource) {
+    if (!uploadDone || !sessionId) {
       addToast('Please choose a resume first — PDF or DOCX.', 'error');
       return;
     }
     setStarting(true);
     try {
-      const { data: sessionRes } = await createSession();
-      const newSessionId = sessionRes.session_id;
-
-      await parseResume(resumeSource, newSessionId);
-
       const diffStr = difficulty === 'Mid Level' ? 'Mid' : difficulty;
       // Config goes straight to /start — no /generate-questions pre-call.
       // That endpoint exists to batch-generate a fixed question list up
       // front, which this engine must never do; it also used to seed a
       // throwaway "questions" entry that /start immediately overwrote.
-      const { data: startRes } = await startAiEngine(newSessionId, {
+      // Resume is already parsed & linked to sessionId via handleResumeSource.
+      const { data: startRes } = await startAiEngine(sessionId, {
         interviewType,
         difficulty: diffStr,
         language,
@@ -242,7 +276,6 @@ export default function AIInterviewBetaPage() {
         return;
       }
 
-      setSessionId(newSessionId);
       setMessage(startRes.response);
       setTurnType(startRes.turnType);
       setQuestionsAsked(startRes.questionsAsked);
@@ -310,14 +343,23 @@ export default function AIInterviewBetaPage() {
             {/* 3 Essential Steps */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
               <div className="bg-white border border-black/[0.06] rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="h-7 w-7 shrink-0 rounded-full bg-[#6B46C1] text-white font-bold text-sm flex items-center justify-center">1</span>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Upload Resume <span className="text-red-500">*</span></h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Required — every question is built from your actual background, not a script</p>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="h-7 w-7 shrink-0 rounded-full bg-[#6B46C1] text-white font-bold text-sm flex items-center justify-center">1</span>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Upload Resume <span className="text-red-500">*</span></h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Required — every question is built from your actual background, not a script</p>
+                    </div>
                   </div>
+                  {uploadDone && <ResumeParsedBadge />}
                 </div>
-                <ResumeSourcePicker onChange={setResumeSource} />
+                <ResumeUploadCard
+                  uploading={uploading}
+                  uploadDone={uploadDone}
+                  resumeData={parsedResumeData}
+                  onSourceChange={setResumeSource}
+                  onReplace={handleReplaceResume}
+                />
               </div>
 
               <div className="bg-white border border-black/[0.06] rounded-2xl p-5 shadow-sm">
@@ -434,7 +476,7 @@ export default function AIInterviewBetaPage() {
             <div className="flex justify-center">
               <button
                 onClick={handleStart}
-                disabled={starting || !hasResumeSource}
+                disabled={starting || !uploadDone}
                 className="w-full max-w-md bg-[#6B46C1] hover:bg-[#5839a3] disabled:opacity-50 text-white font-bold py-3.5 rounded-full transition-colors shadow-[0_4px_20px_rgba(107,70,193,0.3)]"
               >
                 {starting ? 'Starting…' : 'Start Interview (Beta) ✨'}

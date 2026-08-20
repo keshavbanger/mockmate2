@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateInterviewPlan, startTechInterview } from '../utils/api';
+import { generateInterviewPlan, startTechInterview, createSession, parseResume } from '../utils/api';
 import { useAuth } from '../context/AuthContext.jsx';
 import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer.jsx';
 import LoginModal from '../components/LoginModal.jsx';
-import ResumeSourcePicker from '../components/shared/ResumeSourcePicker.jsx';
+import ResumeUploadCard, { ResumeParsedBadge } from '../components/shared/ResumeUploadCard.jsx';
 import { ROLE_LEVELS, INTERVIEW_TYPES, COMPANY_STYLES, LANGUAGES } from '../constants/interviewOptions.js';
 
 export default function TechInterviewSetupPage() {
@@ -17,6 +17,14 @@ export default function TechInterviewSetupPage() {
   // Either { mode: 'upload', file, saveAsResume, label } or
   // { mode: 'saved', savedResumeId } — see ResumeSourcePicker.
   const [resumeSource, setResumeSource] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
+  const [parsedResumeData, setParsedResumeData] = useState(null);
+  // Throwaway session used only to satisfy parseResume's session_id
+  // requirement for this eager preview — handleGeneratePlan below neither
+  // reads nor reuses it, it submits resumeSource straight to its own
+  // FormData exactly as before.
+  const [previewSessionId, setPreviewSessionId] = useState(null);
   const [roleLevel, setRoleLevel]     = useState('SDE_1');
   const [jdText, setJdText]           = useState('');
 
@@ -47,6 +55,47 @@ export default function TechInterviewSetupPage() {
   const [plan, setPlan]       = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+
+  // Fires whenever ResumeSourcePicker (inside ResumeUploadCard) reports a
+  // usable source — parses eagerly, same pattern as SetupPage/Interview
+  // Studio, so the "Resume Parsed & Linked" summary shows before Generate
+  // Plan is even clicked. Purely additive: handleGeneratePlan below still
+  // submits resumeSource through its own FormData exactly as before, so
+  // this can't affect the actual plan-generation call.
+  const handleResumeSource = useCallback(async (source) => {
+    setUploading(true);
+    try {
+      let sid = previewSessionId;
+      if (!sid) {
+        const { data } = await createSession();
+        sid = data.session_id;
+        setPreviewSessionId(sid);
+      }
+      const { data } = await parseResume(source, sid);
+      setParsedResumeData(data.resume_data);
+      setUploadDone(true);
+    } catch (err) {
+      console.error('[TechInterviewSetup] Resume parse failed:', err);
+      setError(err?.response?.data?.detail ?? 'Resume upload failed. Please try again.');
+      setUploadDone(false);
+    } finally {
+      setUploading(false);
+    }
+  }, [previewSessionId]);
+
+  useEffect(() => {
+    if (!resumeSource) return;
+    if (resumeSource.mode === 'upload' && !resumeSource.file) return;
+    if (resumeSource.mode === 'saved' && !resumeSource.savedResumeId) return;
+    handleResumeSource(resumeSource);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSource]);
+
+  const handleReplaceResume = () => {
+    setUploadDone(false);
+    setResumeSource(null);
+    setParsedResumeData(null);
+  };
 
   // Auto-detect role track from JD text when pasted
   const handleJdChange = (text) => {
@@ -178,15 +227,24 @@ export default function TechInterviewSetupPage() {
           <div style={styles.grid}>
             {/* Step 1: Resume Upload */}
             <div style={styles.card}>
-              <div style={styles.cardHeader}>
-                <span style={styles.stepNum}>1</span>
-                <div>
-                  <h3 style={styles.cardTitle}>Upload Resume <span style={{ color: '#EF4444' }}>*</span></h3>
-                  <p style={styles.cardSub}>Required — parses your projects & tech stack so questions are actually about you, not generic</p>
+              <div style={{ ...styles.cardHeader, justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={styles.stepNum}>1</span>
+                  <div>
+                    <h3 style={styles.cardTitle}>Upload Resume <span style={{ color: '#EF4444' }}>*</span></h3>
+                    <p style={styles.cardSub}>Required — parses your projects & tech stack so questions are actually about you, not generic</p>
+                  </div>
                 </div>
+                {uploadDone && <ResumeParsedBadge />}
               </div>
 
-              <ResumeSourcePicker onChange={setResumeSource} />
+              <ResumeUploadCard
+                uploading={uploading}
+                uploadDone={uploadDone}
+                resumeData={parsedResumeData}
+                onSourceChange={setResumeSource}
+                onReplace={handleReplaceResume}
+              />
             </div>
 
             {/* Step 2: Experience Level */}
