@@ -33,6 +33,13 @@ const FEATURE_LINKS = [
     path: '/resume-builder',
     badge: 'Studio'
   },
+  {
+    title: 'AI Interviewer',
+    desc: 'Adaptive AI interviewer that reacts to your answers live',
+    icon: '🤖',
+    path: '/ai-engine-beta',
+    badge: 'Beta'
+  },
 ];
 
 const NAV_LINKS = [

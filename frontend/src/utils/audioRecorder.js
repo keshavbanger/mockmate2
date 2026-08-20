@@ -97,6 +97,11 @@ export class AudioRecorder {
   getIsRecording() {
     return this.isRecording;
   }
+
+  /** The live MediaStream while recording — for AudioVisualizer's AnalyserNode, so it taps the same getUserMedia grant instead of requesting a second one. */
+  getStream() {
+    return this.stream;
+  }
 }
 
 export default AudioRecorder;

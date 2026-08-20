@@ -23,7 +23,10 @@ import java.util.stream.Collectors;
 @Service
 public class ReportGeneratorService {
 
-    private static final String MODEL            = "llama-3.3-70b-versatile";
+    // llama-3.3-70b-versatile was retired from Groq's catalog (confirmed via
+    // GET /v1/models — no longer present); openai/gpt-oss-120b is a
+    // comparable large model still available.
+    private static final String MODEL            = "openai/gpt-oss-120b";
     private static final int    MAX_TOKENS_QUAL  = 2000;
     private static final int    MAX_TOKENS_COACH = 1500;
     private static final double TEMP_QUAL        = 0.3;
@@ -94,8 +97,65 @@ public class ReportGeneratorService {
         this.fillerDetectorService = fillerDetectorService;
     }
 
+    /**
+     * Honest, unscored report for a session the candidate never meaningfully
+     * participated in — see the STATUS_NO_ENGAGEMENT branch below. Matches the
+     * normal report's top-level shape so the existing report page renders it
+     * without special-casing, but reports no score and makes no claim of
+     * assessment rather than inventing strengths from silence.
+     */
+    private Map<String, Object> buildNoEngagementReport(String sessionId, Map<String, Object> sessionData) {
+        Map<String, Object> resumeData = castMap(sessionData.getOrDefault("resume_data", new HashMap<>()));
+        String interviewType = (String) sessionData.getOrDefault("interview_type", "Technical");
+        double startTime = toDouble(sessionData.get("start_time"), 0.0);
+        double endTime = toDouble(sessionData.get("end_time"), startTime);
+        double durationSec = Math.max(1.0, endTime - startTime);
+
+        log.info("[Report] Session={} ended without candidate engagement — emitting unscored report", sessionId);
+
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("sessionId", sessionId);
+        report.put("aiAnalysisPartial", true);
+        report.put("notAssessed", true);
+        report.put("interviewStatus", com.example.mockmate.aiengine.InterviewEngineService.STATUS_NO_ENGAGEMENT);
+        report.put("candidate", Map.of(
+                "name", resumeData.getOrDefault("name", "Candidate"),
+                "role", resumeData.getOrDefault("role", "Professional"),
+                "date", LocalDate.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
+                "duration", String.format("%.0f min", durationSec / 60.0),
+                "interviewType", interviewType,
+                "id", sessionId != null && sessionId.length() > 8 ? sessionId.substring(0, 8) : sessionId
+        ));
+        report.put("overallScore", null);
+        report.put("executiveSummary", "This interview ended early because the answers weren't coming through — "
+                + "there may have been a microphone or connection problem. There isn't enough of a conversation here "
+                + "to assess performance, so no score has been given. Please check your audio setup and start a new interview.");
+        report.put("finalVerdict", "Not assessed");
+        report.put("answers", List.of());
+        report.put("strengths", List.of());
+        report.put("areasToImprove", List.of());
+        report.put("fillerWords", Map.of());
+        report.put("wpm", 0.0);
+        report.put("facialAnalysis", Map.of());
+        report.put("videoMoments", List.of());
+        return report;
+    }
+
     // -- Main Entry Point --------------------------------------------------------
     public Map<String, Object> generateEnhancedReport(String sessionId, Map<String, Object> sessionData) {
+        // An interview the candidate never actually engaged with must not be
+        // presented as a normal graded assessment. A real run produced an
+        // 8/10 "completed" report with Key Strengths for a session whose only
+        // genuine answer was the introduction — every later answer was ".",
+        // "Música" or similar. Scoring that as a finished interview is a
+        // reporting-integrity problem, not just an engine bug. Only the
+        // adaptive AI engine sets this status; the Tavus flow never does, so
+        // this branch cannot affect it.
+        String interviewStatus = (String) sessionData.get("status");
+        if (com.example.mockmate.aiengine.InterviewEngineService.STATUS_NO_ENGAGEMENT.equals(interviewStatus)) {
+            return buildNoEngagementReport(sessionId, sessionData);
+        }
+
         Map<String, Object> resumeData  = castMap(sessionData.getOrDefault("resume_data", new HashMap<>()));
         String interviewType            = (String) sessionData.getOrDefault("interview_type", "Technical");
         String difficulty               = (String) sessionData.getOrDefault("difficulty", "Mid");
@@ -247,7 +307,10 @@ public class ReportGeneratorService {
 
     private Map<String, Object> callGroq(String sysPrompt, String userPrompt, int maxTokens, double temp) {
         Map<String, Object> body = Map.of(
-            "model", MODEL, "temperature", temp, "max_tokens", maxTokens,
+            // GPT-OSS models reason before answering, consuming max_tokens
+            // same as the visible output — capped low so reasoning can't eat
+            // the budget meant for the actual qualitative/coaching JSON.
+            "model", MODEL, "temperature", temp, "max_tokens", maxTokens, "reasoning_effort", "low",
             "messages", List.of(
                 Map.of("role","system","content", sysPrompt),
                 Map.of("role","user",  "content", userPrompt)

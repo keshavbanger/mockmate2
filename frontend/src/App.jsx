@@ -41,6 +41,10 @@ const ContactPage             = lazy(() => import('./pages/ContactPage.jsx'));
 const ResumeDashboardPage     = lazy(() => import('./pages/ResumeDashboardPage.jsx'));
 const ResumeBuilderPage       = lazy(() => import('./pages/ResumeBuilderPage.jsx'));
 
+// AI Interview Engine (beta, no Tavus) — self-hosted alternative to the
+// Tavus-powered AI Mock Interview, listed in the Navbar's feature menu.
+const AIInterviewBetaPage     = lazy(() => import('./pages/AIInterviewBetaPage.jsx'));
+
 function RouteFallback() {
   return (
     <div className="h-screen w-full flex items-center justify-center bg-[#f8f9fa]">
@@ -136,6 +140,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ReportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ai-engine-beta"
+        element={
+          <ProtectedRoute>
+            <AIInterviewBetaPage />
           </ProtectedRoute>
         }
       />

@@ -377,6 +377,33 @@ export const getTechInterviewReport = (sessionId) =>
 export const getTechInterviewHistory = (userId) =>
   api.get(`/tech-interview/history/${userId}`);
 
+// ---------- AI Interview Engine (BETA, no Tavus) ----------
+// Isolated parallel feature — see AiInterviewEngineController.java.
+// Session creation/resume-parsing/question-gen/report-generation all reuse
+// the existing createSession/parseResume/generateQuestions/generateReport
+// above; these are the only calls specific to the new engine.
+// Single entry point for a new adaptive interview — carries the full config
+// (type/difficulty/language/JD/duration). Deliberately does NOT go through
+// /generate-questions first: that endpoint batch-generates a fixed question
+// list, which is the opposite of how this engine works.
+export const startAiEngine = (sessionId, config = {}) =>
+  api.post(`/ai-engine/${sessionId}/start`, config);
+
+export const transcribeAiEngineAudio = (sessionId, audioBlob) => {
+  const form = new FormData();
+  form.append('file', audioBlob, 'answer.webm');
+  return api.post(`/ai-engine/${sessionId}/transcribe`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+
+export const sendAiEngineMessage = (sessionId, message) =>
+  api.post(`/ai-engine/${sessionId}/message`, { message });
+
+export const endAiEngine = (sessionId) =>
+  api.post(`/ai-engine/${sessionId}/end`);
+
+export const getAiEngineStatus = (sessionId) =>
+  api.get(`/ai-engine/${sessionId}/status`);
+
 export const getDsaProblem = (problemId) =>
   api.get(`/tech-interview/problems/dsa/${problemId}`);
 

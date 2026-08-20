@@ -125,8 +125,19 @@ public class ResumeParserService {
 
     private ResumeParsedResponse callGeminiApi(String prompt) {
         Map<String, Object> requestBody = Map.of(
-            "model", "llama-3.1-8b-instant",
+            // llama-3.1-8b-instant was retired from Groq's catalog (confirmed
+            // via GET /v1/models — no longer present); openai/gpt-oss-20b is
+            // a comparable fast/cheap model still available.
+            "model", "openai/gpt-oss-20b",
             "temperature", 0.2,
+            // GPT-OSS models reason before answering, and that reasoning
+            // consumes max_tokens same as the visible output (same quirk
+            // already documented in OpenRouterFallbackService for this model
+            // family, just via Groq's own top-level param instead of
+            // OpenRouter's nested one) — without capping it low, reasoning
+            // alone can eat the whole budget and truncate the JSON output
+            // mid-array, which is exactly what was happening here.
+            "reasoning_effort", "low",
             // Raised from 2048 — the schema now includes full experience/
             // project/education entries with bullet arrays, not just a flat
             // summary, and 2048 was tight enough to risk truncating (and
@@ -139,7 +150,7 @@ public class ResumeParserService {
         );
 
         try {
-            log.info("Calling Groq API for resume parsing with model: llama-3.1-8b-instant");
+            log.info("Calling Groq API for resume parsing with model: openai/gpt-oss-20b");
             String rawJsonResponse = webClient.post()
                     .uri("chat/completions")
                     .header("Authorization", "Bearer " + groqApiKey.trim())

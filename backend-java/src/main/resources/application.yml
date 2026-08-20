@@ -77,6 +77,12 @@ gemini:
   api-key: ${GEMINI_API_KEY:}
 groq:
   api-key: ${GROQ_API_KEY:}
+  # Only read by GroqLlmProvider (AI Interview Engine beta) — every other
+  # Groq caller in this codebase hardcodes its own model name and is
+  # untouched by this key. llama-3.3-70b-versatile was retired from Groq's
+  # catalog (confirmed via GET /v1/models); openai/gpt-oss-20b is a fast,
+  # currently-available model well suited to a live conversational turn.
+  model: ${GROQ_MODEL:openai/gpt-oss-20b}
 # Last-resort fallback for the tech-interview AI calls (conversation, plan
 # generation, report generation) — tried only after every Groq model/attempt
 # has already failed. Groq's rate limit is shared across all Groq models on
