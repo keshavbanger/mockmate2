@@ -51,16 +51,25 @@ export default function ResumeSourcePicker({ onChange, error: externalError }) {
     }
   }, [loading, resumes]);
 
+  // Upload mode fires onChange as soon as a valid file is chosen — picking
+  // a file IS the explicit action. Saved mode does NOT fire automatically
+  // just because a default resume got pre-selected on mount: that used to
+  // kick off parsing (and session creation) with zero user interaction the
+  // instant the page loaded, which is what caused it. It now waits for an
+  // explicit "Use this Resume" click below — any mode/selection change in
+  // the meantime reports null so a stale confirmation can't linger.
   useEffect(() => {
-    if (mode === 'saved' && selectedId) {
-      onChange?.({ mode: 'saved', savedResumeId: selectedId });
-    } else if (mode === 'upload') {
+    if (mode === 'upload') {
       onChange?.({ mode: 'upload', file, saveAsResume, label });
     } else {
       onChange?.(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selectedId, file, saveAsResume, label]);
+
+  const confirmSavedResume = () => {
+    if (selectedId) onChange?.({ mode: 'saved', savedResumeId: selectedId });
+  };
 
   const validate = (f) => {
     const err = validateFile(f);
@@ -104,13 +113,23 @@ export default function ResumeSourcePicker({ onChange, error: externalError }) {
               </label>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => { setMode('upload'); setSelectedId(null); }}
-            className="self-start text-xs font-semibold text-[var(--brand-primary)] hover:underline"
-          >
-            Upload a different resume instead
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={confirmSavedResume}
+              disabled={!selectedId}
+              className="text-xs font-bold text-white bg-[var(--brand-primary)] px-4 py-2 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Use this Resume
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('upload'); setSelectedId(null); }}
+              className="text-xs font-semibold text-[var(--brand-primary)] hover:underline"
+            >
+              Upload a different resume instead
+            </button>
+          </div>
         </div>
       )}
 
