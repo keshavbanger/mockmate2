@@ -72,21 +72,21 @@ public class AuthController {
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<TokenResponse> verify(@Valid @RequestBody TokenVerificationRequest request) {
+    public ResponseEntity<?> verify(@Valid @RequestBody TokenVerificationRequest request) {
         try {
             return ResponseEntity.ok(authService.verify(request));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unhandled exception in verify: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(java.util.Map.of("error", "Verification failed. Please try again."));
         }
     }
 
     @PostMapping("/register")
-    public ResponseEntity<TokenResponse> register(@Valid @RequestBody TokenVerificationRequest request) {
-        try {
-            return ResponseEntity.ok(authService.register(request));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+    public ResponseEntity<?> register(@Valid @RequestBody TokenVerificationRequest request) {
+        return verify(request);
     }
 
     @GetMapping("/me")
@@ -161,13 +161,29 @@ public class AuthController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<TokenResponse> signup(@Valid @RequestBody UserSignupRequest request) {
-        return ResponseEntity.ok(authService.signup(request));
+    public ResponseEntity<?> signup(@Valid @RequestBody UserSignupRequest request) {
+        try {
+            return ResponseEntity.ok(authService.signup(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unhandled exception in signup: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(java.util.Map.of("error", "Signup failed. Please try again."));
+        }
     }
 
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody UserLoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<?> login(@Valid @RequestBody UserLoginRequest request) {
+        try {
+            return ResponseEntity.ok(authService.login(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unhandled exception in login: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(java.util.Map.of("error", "Login failed due to a temporary server issue. Please try again."));
+        }
     }
 
     @DeleteMapping("/account")

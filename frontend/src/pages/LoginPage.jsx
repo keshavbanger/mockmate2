@@ -87,7 +87,8 @@ export default function LoginPage() {
       }
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Login failed. Please check your credentials.';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

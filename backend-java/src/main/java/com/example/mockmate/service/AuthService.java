@@ -23,8 +23,11 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -177,9 +180,13 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid credentials");
         }
 
-        user.setLastLogin(LocalDateTime.now());
-        promoteIfConfiguredAdmin(user);
-        User savedUser = userRepository.save(user);
+        try {
+            user.setLastLogin(LocalDateTime.now());
+            promoteIfConfiguredAdmin(user);
+            userRepository.save(user);
+        } catch (Exception e) {
+            log.warn("Could not update lastLogin for user {}: {}", normalizedEmail, e.getMessage());
+        }
 
         String token = jwtUtil.generateToken(user.getEmail());
 
