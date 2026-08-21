@@ -60,13 +60,13 @@ public class TechnicalInterviewController {
     // ── POST /plan — Generate + preview plan ──────────────────
     @PostMapping(value = "/plan", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> generatePlan(
-            @RequestPart(value = "resume", required = false) MultipartFile resume,
-            @RequestPart(value = "jdText", required = false) String jdText,
-            @RequestPart(value = "roleLevel", required = false) String roleLevel,
-            @RequestPart(value = "interviewType", required = false) String interviewType,
-            @RequestPart(value = "companyStyle", required = false) String companyStyle,
-            @RequestPart(value = "durationMinutes", required = false) String durationMinutes,
-            @RequestPart(value = "preferredLanguage", required = false) String preferredLanguage,
+            @RequestParam(value = "resume", required = false) MultipartFile resume,
+            @RequestParam(value = "jdText", required = false) String jdText,
+            @RequestParam(value = "roleLevel", required = false) String roleLevel,
+            @RequestParam(value = "interviewType", required = false) String interviewType,
+            @RequestParam(value = "companyStyle", required = false) String companyStyle,
+            @RequestParam(value = "durationMinutes", required = false) String durationMinutes,
+            @RequestParam(value = "preferredLanguage", required = false) String preferredLanguage,
             @RequestParam(value = "startDirectlyToDsa", required = false) Boolean startDirectlyToDsa,
             // Reuse a previously saved resume instead of re-uploading — see
             // SavedResumeController. When present, `resume` is ignored.

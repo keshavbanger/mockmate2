@@ -191,6 +191,11 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  // Eagerly warm up the backend server on initial app load
+  useEffect(() => {
+    api.get('/health').catch(() => {});
+  }, []);
+
   // Email/Password Signup via Supabase
   const signupWithEmail = async (email, password, fullName) => {
     try {

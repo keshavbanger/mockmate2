@@ -41,7 +41,10 @@ public class OtpService {
 
         // Invalidate old OTPs for this email
         try {
-            otpRepository.deleteByEmail(email);
+            java.util.List<EmailVerificationOtp> existing = otpRepository.findByEmail(email);
+            if (existing != null && !existing.isEmpty()) {
+                otpRepository.deleteAll(existing);
+            }
         } catch (Exception e) {
             log.warn("Could not cleanup old OTPs for {}: {}", email, e.getMessage());
         }

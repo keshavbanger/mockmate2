@@ -5,13 +5,19 @@ import Logo from '../components/Logo';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { loginWithEmail, loginWithGoogle, login, error: authError } = useAuth();
+  const { loginWithEmail, loginWithGoogle, login, error: authError, api } = useAuth();
   const [loading, setLoading] = useState(false);
   // Render's free-tier backend spins down when idle and can take 50s+ to
   // wake back up on the first request — without this, that wait just looks
   // like the button is stuck, with no indication anything is happening.
   const [slowLoading, setSlowLoading] = useState(false);
   const slowLoadingTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (api) {
+      api.get('/health').catch(() => {});
+    }
+  }, [api]);
 
   useEffect(() => {
     if (loading) {

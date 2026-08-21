@@ -153,7 +153,8 @@ export default function TechInterviewSetupPage() {
       setPlan(data.plan);
       setStep('preview');
     } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to generate interview plan. Please try again.');
+      console.error('[TechInterviewSetupPage] generatePlan failed:', err);
+      setError(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to generate interview plan. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -36,7 +36,13 @@
     </noscript>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Google's favicon guidelines want a square icon that's at least
+         48px — the 32x32 above falls just short of that, and favicon.png
+         below has no declared size for a crawler to go on without
+         fetching and decoding it. This one exists on disk already but
+         wasn't referenced anywhere. -->
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64x64.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Structured data: names the entity explicitly as "MockMate AI" at

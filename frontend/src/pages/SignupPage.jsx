@@ -5,7 +5,13 @@ import Logo from '../components/Logo';
 
 export default function SignupPage() {
   const navigate = useNavigate();
-  const { signupWithEmail, loginWithGoogle, signup, sendOtp, verifyOtp, error: authError } = useAuth();
+  const { signupWithEmail, loginWithGoogle, signup, sendOtp, verifyOtp, error: authError, api } = useAuth();
+
+  useEffect(() => {
+    if (api) {
+      api.get('/health').catch(() => {});
+    }
+  }, [api]);
 
   const [step, setStep] = useState('FORM'); // 'FORM' | 'OTP'
   const [loading, setLoading] = useState(false);

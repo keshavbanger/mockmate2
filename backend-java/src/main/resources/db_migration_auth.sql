@@ -17,3 +17,17 @@ CREATE TABLE IF NOT EXISTS public.users (
 
 -- Index for fast lookup by Supabase user id
 CREATE INDEX IF NOT EXISTS idx_users_supabase_user_id ON public.users(supabase_user_id);
+
+-- OTP verification table
+CREATE TABLE IF NOT EXISTS public.email_verification_otps (
+    id VARCHAR(255) PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    otp_code VARCHAR(6) NOT NULL,
+    purpose VARCHAR(50) DEFAULT 'SIGNUP',
+    created_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_otp ON public.email_verification_otps(email, purpose);
+

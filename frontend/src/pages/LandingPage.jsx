@@ -340,11 +340,65 @@ function InterviewMockup() {
   );
 }
 
+// ─── Hero orb graphics ─────────────────────────────────────────────────────
+// Small feature-representative mockups (not screenshots — there are none of
+// those as project assets, and nothing here can capture the live app) shown
+// inside the floating orbs, in place of generic emoji. Same idea as the
+// "How it Works" section's larger visuals below: build a tiny fragment of
+// real-looking interface rather than an abstract icon.
+function ResumeOrbGraphic() {
+  return (
+    <svg viewBox="0 0 32 32" className="w-6 h-6" fill="none">
+      <rect x="6" y="3" width="20" height="26" rx="3" fill="#F3E8FF" />
+      <rect x="10" y="9" width="12" height="2.5" rx="1.25" fill="#8B5CF6" />
+      <rect x="10" y="14" width="10" height="2" rx="1" fill="#C4B5FD" />
+      <rect x="10" y="18" width="10" height="2" rx="1" fill="#C4B5FD" />
+      <rect x="10" y="22" width="7" height="2" rx="1" fill="#C4B5FD" />
+      <circle cx="23" cy="23" r="5" fill="#6B46C1" />
+      <path d="M20.5 23l1.7 1.7L25.5 21" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function InterviewOrbGraphic() {
+  return (
+    <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
+      <circle cx="16" cy="13" r="7" fill="#6B46C1" />
+      <path d="M12.5 12.5a3.5 3.5 0 017 0v1a3.5 3.5 0 01-7 0v-1z" fill="white" />
+      <rect x="15.2" y="16.5" width="1.6" height="2.5" fill="white" />
+      <path d="M6 24c1.5-3 5-4.5 10-4.5s8.5 1.5 10 4.5" stroke="#C4B5FD" strokeWidth="2" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
+
+function CodeOrbGraphic() {
+  return (
+    <svg viewBox="0 0 32 32" className="w-6 h-6" fill="none">
+      <rect x="3" y="6" width="26" height="20" rx="3" fill="#1E1B2E" />
+      <rect x="6" y="10" width="8" height="2" rx="1" fill="#34D399" />
+      <rect x="6" y="14" width="14" height="2" rx="1" fill="#818CF8" />
+      <rect x="6" y="18" width="10" height="2" rx="1" fill="#F472B6" />
+      <rect x="6" y="22" width="6" height="2" rx="1" fill="#818CF8" />
+    </svg>
+  );
+}
+
+function ReportOrbGraphic() {
+  return (
+    <svg viewBox="0 0 32 32" className="w-6 h-6" fill="none">
+      <rect x="4" y="5" width="24" height="23" rx="3" fill="#EEF2FF" />
+      <rect x="9" y="17" width="3.5" height="7" rx="1" fill="#A78BFA" />
+      <rect x="14.5" y="12" width="3.5" height="12" rx="1" fill="#8B5CF6" />
+      <rect x="20" y="15" width="3.5" height="9" rx="1" fill="#6B46C1" />
+    </svg>
+  );
+}
+
 // ─── Floating Icon Orb (hero decoration) ──────────────────────────────────────
-// Icon-only bubbles scattered around the concentric rings, representing
-// MockMate's own capabilities — not third-party brand logos. Showing real
-// tool logos here would wrongly imply integrations/partnerships that don't
-// exist, the same problem as a fake "trusted by" strip.
+// Bubbles scattered around the concentric rings, representing MockMate's own
+// capabilities — not third-party brand logos. Showing real tool logos here
+// would wrongly imply integrations/partnerships that don't exist, the same
+// problem as a fake "trusted by" strip.
 function FloatingIconOrb({ className = '', icon, delay = 0, size = 'md' }) {
   const dim = size === 'lg' ? 'h-14 w-14 text-2xl' : size === 'sm' ? 'h-10 w-10 text-base' : 'h-12 w-12 text-lg';
   return (
@@ -393,10 +447,10 @@ function HeroShowcase({ navigate }) {
 
       <div className="relative pb-6">
         {/* Floating capability icons, scattered around the rings */}
-        <FloatingIconOrb className="left-[6%] top-[10%]" icon="📄" delay={0} />
-        <FloatingIconOrb className="right-[8%] top-[6%]" icon="🎤" delay={0.3} size="lg" />
-        <FloatingIconOrb className="left-[2%] top-[42%]" icon="💻" delay={0.6} size="sm" />
-        <FloatingIconOrb className="right-[2%] top-[40%]" icon="📊" delay={0.9} />
+        <FloatingIconOrb className="left-[6%] top-[10%]" icon={<ResumeOrbGraphic />} delay={0} />
+        <FloatingIconOrb className="right-[8%] top-[6%]" icon={<InterviewOrbGraphic />} delay={0.3} size="lg" />
+        <FloatingIconOrb className="left-[2%] top-[42%]" icon={<CodeOrbGraphic />} delay={0.6} size="sm" />
+        <FloatingIconOrb className="right-[2%] top-[40%]" icon={<ReportOrbGraphic />} delay={0.9} />
         <FloatingIconOrb className="left-[14%] top-[58%]" icon="🎯" delay={1.2} size="sm" />
 
         {/* Announcement pill — real, not a fabricated user count */}
