@@ -3,6 +3,7 @@ package com.example.mockmate.controller;
 import com.example.mockmate.dto.response.ResumeParsedResponse;
 import com.example.mockmate.model.SavedResume;
 import com.example.mockmate.service.ResumeParserService;
+import com.example.mockmate.service.ResumeTextExtractor;
 import com.example.mockmate.service.SavedResumeService;
 import com.example.mockmate.service.SessionStoreService;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class ResumeController {
     private final ResumeParserService resumeParserService;
     private final SessionStoreService sessionStoreService;
     private final SavedResumeService savedResumeService;
+    private final ResumeTextExtractor resumeTextExtractor;
 
     @PostMapping("/parse-resume")
     public ResponseEntity<?> uploadResume(
@@ -42,13 +44,22 @@ public class ResumeController {
         boolean usingSavedResume = savedResumeId != null && !savedResumeId.isBlank();
         if (!usingSavedResume) {
             if (file == null || file.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Please upload a file"));
+                return ResponseEntity.badRequest().body(Map.of("detail", "Please upload a file"));
             }
-            if (file.getContentType() == null || !file.getContentType().equals("application/pdf")) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Only PDF files are supported"));
+            // Was PDF-only via content-type sniffing — ResumeSourcePicker
+            // (the shared upload widget every page uses) has accepted PDF
+            // and DOCX for a while, so any DOCX upload was silently 400ing
+            // here even though the picker's own UI advertised DOCX support.
+            // ResumeTextExtractor below already handles both; every other
+            // resume-upload endpoint (Technical Interview Lab, Resume
+            // Builder, ATS, saved resumes) already goes through it — this
+            // was the one path still on the old PDF-only extractor.
+            String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+            if (!filename.endsWith(".pdf") && !filename.endsWith(".docx")) {
+                return ResponseEntity.badRequest().body(Map.of("detail", "Only PDF and DOCX files are supported"));
             }
         } else if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Authentication required to use a saved resume"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("detail", "Authentication required to use a saved resume"));
         }
 
         try {
@@ -59,8 +70,12 @@ public class ResumeController {
                         ? saved.getParsedProfile()
                         : resumeParserService.parseResumeFromText(saved.getRawText());
             } else {
-                byte[] pdfBytes = file.getBytes();
-                parsedData = resumeParserService.parseResumeWithGemini(pdfBytes);
+                String extractedText = resumeTextExtractor.extract(file);
+                if (extractedText.isBlank()) {
+                    return ResponseEntity.badRequest().body(Map.of("detail",
+                            "Couldn't read any text from that file — it may be a scanned image or corrupted."));
+                }
+                parsedData = resumeParserService.parseResumeFromText(extractedText);
                 if (saveAsResume && user != null) {
                     try {
                         savedResumeService.upload(user.getId(), file, label, false);
