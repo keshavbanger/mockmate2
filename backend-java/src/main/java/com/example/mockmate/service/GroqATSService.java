@@ -485,7 +485,14 @@ public class GroqATSService {
             Map<String, Object> requestBody = Map.of(
                     "model", modelName,
                     "temperature", 0.3,
-                    "max_tokens", 6000,
+                    // Was 6000 — reserved against Groq's per-account TPM budget
+                    // regardless of actual output length, on top of an already
+                    // ~13KB system prompt. This is the heaviest Groq call in the
+                    // app; every other structured-JSON call here uses <=2048.
+                    // Live testing traced production 413s to this account's TPM
+                    // ceiling, not genuine payload size — lowering the reservation
+                    // reduces how easily a single call trips it.
+                    "max_tokens", 4000,
                     // GPT-OSS models spend the whole max_tokens budget on
                     // hidden reasoning tokens unless capped — see
                     // OpenRouterFallbackService's original note on this.
