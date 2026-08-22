@@ -192,7 +192,7 @@ public class AuthService {
 
         return TokenResponse.builder()
                 .accessToken(token)
-                .user(mapToResponse(savedUser))
+                .user(mapToResponse(user))
                 .build();
     }
 
