@@ -22,6 +22,17 @@ spring:
       validation-timeout: 3000
       keepalive-time: 45000
       leak-detection-threshold: 60000
+      # SUPABASE_DB_URL goes through Supabase's PgBouncer pooler in
+      # transaction-pooling mode, which doesn't support the PostgreSQL JDBC
+      # driver's server-side prepared-statement cache — a pooled connection
+      # can be handed to a different transaction than the one that named a
+      # given statement, producing "prepared statement \"S_n\" already
+      # exists" on commit (seen live: ATSAnalyzerService's INSERT into
+      # ats_analyses). prepareThreshold=0 tells the driver to never
+      # server-side-prepare, which is the standard fix for this exact
+      # pooler/driver combination.
+      data-source-properties:
+        prepareThreshold: 0
   jpa:
     open-in-view: false
     hibernate:
