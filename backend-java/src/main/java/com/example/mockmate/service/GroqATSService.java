@@ -258,8 +258,12 @@ public class GroqATSService {
             "relevantExperience", 30, "resumeCraft", 12, "softSkills", 8
     );
 
+    // llama-3.3-70b-versatile / llama-3.1-8b-instant were retired from
+    // Groq's catalog (confirmed via GET /v1/models) — every attempt in this
+    // list was failing, which is what left ATS reports stuck on the
+    // "Deterministic only — AI unavailable" fallback.
     private static final List<String> MODELS_TO_TRY =
-            List.of("llama-3.3-70b-versatile", "llama-3.1-8b-instant");
+            List.of("openai/gpt-oss-120b", "openai/gpt-oss-20b");
     private static final int RETRY_BACKOFF_MS = 700;
 
     public HonestResumeAssessment analyze(String resumeText, String jdText, ATSScoringService.ScoringResult scoring) {
@@ -482,6 +486,10 @@ public class GroqATSService {
                     "model", modelName,
                     "temperature", 0.3,
                     "max_tokens", 6000,
+                    // GPT-OSS models spend the whole max_tokens budget on
+                    // hidden reasoning tokens unless capped — see
+                    // OpenRouterFallbackService's original note on this.
+                    "reasoning_effort", "low",
                     "response_format", Map.of("type", "json_object"),
                     "messages", List.of(
                             Map.of("role", "system", "content", SYSTEM_PROMPT),

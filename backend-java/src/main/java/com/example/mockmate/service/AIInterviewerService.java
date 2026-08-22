@@ -28,7 +28,9 @@ public class AIInterviewerService {
     private String groqApiKey;
 
     private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final String MODEL    = "llama-3.3-70b-versatile";
+    // llama-3.3-70b-versatile was retired from Groq's catalog (confirmed
+    // via GET /v1/models).
+    private static final String MODEL    = "openai/gpt-oss-120b";
 
     private static final Pattern THIRD_PERSON_LEAK = Pattern.compile(
             "\\b(the candidate|the user|the interviewee)\\b", Pattern.CASE_INSENSITIVE
@@ -1337,10 +1339,12 @@ Rewrite it as ONE new question, same difficulty and topic area, that explicitly 
         // /openai/v1/models) — it 404'd on every attempt, silently burning a
         // full retry slot whenever both real models above it had already
         // failed and this was the last fallback standing before the
-        // hard-coded SYSTEM_ERROR response.
+        // hard-coded SYSTEM_ERROR response. llama-3.1-8b-instant, the
+        // remaining fallback, was itself later retired too — every attempt
+        // in this list was failing until both were swapped for real models.
         List<String> modelsToTry = List.of(
                 MODEL,
-                "llama-3.1-8b-instant"
+                "openai/gpt-oss-20b"
         );
 
         log.info("Sending request to Groq LLM for sessionId={}. User prompt length: {}", 
@@ -1356,6 +1360,9 @@ Rewrite it as ONE new question, same difficulty and topic area, that explicitly 
             // response mid-JSON, which then fails to parse and silently burns
             // a retry/model-fallback slot exactly like a real API failure would.
             body.put("max_tokens", 1024);
+            // GPT-OSS models spend max_tokens on hidden reasoning first —
+            // capped here so it doesn't eat the JSON response.
+            body.put("reasoning_effort", "low");
             body.put("response_format", Map.of("type", "json_object"));
             body.put("messages", List.of(
                     Map.of("role", "system", "content", activeSystemPrompt),

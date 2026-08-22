@@ -20,7 +20,9 @@ import java.util.stream.Collectors;
 public class ResumeReconstructionService {
 
     private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final String MODEL    = "llama-3.3-70b-versatile";
+    // llama-3.3-70b-versatile was retired from Groq's catalog (confirmed
+    // via GET /v1/models).
+    private static final String MODEL    = "openai/gpt-oss-120b";
 
     private static final String SYS = """
         You are an expert resume writer with 15 years of experience writing resumes for Google, Microsoft,
@@ -78,14 +80,20 @@ public class ResumeReconstructionService {
         log.info("[Reconstruct] Calling Groq for {}, template={}", modifiedParsed.getName(), templateId);
         long t = System.currentTimeMillis();
 
-        List<String> modelsToTry = List.of("llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant");
+        // mixtral-8x7b-32768 and llama-3.1-8b-instant were also retired —
+        // every model in this list was failing until all three were
+        // swapped for real, currently-available ones.
+        List<String> modelsToTry = List.of(MODEL, "openai/gpt-oss-20b");
         String raw = null;
-        
+
         for (String modelName : modelsToTry) {
             try {
                 log.info("[Reconstruct] Attempting reconstruction using model: {}", modelName);
                 Map<String, Object> body = Map.of(
                     "model", modelName, "temperature", 0.3, "max_tokens", 4096,
+                    // GPT-OSS models spend max_tokens on hidden reasoning
+                    // first — capped so it doesn't eat the response.
+                    "reasoning_effort", "low",
                     "messages", List.of(
                         Map.of("role","system","content", SYS),
                         Map.of("role","user",  "content", userPrompt)

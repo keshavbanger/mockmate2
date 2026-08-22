@@ -115,9 +115,13 @@ public class FillerDetectorService {
         String prompt = String.format(QUALITY_PROMPT, question.trim(), safeAnswer.trim());
 
         Map<String, Object> requestBody = Map.of(
-            "model", "llama-3.1-8b-instant",
+            "model", "openai/gpt-oss-20b",
             "temperature", 0.3,
             "max_tokens", 512,
+            // See InterviewController's identical note — GPT-OSS needs this
+            // capped or reasoning tokens eat the whole budget. Retired
+            // llama-3.1-8b-instant is what this replaced.
+            "reasoning_effort", "low",
             "messages", List.of(
                 Map.of("role", "system", "content", "You are an interview quality scorer. Return ONLY a valid JSON object with the requested keys, no markdown formatting."),
                 Map.of("role", "user",   "content", prompt)

@@ -387,9 +387,14 @@ public class InterviewController {
             String apiKey = groqApiKey != null ? groqApiKey.trim().replace("\"", "").replace("'", "") : "";
             WebClient webClient = webClientBuilder.baseUrl("https://api.groq.com/openai/v1/").build();
             Map<String, Object> requestBody = Map.of(
-                "model", "llama-3.1-8b-instant",
+                "model", "openai/gpt-oss-20b",
                 "temperature", 0.7,
                 "max_tokens", 256,
+                // GPT-OSS models spend max_tokens on hidden reasoning first —
+                // at 256 tokens that leaves nothing for the actual answer
+                // unless capped. llama-3.1-8b-instant (the model this
+                // replaced) was retired from Groq's catalog.
+                "reasoning_effort", "low",
                 "messages", List.of(
                     Map.of("role", "system", "content", systemPrompt),
                     Map.of("role", "user",   "content", userPrompt)

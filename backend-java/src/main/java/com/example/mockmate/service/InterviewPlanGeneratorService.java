@@ -27,7 +27,9 @@ public class InterviewPlanGeneratorService {
     private String groqApiKey;
 
     private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final String MODEL    = "llama-3.3-70b-versatile";
+    // llama-3.3-70b-versatile was retired from Groq's catalog (confirmed
+    // via GET /v1/models).
+    private static final String MODEL    = "openai/gpt-oss-120b";
 
     // ── System Prompt ─────────────────────────────────────────
     private static final String SYSTEM_PROMPT = """
@@ -217,12 +219,10 @@ Return this exact JSON structure:
 
     // ── Groq Call ─────────────────────────────────────────────
     private String callGroq(String userPrompt) {
-        List<String> modelsToTry = List.of(
-                MODEL,
-                "llama-3.1-70b-versatile",
-                "llama-3.1-8b-instant",
-                "llama3-70b-8192"
-        );
+        // The other three were also retired from Groq's catalog — same root
+        // cause as MODEL above, they just weren't the one named in the
+        // constant so it was easy to miss on a first pass.
+        List<String> modelsToTry = List.of(MODEL, "openai/gpt-oss-20b");
 
         Exception lastException = null;
 
@@ -231,6 +231,9 @@ Return this exact JSON structure:
             body.put("model", modelName);
             body.put("temperature", 0.3);
             body.put("max_tokens", 4096);
+            // GPT-OSS models spend the whole max_tokens budget on hidden
+            // reasoning tokens unless capped.
+            body.put("reasoning_effort", "low");
             body.put("response_format", Map.of("type", "json_object"));
             body.put("messages", List.of(
                     Map.of("role", "system", "content", SYSTEM_PROMPT),

@@ -41,7 +41,11 @@ public class ResumeWriterService {
     private String groqApiKey;
 
     private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final List<String> MODELS_TO_TRY = List.of("llama-3.3-70b-versatile", "llama-3.1-8b-instant");
+    // llama-3.3-70b-versatile / llama-3.1-8b-instant were retired from
+    // Groq's catalog (confirmed via GET /v1/models) — every attempt in
+    // this list was failing, which is what forced the
+    // "refusing to fall back to generic content" exception below every time.
+    private static final List<String> MODELS_TO_TRY = List.of("openai/gpt-oss-120b", "openai/gpt-oss-20b");
 
     private static final String SYSTEM_PROMPT = """
             You are a resume writer producing a final, ATS-optimised document that a real
@@ -175,6 +179,9 @@ public class ResumeWriterService {
                 "model", modelName,
                 "temperature", 0.3,
                 "max_tokens", 4096,
+                // GPT-OSS models spend max_tokens on hidden reasoning first —
+                // capped so it doesn't eat the JSON response.
+                "reasoning_effort", "low",
                 "response_format", Map.of("type", "json_object"),
                 "messages", List.of(
                         Map.of("role", "system", "content", SYSTEM_PROMPT),

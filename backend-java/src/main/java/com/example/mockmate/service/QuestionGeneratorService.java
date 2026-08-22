@@ -297,9 +297,13 @@ public class QuestionGeneratorService {
     // ── Shared Groq HTTP call ─────────────────────────────────────────────────
     private String callGroq(String userPrompt, int maxTokens, String systemPrompt) {
         Map<String, Object> body = Map.of(
-                "model",       "llama-3.1-8b-instant",
+                "model",       "openai/gpt-oss-20b",
                 "temperature", 0.5,
                 "max_tokens",  maxTokens,
+                // See InterviewController's identical note — GPT-OSS needs
+                // this capped or reasoning tokens eat the whole budget.
+                // Retired llama-3.1-8b-instant is what this replaced.
+                "reasoning_effort", "low",
                 "messages", List.of(
                         Map.of("role", "system", "content", systemPrompt),
                         Map.of("role", "user",   "content", userPrompt)

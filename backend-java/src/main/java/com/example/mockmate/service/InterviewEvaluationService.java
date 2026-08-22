@@ -28,7 +28,9 @@ public class InterviewEvaluationService {
     private String groqApiKey;
 
     private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final String MODEL    = "llama-3.3-70b-versatile";
+    // llama-3.3-70b-versatile was retired from Groq's catalog (confirmed
+    // via GET /v1/models).
+    private static final String MODEL    = "openai/gpt-oss-120b";
 
     public TechInterviewReport evaluate(TechInterviewSession session) {
         TechInterviewReport report = new TechInterviewReport();
@@ -426,7 +428,9 @@ Return JSON:
     // or rate limit, on a call that only ever fires once per interview.
     // Mirrors the retry/fallback pattern already used in AIInterviewerService
     // and GroqATSService.
-    private static final List<String> EVAL_MODELS_TO_TRY = List.of(MODEL, "llama-3.1-8b-instant");
+    // llama-3.1-8b-instant, the fallback, was also retired — every attempt
+    // in this list was failing until both were swapped for real models.
+    private static final List<String> EVAL_MODELS_TO_TRY = List.of(MODEL, "openai/gpt-oss-20b");
 
     // Returns the extracted message content (not the raw API envelope) so
     // both the Groq path and the OpenRouter fallback path hand the caller the
@@ -439,6 +443,10 @@ Return JSON:
                             "model", modelName,
                             "temperature", 0.5,
                             "max_tokens", 2048,
+                            // GPT-OSS models spend max_tokens on hidden
+                            // reasoning first — capped so it doesn't eat
+                            // the JSON response.
+                            "reasoning_effort", "low",
                             "response_format", Map.of("type", "json_object"),
                             "messages", List.of(Map.of("role", "user", "content", prompt))
                     );

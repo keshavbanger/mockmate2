@@ -30,7 +30,9 @@ public class ResumeAIService {
 
     private final ObjectMapper objectMapper;
     private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-    private static final String MODEL    = "llama-3.3-70b-versatile";
+    // llama-3.3-70b-versatile was retired from Groq's catalog (confirmed
+    // via GET /v1/models).
+    private static final String MODEL    = "openai/gpt-oss-120b";
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -153,7 +155,10 @@ public class ResumeAIService {
             "model",       MODEL,
             "messages",    List.of(message),
             "max_tokens",  maxTokens,
-            "temperature", 0.7
+            "temperature", 0.7,
+            // GPT-OSS models spend max_tokens on hidden reasoning first —
+            // capped so it doesn't eat the actual response.
+            "reasoning_effort", "low"
         );
 
         try {
